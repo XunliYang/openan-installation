@@ -1,0 +1,51 @@
+# OpenAN Platform 镜像构建配置文件
+# 复制此文件为 build-config.yaml 并修改配置
+
+# 镜像仓库配置
+registry:
+  url: docker.io          # 镜像仓库地址
+  namespace: openan       # 镜像命名空间
+  tag: latest             # 镜像标签
+
+# Registry Center 配置
+registry-center:
+  # 源码来源（二选一，优先级：source > repository）
+  source: ""              # 本地源码路径，例如: /path/to/registry-center
+  repository: ""          # Git 仓库地址，例如: https://github.com/org/registry-center.git
+  branch: main            # Git 分支（仅在使用 repository 时生效）
+
+# Orchestration Center 配置
+orchestration-center:
+  source: ""              # 本地源码路径，例如: /path/to/orchestration-center
+  repository: ""          # Git 仓库地址
+  branch: main            # Git 分支
+
+# Workflow Designer 配置
+# 注意：Workflow Designer 是 Orchestration Center 的子目录
+# 默认使用 {orchestration-center}/workflow-designer
+workflow-designer:
+  source: ""              # 本地源码路径（可选，默认: {orchestration-center}/workflow-designer）
+
+# 构建选项
+build:
+  push: false             # 构建后是否推送到仓库
+  no-cache: false         # 是否禁用构建缓存
+  platforms: "linux/amd64,linux/arm64"  # 目标平台架构
+
+# 示例配置：
+# 
+# 使用本地源码：
+# registry-center:
+#   source: /home/user/projects/registry-center
+# orchestration-center:
+#   source: /home/user/projects/orchestration-center
+# workflow-designer:
+#   source: /home/user/projects/orchestration-center/workflow-designer  # 可选
+#
+# 使用 Git 仓库：
+# registry-center:
+#   repository: https://github.com/openan/registry-center.git
+#   branch: v1.0.0
+# orchestration-center:
+#   repository: https://github.com/openan/orchestration-center.git
+#   branch: main

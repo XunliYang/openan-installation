@@ -1,0 +1,12 @@
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{- if .Values.createNamespace }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}
+  labels:
+    {{- include "openan.labels" . | nindent 4 }}
+{{- end }}

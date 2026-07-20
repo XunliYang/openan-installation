@@ -1,0 +1,81 @@
+# OpenAN Platform - 自定义配置示例
+# 复制此文件并根据需要修改
+
+# 命名空间
+namespace: openan
+
+# PostgreSQL 配置
+postgresql:
+  enabled: true
+  password: "openan123"
+  storage: 20Gi
+
+# Registry Center 配置
+registry:
+  enabled: true
+  replicas: 1
+  image:
+    repository: registry-center
+    tag: latest
+    pullPolicy: IfNotPresent
+  port: 5000
+  llm:
+    chat:
+      model: "deepseek-chat"
+      url: "https://api.deepseek.com/v1/chat/completions"
+      apiKey: ""  # 填入你的 API Key
+    embed:
+      model: "bge-m3"
+      url: ""
+      apiKey: ""
+    rerank:
+      model: "bge-reranker-v2-m3"
+      url: ""
+      apiKey: ""
+  tls:
+    mode: auto
+  signing:
+    mode: auto
+
+# Orchestration Center 配置
+orchestration:
+  enabled: true
+  replicas: 1
+  image:
+    repository: orchestration-center
+    tag: latest
+    pullPolicy: IfNotPresent
+  port: 5001
+  agentRegistryUrl: ""  # 留空则自动发现
+  llm:
+    chat:
+      model: "deepseek-chat"
+      url: "https://api.deepseek.com/v1/chat/completions"
+      apiKey: ""  # 填入你的 API Key
+  a2at:
+    provider: "deepseek"
+    model: "deepseek-chat"
+    baseUrl: "https://api.deepseek.com"
+    apiKey: ""  # 填入你的 API Key
+  hpa:
+    enabled: false
+
+# Workflow Designer 配置
+frontend:
+  enabled: true
+  replicas: 1
+  image:
+    repository: workflow-designer
+    tag: latest
+    pullPolicy: IfNotPresent
+  port: 80
+  hpa:
+    enabled: false
+
+# Ingress 配置
+ingress:
+  enabled: false
+  className: nginx
+  host: openan.example.com
+  tls:
+    enabled: false
