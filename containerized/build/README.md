@@ -25,17 +25,22 @@ build/
 # 进入 build 目录
 cd build
 
-# 构建所有镜像（Workflow Designer 默认使用 {orchestration-src}/workflow-designer）
+# 仅构建 Registry Center
+./build.sh --registry-src /path/to/registry-center
+
+# 仅构建 Orchestration Center（包含 Workflow Designer）
+./build.sh --orchestration-src /path/to/orchestration-center
+
+# 同时构建两个组件
 ./build.sh \
   --registry-src /path/to/registry-center \
   --orchestration-src /path/to/orchestration-center
 
-# 构建并推送
+# 构建并推送到私有仓库
 ./build.sh \
   --registry harbor.example.com \
   --namespace openan \
   --tag v1.0.0 \
-  --registry-src /path/to/registry-center \
   --orchestration-src /path/to/orchestration-center \
   --push
 ```
@@ -43,6 +48,19 @@ cd build
 ### 方式二：使用 Git 仓库（推荐 CI/CD）
 
 ```bash
+# 仅构建 Registry Center
+./build.sh \
+  --registry-repo https://github.com/org/registry-center.git \
+  --tag v1.0.0 \
+  --push
+
+# 仅构建 Orchestration Center
+./build.sh \
+  --orchestration-repo https://github.com/org/orchestration-center.git \
+  --tag v1.0.0 \
+  --push
+
+# 同时构建两个组件
 ./build.sh \
   --registry-repo https://github.com/org/registry-center.git \
   --orchestration-repo https://github.com/org/orchestration-center.git \
@@ -50,7 +68,7 @@ cd build
   --push
 ```
 
-注意：Workflow Designer 是 Orchestration Center 的子目录，无需单独指定 Git 仓库。
+注意：Workflow Designer 是 Orchestration Center 的子目录，构建 Orchestration Center 时会自动包含。
 
 ### 方式三：使用配置文件
 
@@ -137,21 +155,23 @@ docker buildx imagetools inspect your-registry.com/openan/registry-center:latest
 
 ### 命令行参数
 
-| 参数 | 说明 | 示例 |
-|------|------|------|
-| `--registry` | 镜像仓库地址 | `harbor.example.com` |
-| `--namespace` | 镜像命名空间 | `openan` |
-| `--tag` | 镜像标签 | `v1.0.0` |
-| `--push` | 构建后推送 | - |
-| `--config` | 配置文件路径 | `build-config.yaml` |
-| `--registry-src` | Registry Center 本地路径 | `/path/to/registry-center` |
-| `--orchestration-src` | Orchestration Center 本地路径 | `/path/to/orchestration-center` |
-| `--frontend-src` | Workflow Designer 本地路径（默认: `{orchestration-src}/workflow-designer`） | `/path/to/orchestration-center/workflow-designer` |
-| `--registry-repo` | Registry Center Git 仓库 | `https://github.com/...` |
-| `--orchestration-repo` | Orchestration Center Git 仓库 | `https://github.com/...` |
-| `--registry-branch` | Registry Center 分支 | `main` |
-| `--orchestration-branch` | Orchestration Center 分支 | `main` |
-| `--platforms` | 目标平台架构 | `linux/amd64,linux/arm64` |
+| 参数 | 说明 | 必填 | 示例 |
+|------|------|------|------|
+| `--registry` | 镜像仓库地址 | 否 | `harbor.example.com` |
+| `--namespace` | 镜像命名空间 | 否 | `openan` |
+| `--tag` | 镜像标签 | 否 | `v1.0.0` |
+| `--push` | 构建后推送 | 否 | - |
+| `--config` | 配置文件路径 | 否 | `build-config.yaml` |
+| `--registry-src` | Registry Center 本地路径 | 二选一 | `/path/to/registry-center` |
+| `--orchestration-src` | Orchestration Center 本地路径 | 二选一 | `/path/to/orchestration-center` |
+| `--frontend-src` | Workflow Designer 本地路径 | 否 | `/path/to/workflow-designer` |
+| `--registry-repo` | Registry Center Git 仓库 | 二选一 | `https://github.com/...` |
+| `--orchestration-repo` | Orchestration Center Git 仓库 | 二选一 | `https://github.com/...` |
+| `--registry-branch` | Registry Center 分支 | 否 | `main` |
+| `--orchestration-branch` | Orchestration Center 分支 | 否 | `main` |
+| `--platforms` | 目标平台架构 | 否 | `linux/amd64,linux/arm64` |
+
+**说明**：至少需要指定一个组件的源码（`--registry-src` 或 `--orchestration-src`），未指定的组件将跳过构建。
 
 ### 配置文件参数
 
@@ -168,10 +188,10 @@ docker buildx imagetools inspect your-registry.com/openan/registry-center:latest
    ├─ 本地路径：验证路径存在
    └─ Git 仓库：克隆到临时目录
    ↓
-3. 构建镜像
-   ├─ registry-center
-   ├─ orchestration-center
-   └─ workflow-designer (使用 {orchestration-center}/workflow-designer)
+3. 构建镜像（仅构建指定了源码的组件）
+   ├─ registry-center        (如果指定了 --registry-src 或 --registry-repo)
+   ├─ orchestration-center   (如果指定了 --orchestration-src 或 --orchestration-repo)
+   └─ workflow-designer      (如果构建了 orchestration-center)
    ↓
 4. 推送镜像（如果指定 --push）
    ↓
@@ -196,7 +216,19 @@ docker buildx imagetools inspect your-registry.com/openan/registry-center:latest
 构建完成后，使用以下方式部署：
 
 ```bash
-# 方式一：命令行指定镜像
+# 仅构建了 Registry Center
+helm install openan . \
+  --set registry.image.repository=harbor.example.com/openan/registry-center \
+  --set registry.image.tag=v1.0.0
+
+# 仅构建了 Orchestration Center
+helm install openan . \
+  --set orchestration.image.repository=harbor.example.com/openan/orchestration-center \
+  --set orchestration.image.tag=v1.0.0 \
+  --set frontend.image.repository=harbor.example.com/openan/workflow-designer \
+  --set frontend.image.tag=v1.0.0
+
+# 同时构建两个组件
 helm install openan . \
   --set registry.image.repository=harbor.example.com/openan/registry-center \
   --set registry.image.tag=v1.0.0 \
@@ -204,13 +236,6 @@ helm install openan . \
   --set orchestration.image.tag=v1.0.0 \
   --set frontend.image.repository=harbor.example.com/openan/workflow-designer \
   --set frontend.image.tag=v1.0.0
-
-# 方式二：修改 values.yaml
-# 编辑 values.yaml 中的 image 配置
-vim ../values.yaml
-
-# 部署
-helm install openan .
 ```
 
 ## CI/CD 集成示例
@@ -226,7 +251,7 @@ on:
       - 'v*'
 
 jobs:
-  build:
+  build-registry:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -239,7 +264,7 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
       
-      - name: Build and Push
+      - name: Build and Push Registry Center
         run: |
           cd k8s/openan-chart/build
           ./build.sh \
@@ -247,6 +272,28 @@ jobs:
             --namespace openan \
             --tag ${{ github.ref_name }} \
             --registry-repo https://github.com/org/registry-center.git \
+            --push
+
+  build-orchestration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Login to Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ secrets.REGISTRY_URL }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+      
+      - name: Build and Push Orchestration Center
+        run: |
+          cd k8s/openan-chart/build
+          ./build.sh \
+            --registry ${{ secrets.REGISTRY_URL }} \
+            --namespace openan \
+            --tag ${{ github.ref_name }} \
             --orchestration-repo https://github.com/org/orchestration-center.git \
             --push
 ```
@@ -254,7 +301,7 @@ jobs:
 ### GitLab CI
 
 ```yaml
-build-images:
+build-registry:
   stage: build
   image: docker:latest
   services:
@@ -267,6 +314,22 @@ build-images:
       --namespace openan
       --tag $CI_COMMIT_TAG
       --registry-repo https://github.com/org/registry-center.git
+      --push
+  only:
+    - tags
+
+build-orchestration:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - cd k8s/openan-chart/build
+    - ./build.sh
+      --registry $CI_REGISTRY
+      --namespace openan
+      --tag $CI_COMMIT_TAG
       --orchestration-repo https://github.com/org/orchestration-center.git
       --push
   only:
@@ -288,12 +351,19 @@ A: Workflow Designer 是 Orchestration Center 的子目录，默认使用 `{orch
 
 ### Q: 如何只构建单个组件？
 
-A: 当前脚本不支持单独构建，可以手动执行：
+A: 脚本支持选择性构建，只需指定一个组件的源码：
 
 ```bash
-docker build -t my-registry.com/openan/registry-center:v1.0.0 /path/to/registry-center
-docker push my-registry.com/openan/registry-center:v1.0.0
+# 仅构建 Registry Center
+./build.sh --registry-src /path/to/registry-center
+
+# 仅构建 Orchestration Center（自动包含 Workflow Designer）
+./build.sh --orchestration-src /path/to/orchestration-center
 ```
+
+### Q: 如何跳过 Workflow Designer 的构建？
+
+A: 如果 Orchestration Center 源码中没有 `workflow-designer` 目录，脚本会自动跳过前端构建。也可以通过 `--frontend-src ""` 显式跳过。
 
 ### Q: 构建失败如何调试？
 
@@ -332,11 +402,12 @@ docker run --rm my-registry.com/openan/registry-center:v1.0.0 --help
 
 ## 最佳实践
 
-1. **版本标签**：生产环境使用语义化版本（如 `v1.0.0`），开发环境使用 `latest` 或 git commit hash
-2. **镜像扫描**：推送前使用 `trivy` 或 `snyk` 扫描镜像漏洞
-3. **多架构支持**：使用 `docker buildx` 构建多架构镜像（amd64/arm64）
-4. **缓存优化**：合理编写 Dockerfile，利用构建缓存加速构建
-5. **安全存储**：使用 Kubernetes Secrets 或 Vault 存储镜像仓库凭证
+1. **选择性构建**：仅构建有变更的组件，节省构建时间
+2. **版本标签**：生产环境使用语义化版本（如 `v1.0.0`），开发环境使用 `latest` 或 git commit hash
+3. **镜像扫描**：推送前使用 `trivy` 或 `snyk` 扫描镜像漏洞
+4. **多架构支持**：使用 `docker buildx` 构建多架构镜像（amd64/arm64）
+5. **缓存优化**：合理编写 Dockerfile，利用构建缓存加速构建
+6. **安全存储**：使用 Kubernetes Secrets 或 Vault 存储镜像仓库凭证
 
 ## 相关文档
 

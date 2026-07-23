@@ -8,15 +8,20 @@
 #   --tag <tag>                   镜像标签 (默认: latest)
 #   --push                        构建后推送到仓库
 #   --config <file>               使用配置文件 (默认: build-config.yaml)
-#   --registry-src <path>         Registry Center 源码路径
-#   --orchestration-src <path>    Orchestration Center 源码路径
+#   --registry-src <path>         Registry Center 源码路径 (可选)
+#   --orchestration-src <path>    Orchestration Center 源码路径 (可选)
 #   --frontend-src <path>         Workflow Designer 源码路径 (默认: {orchestration-src}/workflow-designer)
-#   --registry-repo <url>         Registry Center Git 仓库
-#   --orchestration-repo <url>    Orchestration Center Git 仓库
+#   --registry-repo <url>         Registry Center Git 仓库 (可选)
+#   --orchestration-repo <url>    Orchestration Center Git 仓库 (可选)
 #   --registry-branch <branch>    Registry Center 分支 (默认: main)
 #   --orchestration-branch <branch>  Orchestration Center 分支 (默认: main)
 #   --platforms <platforms>       目标平台架构 (默认: linux/amd64,linux/arm64)
 #   --help                        显示帮助信息
+#
+# 说明:
+#   - 至少需要指定一个组件的源码 (--registry-src 或 --orchestration-src)
+#   - Workflow Designer 默认跟随 Orchestration Center 构建
+#   - 未指定的组件将跳过构建
 
 set -e
 
@@ -90,13 +95,13 @@ OpenAN Platform - 镜像构建脚本（独立仓库版本）
   --push                        构建后推送到仓库
 
 源码路径选项（本地路径）:
-  --registry-src <path>         Registry Center 源码路径
-  --orchestration-src <path>    Orchestration Center 源码路径
+  --registry-src <path>         Registry Center 源码路径 (可选)
+  --orchestration-src <path>    Orchestration Center 源码路径 (可选)
   --frontend-src <path>         Workflow Designer 源码路径 (默认: {orchestration-src}/workflow-designer)
 
 Git 仓库选项:
-  --registry-repo <url>         Registry Center Git 仓库
-  --orchestration-repo <url>    Orchestration Center Git 仓库
+  --registry-repo <url>         Registry Center Git 仓库 (可选)
+  --orchestration-repo <url>    Orchestration Center Git 仓库 (可选)
   --registry-branch <branch>    Registry Center 分支 (默认: main)
   --orchestration-branch <branch>  Orchestration Center 分支 (默认: main)
 
@@ -108,11 +113,21 @@ Git 仓库选项:
   --config <file>               使用配置文件 (默认: build-config.yaml)
   --help                        显示帮助信息
 
+说明:
+  - 至少需要指定一个组件的源码
+  - Workflow Designer 默认跟随 Orchestration Center 构建
+  - 未指定的组件将跳过构建
+
 示例:
-  # 使用本地源码
+  # 仅构建 Registry Center
+  $0 --registry-src /path/to/registry-center
+
+  # 仅构建 Orchestration Center (包含 Workflow Designer)
+  $0 --orchestration-src /path/to/orchestration-center
+
+  # 同时构建两个组件
   $0 --registry-src /path/to/registry-center \\
-     --orchestration-src /path/to/orchestration-center \\
-     --frontend-src /path/to/orchestration-center/workflow-designer
+     --orchestration-src /path/to/orchestration-center
 
   # 使用 Git 仓库
   $0 --registry-repo https://github.com/org/registry-center.git \\
@@ -268,6 +283,9 @@ clone_repo() {
 prepare_sources() {
     log_info "准备源码..."
     
+    local has_registry=false
+    local has_orchestration=false
+    
     # Registry Center
     if [ -n "$REGISTRY_SRC" ]; then
         if [ ! -d "$REGISTRY_SRC" ]; then
@@ -275,12 +293,11 @@ prepare_sources() {
             exit 1
         fi
         log_info "使用本地源码: Registry Center = $REGISTRY_SRC"
+        has_registry=true
     elif [ -n "$REGISTRY_REPO" ]; then
         REGISTRY_SRC=$(clone_repo "$REGISTRY_REPO" "$REGISTRY_BRANCH" "registry-center" "Registry Center")
         log_info "克隆完成: Registry Center = $REGISTRY_SRC"
-    else
-        log_error "未指定 Registry Center 源码（需要 --registry-src 或 --registry-repo）"
-        exit 1
+        has_registry=true
     fi
     
     # Orchestration Center
@@ -290,42 +307,60 @@ prepare_sources() {
             exit 1
         fi
         log_info "使用本地源码: Orchestration Center = $ORCHESTRATION_SRC"
+        has_orchestration=true
     elif [ -n "$ORCHESTRATION_REPO" ]; then
         ORCHESTRATION_SRC=$(clone_repo "$ORCHESTRATION_REPO" "$ORCHESTRATION_BRANCH" "orchestration-center" "Orchestration Center")
         log_info "克隆完成: Orchestration Center = $ORCHESTRATION_SRC"
-    else
-        log_error "未指定 Orchestration Center 源码（需要 --orchestration-src 或 --orchestration-repo）"
-        exit 1
+        has_orchestration=true
     fi
     
     # Workflow Designer (orchestration-center 的子目录)
-    if [ -n "$FRONTEND_SRC" ]; then
+    if [ "$has_orchestration" = true ]; then
+        if [ -n "$FRONTEND_SRC" ]; then
+            if [ ! -d "$FRONTEND_SRC" ]; then
+                log_error "Workflow Designer 源码路径不存在: $FRONTEND_SRC"
+                exit 1
+            fi
+            log_info "使用本地源码: Workflow Designer = $FRONTEND_SRC"
+        else
+            # 默认使用 Orchestration Center 下的 workflow-designer 目录
+            FRONTEND_SRC="$ORCHESTRATION_SRC/workflow-designer"
+            if [ ! -d "$FRONTEND_SRC" ]; then
+                log_warn "Workflow Designer 目录不存在: $FRONTEND_SRC，跳过前端构建"
+                FRONTEND_SRC=""
+            else
+                log_info "使用默认路径: Workflow Designer = $FRONTEND_SRC"
+            fi
+        fi
+    elif [ -n "$FRONTEND_SRC" ]; then
         if [ ! -d "$FRONTEND_SRC" ]; then
             log_error "Workflow Designer 源码路径不存在: $FRONTEND_SRC"
             exit 1
         fi
         log_info "使用本地源码: Workflow Designer = $FRONTEND_SRC"
-    else
-        # 默认使用 Orchestration Center 下的 workflow-designer 目录
-        FRONTEND_SRC="$ORCHESTRATION_SRC/workflow-designer"
-        if [ ! -d "$FRONTEND_SRC" ]; then
-            log_error "Workflow Designer 目录不存在: $FRONTEND_SRC"
-            log_error "请使用 --frontend-src 指定正确的路径"
-            exit 1
-        fi
-        log_info "使用默认路径: Workflow Designer = $FRONTEND_SRC"
     fi
+    
+    # 至少需要一个组件
+    if [ "$has_registry" = false ] && [ "$has_orchestration" = false ]; then
+        log_error "未指定任何组件源码"
+        log_error "请使用以下选项之一："
+        log_error "  --registry-src <path>         Registry Center 源码路径"
+        log_error "  --orchestration-src <path>    Orchestration Center 源码路径"
+        log_error "  --registry-repo <url>         Registry Center Git 仓库"
+        log_error "  --orchestration-repo <url>    Orchestration Center Git 仓库"
+        exit 1
+    fi
+    
+    # 设置构建标志
+    BUILD_REGISTRY="$has_registry"
+    BUILD_ORCHESTRATION="$has_orchestration"
+    BUILD_FRONTEND="$has_orchestration" && [ -n "$FRONTEND_SRC" ]
 }
 
 # 构建镜像
 build_images() {
     log_info "开始构建多架构镜像..."
     log_info "目标平台: $PLATFORMS"
-    
-    # 镜像名称
-    REGISTRY_IMAGE="$REGISTRY/$NAMESPACE/registry-center:$TAG"
-    ORCHESTRATION_IMAGE="$REGISTRY/$NAMESPACE/orchestration-center:$TAG"
-    FRONTEND_IMAGE="$REGISTRY/$NAMESPACE/workflow-designer:$TAG"
     
     # 检查是否启用了 buildx
     if ! docker buildx version &> /dev/null; then
@@ -342,32 +377,52 @@ build_images() {
         docker buildx use multiarch-builder
     fi
     
+    local total=0
+    local current=0
+    
+    # 计算总数
+    [ "$BUILD_REGISTRY" = true ] && ((total++))
+    [ "$BUILD_ORCHESTRATION" = true ] && ((total++))
+    [ "$BUILD_FRONTEND" = true ] && ((total++))
+    
     # 构建 Registry Center
-    log_info "[1/3] 构建 Registry Center..."
-    docker buildx build \
-        --platform "$PLATFORMS" \
-        -t "$REGISTRY_IMAGE" \
-        --push \
-        "$REGISTRY_SRC"
-    log_info "✓ Registry Center 镜像: $REGISTRY_IMAGE"
+    if [ "$BUILD_REGISTRY" = true ]; then
+        ((current++))
+        REGISTRY_IMAGE="$REGISTRY/$NAMESPACE/registry-center:$TAG"
+        log_info "[$current/$total] 构建 Registry Center..."
+        docker buildx build \
+            --platform "$PLATFORMS" \
+            -t "$REGISTRY_IMAGE" \
+            --push \
+            "$REGISTRY_SRC"
+        log_info "✓ Registry Center 镜像: $REGISTRY_IMAGE"
+    fi
     
     # 构建 Orchestration Center
-    log_info "[2/3] 构建 Orchestration Center..."
-    docker buildx build \
-        --platform "$PLATFORMS" \
-        -t "$ORCHESTRATION_IMAGE" \
-        --push \
-        "$ORCHESTRATION_SRC"
-    log_info "✓ Orchestration Center 镜像: $ORCHESTRATION_IMAGE"
+    if [ "$BUILD_ORCHESTRATION" = true ]; then
+        ((current++))
+        ORCHESTRATION_IMAGE="$REGISTRY/$NAMESPACE/orchestration-center:$TAG"
+        log_info "[$current/$total] 构建 Orchestration Center..."
+        docker buildx build \
+            --platform "$PLATFORMS" \
+            -t "$ORCHESTRATION_IMAGE" \
+            --push \
+            "$ORCHESTRATION_SRC"
+        log_info "✓ Orchestration Center 镜像: $ORCHESTRATION_IMAGE"
+    fi
     
     # 构建 Workflow Designer
-    log_info "[3/3] 构建 Workflow Designer..."
-    docker buildx build \
-        --platform "$PLATFORMS" \
-        -t "$FRONTEND_IMAGE" \
-        --push \
-        "$FRONTEND_SRC"
-    log_info "✓ Workflow Designer 镜像: $FRONTEND_IMAGE"
+    if [ "$BUILD_FRONTEND" = true ]; then
+        ((current++))
+        FRONTEND_IMAGE="$REGISTRY/$NAMESPACE/workflow-designer:$TAG"
+        log_info "[$current/$total] 构建 Workflow Designer..."
+        docker buildx build \
+            --platform "$PLATFORMS" \
+            -t "$FRONTEND_IMAGE" \
+            --push \
+            "$FRONTEND_SRC"
+        log_info "✓ Workflow Designer 镜像: $FRONTEND_IMAGE"
+    fi
 }
 
 # 推送镜像（多架构镜像已通过 --push 直接推送）
@@ -375,18 +430,23 @@ push_images() {
     log_info "多架构镜像已在构建时推送到仓库"
     log_info "验证镜像架构:"
     
-    REGISTRY_IMAGE="$REGISTRY/$NAMESPACE/registry-center:$TAG"
-    ORCHESTRATION_IMAGE="$REGISTRY/$NAMESPACE/orchestration-center:$TAG"
-    FRONTEND_IMAGE="$REGISTRY/$NAMESPACE/workflow-designer:$TAG"
+    if [ "$BUILD_REGISTRY" = true ]; then
+        REGISTRY_IMAGE="$REGISTRY/$NAMESPACE/registry-center:$TAG"
+        log_info "Registry Center:"
+        docker buildx imagetools inspect "$REGISTRY_IMAGE" || true
+    fi
     
-    log_info "[1/3] Registry Center:"
-    docker buildx imagetools inspect "$REGISTRY_IMAGE" || true
+    if [ "$BUILD_ORCHESTRATION" = true ]; then
+        ORCHESTRATION_IMAGE="$REGISTRY/$NAMESPACE/orchestration-center:$TAG"
+        log_info "Orchestration Center:"
+        docker buildx imagetools inspect "$ORCHESTRATION_IMAGE" || true
+    fi
     
-    log_info "[2/3] Orchestration Center:"
-    docker buildx imagetools inspect "$ORCHESTRATION_IMAGE" || true
-    
-    log_info "[3/3] Workflow Designer:"
-    docker buildx imagetools inspect "$FRONTEND_IMAGE" || true
+    if [ "$BUILD_FRONTEND" = true ]; then
+        FRONTEND_IMAGE="$REGISTRY/$NAMESPACE/workflow-designer:$TAG"
+        log_info "Workflow Designer:"
+        docker buildx imagetools inspect "$FRONTEND_IMAGE" || true
+    fi
 }
 
 # 显示结果
@@ -399,18 +459,33 @@ show_result() {
     echo "目标平台: $PLATFORMS"
     echo ""
     echo "镜像列表:"
-    echo "  - $REGISTRY/$NAMESPACE/registry-center:$TAG"
-    echo "  - $REGISTRY/$NAMESPACE/orchestration-center:$TAG"
-    echo "  - $REGISTRY/$NAMESPACE/workflow-designer:$TAG"
+    
+    if [ "$BUILD_REGISTRY" = true ]; then
+        echo "  - $REGISTRY/$NAMESPACE/registry-center:$TAG"
+    fi
+    if [ "$BUILD_ORCHESTRATION" = true ]; then
+        echo "  - $REGISTRY/$NAMESPACE/orchestration-center:$TAG"
+    fi
+    if [ "$BUILD_FRONTEND" = true ]; then
+        echo "  - $REGISTRY/$NAMESPACE/workflow-designer:$TAG"
+    fi
+    
     echo ""
     echo "使用 Helm 部署:"
     echo "  helm install openan . \\"
-    echo "    --set registry.image.repository=$REGISTRY/$NAMESPACE/registry-center \\"
-    echo "    --set registry.image.tag=$TAG \\"
-    echo "    --set orchestration.image.repository=$REGISTRY/$NAMESPACE/orchestration-center \\"
-    echo "    --set orchestration.image.tag=$TAG \\"
-    echo "    --set frontend.image.repository=$REGISTRY/$NAMESPACE/workflow-designer \\"
-    echo "    --set frontend.image.tag=$TAG"
+    
+    if [ "$BUILD_REGISTRY" = true ]; then
+        echo "    --set registry.image.repository=$REGISTRY/$NAMESPACE/registry-center \\"
+        echo "    --set registry.image.tag=$TAG \\"
+    fi
+    if [ "$BUILD_ORCHESTRATION" = true ]; then
+        echo "    --set orchestration.image.repository=$REGISTRY/$NAMESPACE/orchestration-center \\"
+        echo "    --set orchestration.image.tag=$TAG \\"
+    fi
+    if [ "$BUILD_FRONTEND" = true ]; then
+        echo "    --set frontend.image.repository=$REGISTRY/$NAMESPACE/workflow-designer \\"
+        echo "    --set frontend.image.tag=$TAG"
+    fi
     echo ""
 }
 

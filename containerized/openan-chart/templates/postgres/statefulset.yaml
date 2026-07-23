@@ -93,9 +93,9 @@ spec:
       - ReadWriteOnce
       resources:
         requests:
-          storage: {{ .Values.postgresql.storage }}
-      {{- if .Values.postgresql.storageClassName }}
-      storageClassName: {{ .Values.postgresql.storageClassName | quote }}
+          storage: {{ .Values.postgresql.storage.size }}
+      {{- if .Values.postgresql.storage.storageClassName }}
+      storageClassName: {{ .Values.postgresql.storage.storageClassName | quote }}
       {{- end }}
 
 ---

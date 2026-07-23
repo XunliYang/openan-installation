@@ -27,6 +27,31 @@ postgresql:
   # Storage
   storage: 20Gi
   storageClassName: ""
+  # Storage infrastructure (StorageClass and PV)
+  # Set to true to create StorageClass and PV automatically
+  storage:
+    # Storage size
+    size: 20Gi
+    # Create StorageClass automatically
+    createStorageClass: false
+    # Create PV automatically
+    createPV: false
+    # StorageClass name
+    storageClassName: "openan-local"
+    # Set as default StorageClass
+    setDefault: false
+    # Reclaim policy: Retain or Delete
+    reclaimPolicy: "Retain"
+    # PV name
+    pvName: "openan-postgres-pv"
+    # Use hostPath (for single-node clusters)
+    useHostPath: true
+    # hostPath directory (when useHostPath=true)
+    hostPath: "/data/openan-postgres"
+    # Local path (when useHostPath=false)
+    localPath: "/data/openan-postgres"
+    # Node name (when useHostPath=false)
+    nodeName: ""
   # Resource limits
   resources:
     requests:
@@ -53,7 +78,6 @@ registry:
     tag: latest
     pullPolicy: Always
   port: 5000
-  nodePort: 30081
   # LLM configuration for registry-center
   llm:
     chat:

@@ -11,13 +11,12 @@ metadata:
   labels:
     {{- include "openan.registry.labels" . | nindent 4 }}
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     {{- include "openan.registry.selectorLabels" . | nindent 4 }}
   ports:
   - port: {{ .Values.registry.port }}
     targetPort: {{ .Values.registry.port }}
-    nodePort: {{ .Values.registry.nodePort | default 30081 }}
     protocol: TCP
     name: http
 {{- end }}

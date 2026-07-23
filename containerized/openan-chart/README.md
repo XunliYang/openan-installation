@@ -17,7 +17,7 @@ OpenAN 平台 Helm Chart，用于在 Kubernetes 集群上一键部署完整的 O
 
 - Kubernetes 1.24+
 - Helm 3.x
-- 容器镜像（参考 [镜像构建指南](./build/README.md)）
+- 容器镜像（参考 [镜像构建指南](../build/README.md)）
 
 ## 快速开始
 
@@ -100,11 +100,48 @@ kubectl get svc -n openan
 
 # 查看 Ingress
 kubectl get ingress -n openan
-
-# 测试 API
-curl http://localhost:5000/rest/v1/registry-center/agent-cards
-curl http://localhost:5001/rest/v1/orchestrate/agent-cards
 ```
+
+### 5. 通过 Ingress 访问 Registry Center
+
+Registry Center 通过 Ingress 暴露，路径前缀为 `/registry`。
+
+**配置 hosts（如果使用自定义域名）：**
+
+```bash
+# 假设 Ingress Controller 的 NodePort 为 30083
+# 添加以下到 /etc/hosts（Linux/Mac）或 C:\Windows\System32\drivers\etc\hosts（Windows）
+192.168.200.183  openan.local
+```
+
+**访问 Registry API：**
+
+```bash
+# 查询所有 Agent
+curl http://openan.local:30083/registry/rest/v1/registry-center/agent-cards
+
+# 注册新 Agent
+curl -X POST http://openan.local:30083/registry/rest/v1/registry-center/agent-cards \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-agent",
+    "description": "My custom agent",
+    "url": "http://my-agent:8080",
+    "version": "1.0.0"
+  }'
+
+# 查询特定 Agent
+curl http://openan.local:30083/registry/rest/v1/registry-center/agent-cards/my-agent
+
+# 删除 Agent
+curl -X DELETE http://openan.local:30083/registry/rest/v1/registry-center/agent-cards/my-agent
+```
+
+**路径重写规则：**
+
+Ingress 会自动将 `/registry` 前缀去掉：
+- 外部请求：`/registry/rest/v1/registry-center/agent-cards`
+- 转发到后端：`/rest/v1/registry-center/agent-cards`
 
 ## 配置参数
 
@@ -125,8 +162,52 @@ curl http://localhost:5001/rest/v1/orchestrate/agent-cards
 | `postgresql.externalHost` | 外部数据库地址 | `""` |
 | `postgresql.port` | 数据库端口 | `5432` |
 | `postgresql.password` | 数据库密码 | `"openan-db-password"` |
-| `postgresql.storage` | 存储大小 | `20Gi` |
-| `postgresql.storageClassName` | StorageClass 名称 | `""` |
+| `postgresql.storage.size` | 存储大小 | `20Gi` |
+| `postgresql.storage.createStorageClass` | 是否自动创建 StorageClass | `false` |
+| `postgresql.storage.createPV` | 是否自动创建 PV | `false` |
+| `postgresql.storage.storageClassName` | StorageClass 名称 | `"openan-local"` |
+| `postgresql.storage.setDefault` | 是否设为默认 StorageClass | `false` |
+| `postgresql.storage.reclaimPolicy` | 回收策略（Retain/Delete） | `"Retain"` |
+| `postgresql.storage.useHostPath` | 是否使用 hostPath（单节点集群） | `true` |
+| `postgresql.storage.hostPath` | hostPath 目录 | `"/data/openan-postgres"` |
+| `postgresql.storage.nodeName` | 节点名称（useHostPath=false 时） | `""` |
+
+**存储配置说明：**
+
+**场景一：集群已有默认 StorageClass**
+```yaml
+postgresql:
+  storage:
+    createStorageClass: false
+    createPV: false
+```
+
+**场景二：单节点集群，使用 hostPath**
+```yaml
+postgresql:
+  storage:
+    createStorageClass: true
+    createPV: true
+    useHostPath: true
+    hostPath: "/data/openan-postgres"
+```
+
+**场景三：多节点集群，使用 local volume**
+```yaml
+postgresql:
+  storage:
+    createStorageClass: true
+    createPV: true
+    useHostPath: false
+    localPath: "/data/openan-postgres"
+    nodeName: "node185"
+```
+
+**注意**：使用 hostPath 或 local volume 时，需要确保节点上已创建对应目录：
+```bash
+# 在目标节点上执行
+mkdir -p /data/openan-postgres
+```
 
 ### Registry Center 配置
 
