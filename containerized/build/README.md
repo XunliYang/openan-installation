@@ -1,42 +1,42 @@
-# OpenAN Platform 镜像构建指南
+# OpenAN Platform Image Build Guide
 
-本文档介绍如何为 OpenAN Helm Chart 构建所需的容器镜像。
+This document describes how to build the container images required for the OpenAN Helm Chart.
 
-## 目录结构
+## Directory Structure
 
 ```
 build/
-├── build.sh                    # 主构建脚本
-├── build-config.yaml.example   # 配置文件模板
-└── README.md                   # 本文档
+├── build.sh                    # Main build script
+├── build-config.yaml.example   # Configuration file template
+└── README.md                   # This document
 ```
 
-## 前置要求
+## Prerequisites
 
-- Docker 已安装并运行
-- Git（如果使用 Git 仓库方式）
-- Python 3（如果使用 YAML 配置文件）
+- Docker installed and running
+- Git (if using Git repository method)
+- Python 3 (if using YAML configuration file)
 
-## 快速开始
+## Quick Start
 
-### 方式一：使用本地源码（推荐开发环境）
+### Method 1: Using Local Source Code (Recommended for Development)
 
 ```bash
-# 进入 build 目录
+# Enter build directory
 cd build
 
-# 仅构建 Registry Center
+# Build Registry Center only
 ./build.sh --registry-src /path/to/registry-center
 
-# 仅构建 Orchestration Center（包含 Workflow Designer）
+# Build Orchestration Center only (includes Workflow Designer)
 ./build.sh --orchestration-src /path/to/orchestration-center
 
-# 同时构建两个组件
+# Build both components
 ./build.sh \
   --registry-src /path/to/registry-center \
   --orchestration-src /path/to/orchestration-center
 
-# 构建并推送到私有仓库
+# Build and push to private registry
 ./build.sh \
   --registry harbor.example.com \
   --namespace openan \
@@ -45,22 +45,22 @@ cd build
   --push
 ```
 
-### 方式二：使用 Git 仓库（推荐 CI/CD）
+### Method 2: Using Git Repository (Recommended for CI/CD)
 
 ```bash
-# 仅构建 Registry Center
+# Build Registry Center only
 ./build.sh \
   --registry-repo https://github.com/org/registry-center.git \
   --tag v1.0.0 \
   --push
 
-# 仅构建 Orchestration Center
+# Build Orchestration Center only
 ./build.sh \
   --orchestration-repo https://github.com/org/orchestration-center.git \
   --tag v1.0.0 \
   --push
 
-# 同时构建两个组件
+# Build both components
 ./build.sh \
   --registry-repo https://github.com/org/registry-center.git \
   --orchestration-repo https://github.com/org/orchestration-center.git \
@@ -68,60 +68,60 @@ cd build
   --push
 ```
 
-注意：Workflow Designer 是 Orchestration Center 的子目录，构建 Orchestration Center 时会自动包含。
+Note: Workflow Designer is a subdirectory of Orchestration Center and will be automatically included when building Orchestration Center.
 
-### 方式三：使用配置文件
+### Method 3: Using Configuration File
 
 ```bash
-# 复制配置文件模板
+# Copy configuration file template
 cp build-config.yaml.example build-config.yaml
 
-# 编辑配置文件
+# Edit configuration file
 vim build-config.yaml
 
-# 使用配置文件构建
+# Build using configuration file
 ./build.sh --config build-config.yaml
 ```
 
-注意：Workflow Designer 是 Orchestration Center 的子目录，默认使用 `{orchestration-center}/workflow-designer`，无需单独配置。
+Note: Workflow Designer is a subdirectory of Orchestration Center and defaults to `{orchestration-center}/workflow-designer`, no separate configuration needed.
 
-## 多架构构建
+## Multi-architecture Build
 
-构建脚本默认支持多架构（amd64 + arm64），可以通过 `--platforms` 参数自定义目标平台。
+The build script supports multi-architecture (amd64 + arm64) by default, customizable via the `--platforms` parameter.
 
-### 前置要求
+### Prerequisites
 
-1. **安装 QEMU**（用于模拟不同架构）
+1. **Install QEMU** (for emulating different architectures)
    ```bash
    # Ubuntu/Debian
    sudo apt-get install qemu-user-static
    
-   # 或使用 Docker
+   # Or using Docker
    docker run --privileged --rm tonistiigi/binfmt --install all
    ```
 
-2. **创建 buildx builder**
+2. **Create buildx builder**
    ```bash
    docker buildx create --name multiarch --use
    ```
 
-### 构建多架构镜像
+### Building Multi-architecture Images
 
 ```bash
-# 默认构建 amd64 + arm64
+# Default: build amd64 + arm64
 ./build.sh \
   --registry-src /path/to/registry-center \
   --orchestration-src /path/to/orchestration-center \
   --push
 
-# 自定义目标平台
+# Custom target platforms
 ./build.sh \
   --registry-src /path/to/registry-center \
   --orchestration-src /path/to/orchestration-center \
   --platforms linux/amd64,linux/arm64,linux/arm/v7 \
   --push
 
-# 仅构建单架构（更快）
+# Single architecture only (faster)
 ./build.sh \
   --registry-src /path/to/registry-center \
   --orchestration-src /path/to/orchestration-center \
@@ -129,13 +129,13 @@ vim build-config.yaml
   --push
 ```
 
-### 验证多架构镜像
+### Verifying Multi-architecture Images
 
 ```bash
-# 查看镜像支持的架构
+# View supported architectures for an image
 docker buildx imagetools inspect your-registry.com/openan/registry-center:latest
 
-# 输出示例：
+# Example output:
 # Name: your-registry.com/openan/registry-center:latest
 # Manifests:
 #   Name: ...@sha256:abc123
@@ -145,90 +145,90 @@ docker buildx imagetools inspect your-registry.com/openan/registry-center:latest
 #   Platform: linux/arm64
 ```
 
-### 注意事项
+### Notes
 
-1. **必须推送**：多架构镜像必须推送到仓库，无法在本地直接使用
-2. **构建时间**：多架构构建时间约为单架构的 N 倍（N = 架构数量）
-3. **仓库支持**：确保镜像仓库支持多架构 manifest（Docker Hub、Harbor、ACR 等都支持）
+1. **Must push**: Multi-architecture images must be pushed to a registry, cannot be used locally
+2. **Build time**: Multi-architecture build time is approximately N times single architecture (N = number of architectures)
+3. **Registry support**: Ensure your image registry supports multi-architecture manifests (Docker Hub, Harbor, ACR, etc. all support this)
 
-## 配置参数说明
+## Configuration Parameters
 
-### 命令行参数
+### Command Line Parameters
 
-| 参数 | 说明 | 必填 | 示例 |
-|------|------|------|------|
-| `--registry` | 镜像仓库地址 | 否 | `harbor.example.com` |
-| `--namespace` | 镜像命名空间 | 否 | `openan` |
-| `--tag` | 镜像标签 | 否 | `v1.0.0` |
-| `--push` | 构建后推送 | 否 | - |
-| `--config` | 配置文件路径 | 否 | `build-config.yaml` |
-| `--registry-src` | Registry Center 本地路径 | 二选一 | `/path/to/registry-center` |
-| `--orchestration-src` | Orchestration Center 本地路径 | 二选一 | `/path/to/orchestration-center` |
-| `--frontend-src` | Workflow Designer 本地路径 | 否 | `/path/to/workflow-designer` |
-| `--registry-repo` | Registry Center Git 仓库 | 二选一 | `https://github.com/...` |
-| `--orchestration-repo` | Orchestration Center Git 仓库 | 二选一 | `https://github.com/...` |
-| `--registry-branch` | Registry Center 分支 | 否 | `main` |
-| `--orchestration-branch` | Orchestration Center 分支 | 否 | `main` |
-| `--platforms` | 目标平台架构 | 否 | `linux/amd64,linux/arm64` |
+| Parameter | Description | Required | Example |
+|-----------|-------------|----------|---------|
+| `--registry` | Image registry address | No | `harbor.example.com` |
+| `--namespace` | Image namespace | No | `openan` |
+| `--tag` | Image tag | No | `v1.0.0` |
+| `--push` | Push after build | No | - |
+| `--config` | Configuration file path | No | `build-config.yaml` |
+| `--registry-src` | Registry Center local path | One of two | `/path/to/registry-center` |
+| `--orchestration-src` | Orchestration Center local path | One of two | `/path/to/orchestration-center` |
+| `--frontend-src` | Workflow Designer local path | No | `/path/to/workflow-designer` |
+| `--registry-repo` | Registry Center Git repository | One of two | `https://github.com/...` |
+| `--orchestration-repo` | Orchestration Center Git repository | One of two | `https://github.com/...` |
+| `--registry-branch` | Registry Center branch | No | `main` |
+| `--orchestration-branch` | Orchestration Center branch | No | `main` |
+| `--platforms` | Target platform architectures | No | `linux/amd64,linux/arm64` |
 
-**说明**：至少需要指定一个组件的源码（`--registry-src` 或 `--orchestration-src`），未指定的组件将跳过构建。
+**Note**: At least one component source must be specified (`--registry-src` or `--orchestration-src`), components not specified will be skipped.
 
-### 配置文件参数
+### Configuration File Parameters
 
-参见 `build-config.yaml.example` 中的注释。
+See comments in `build-config.yaml.example`.
 
-注意：Workflow Designer 是 Orchestration Center 的子目录，配置文件中只需配置 `orchestration-center`，`workflow-designer` 会自动使用 `{orchestration-center}/workflow-designer`。
+Note: Workflow Designer is a subdirectory of Orchestration Center, configuration only needs `orchestration-center`, `workflow-designer` will automatically use `{orchestration-center}/workflow-designer`.
 
-## 构建流程
+## Build Process
 
 ```
-1. 解析参数（命令行 > 配置文件 > 默认值）
+1. Parse arguments (command line > config file > defaults)
    ↓
-2. 准备源码
-   ├─ 本地路径：验证路径存在
-   └─ Git 仓库：克隆到临时目录
+2. Prepare source code
+   ├─ Local path: verify path exists
+   └─ Git repository: clone to temp directory
    ↓
-3. 构建镜像（仅构建指定了源码的组件）
-   ├─ registry-center        (如果指定了 --registry-src 或 --registry-repo)
-   ├─ orchestration-center   (如果指定了 --orchestration-src 或 --orchestration-repo)
-   └─ workflow-designer      (如果构建了 orchestration-center)
+3. Build images (only builds components with specified source)
+   ├─ registry-center        (if --registry-src or --registry-repo specified)
+   ├─ orchestration-center   (if --orchestration-src or --orchestration-repo specified)
+   └─ workflow-designer      (if orchestration-center is built)
    ↓
-4. 推送镜像（如果指定 --push）
+4. Push images (if --push specified)
    ↓
-5. 清理临时目录
+5. Clean up temp directories
 ```
 
-## 镜像命名规范
+## Image Naming Convention
 
-构建的镜像命名格式：
+Built images follow this naming format:
 
 ```
 {registry}/{namespace}/{component}:{tag}
 ```
 
-示例：
+Examples:
 - `harbor.example.com/openan/registry-center:v1.0.0`
 - `harbor.example.com/openan/orchestration-center:v1.0.0`
 - `harbor.example.com/openan/workflow-designer:v1.0.0`
 
-## 与 Helm Chart 集成
+## Integration with Helm Chart
 
-构建完成后，使用以下方式部署：
+After building, deploy using:
 
 ```bash
-# 仅构建了 Registry Center
+# Only built Registry Center
 helm install openan . \
   --set registry.image.repository=harbor.example.com/openan/registry-center \
   --set registry.image.tag=v1.0.0
 
-# 仅构建了 Orchestration Center
+# Only built Orchestration Center
 helm install openan . \
   --set orchestration.image.repository=harbor.example.com/openan/orchestration-center \
   --set orchestration.image.tag=v1.0.0 \
   --set frontend.image.repository=harbor.example.com/openan/workflow-designer \
   --set frontend.image.tag=v1.0.0
 
-# 同时构建两个组件
+# Built both components
 helm install openan . \
   --set registry.image.repository=harbor.example.com/openan/registry-center \
   --set registry.image.tag=v1.0.0 \
@@ -238,11 +238,11 @@ helm install openan . \
   --set frontend.image.tag=v1.0.0
 ```
 
-## 常见问题
+## FAQ
 
-### Q: Workflow Designer 如何指定源码？
+### Q: How to specify Workflow Designer source?
 
-A: Workflow Designer 是 Orchestration Center 的子目录，默认使用 `{orchestration-src}/workflow-designer`。如需使用其他路径，可通过 `--frontend-src` 参数指定：
+A: Workflow Designer is a subdirectory of Orchestration Center, defaults to `{orchestration-src}/workflow-designer`. To use a different path, use `--frontend-src`:
 
 ```bash
 ./build.sh \
@@ -251,69 +251,69 @@ A: Workflow Designer 是 Orchestration Center 的子目录，默认使用 `{orch
   --frontend-src /custom/path/to/workflow-designer
 ```
 
-### Q: 如何只构建单个组件？
+### Q: How to build only one component?
 
-A: 脚本支持选择性构建，只需指定一个组件的源码：
+A: The script supports selective builds, just specify one component's source:
 
 ```bash
-# 仅构建 Registry Center
+# Build Registry Center only
 ./build.sh --registry-src /path/to/registry-center
 
-# 仅构建 Orchestration Center（自动包含 Workflow Designer）
+# Build Orchestration Center only (automatically includes Workflow Designer)
 ./build.sh --orchestration-src /path/to/orchestration-center
 ```
 
-### Q: 如何跳过 Workflow Designer 的构建？
+### Q: How to skip Workflow Designer build?
 
-A: 如果 Orchestration Center 源码中没有 `workflow-designer` 目录，脚本会自动跳过前端构建。也可以通过 `--frontend-src ""` 显式跳过。
+A: If Orchestration Center source doesn't have a `workflow-designer` directory, the script will automatically skip frontend build. You can also explicitly skip with `--frontend-src ""`.
 
-### Q: 构建失败如何调试？
+### Q: How to debug build failures?
 
-A: 使用 `--no-cache` 参数禁用缓存，查看详细构建日志：
+A: Use `--no-cache` to disable cache and view detailed build logs:
 
 ```bash
 docker build --no-cache -t my-image /path/to/source
 ```
 
-### Q: 如何使用私有 Git 仓库？
+### Q: How to use private Git repositories?
 
-A: 配置 Git 认证：
+A: Configure Git authentication:
 
 ```bash
-# 方式一：使用 SSH
+# Method 1: Using SSH
 git clone git@github.com:org/repo.git
 
-# 方式二：使用 HTTPS + Token
+# Method 2: Using HTTPS + Token
 git clone https://token@github.com/org/repo.git
 
-# 方式三：配置 Git credential
+# Method 3: Configure Git credential
 git config --global credential.helper store
 ```
 
-### Q: 如何验证镜像是否构建成功？
+### Q: How to verify successful image build?
 
-A: 使用以下命令检查：
+A: Use these commands to check:
 
 ```bash
-# 列出镜像
+# List images
 docker images | grep openan
 
-# 测试运行
+# Test run
 docker run --rm my-registry.com/openan/registry-center:v1.0.0 --help
 ```
 
-## 最佳实践
+## Best Practices
 
-1. **选择性构建**：仅构建有变更的组件，节省构建时间
-2. **版本标签**：生产环境使用语义化版本（如 `v1.0.0`），开发环境使用 `latest` 或 git commit hash
-3. **镜像扫描**：推送前使用 `trivy` 或 `snyk` 扫描镜像漏洞
-4. **多架构支持**：使用 `docker buildx` 构建多架构镜像（amd64/arm64）
-5. **缓存优化**：合理编写 Dockerfile，利用构建缓存加速构建
-6. **安全存储**：使用 Kubernetes Secrets 或 Vault 存储镜像仓库凭证
+1. **Selective builds**: Only build components with changes to save build time
+2. **Version tags**: Use semantic versioning (e.g., `v1.0.0`) for production, `latest` or git commit hash for development
+3. **Image scanning**: Scan images for vulnerabilities using `trivy` or `snyk` before pushing
+4. **Multi-architecture support**: Use `docker buildx` to build multi-architecture images (amd64/arm64)
+5. **Cache optimization**: Write Dockerfiles to leverage build cache for faster builds
+6. **Secure storage**: Use Kubernetes Secrets or Vault to store image registry credentials
 
-## 相关文档
+## Related Documentation
 
-- [快速体验](../QUICKSTART.md)（构建 + 部署一站式指南）
-- [Helm Chart 部署](../openan-chart/README.md)
-- [K8S 部署指南](../../k8s-deployment-guide.md)
-- [Docker 官方文档](https://docs.docker.com/)
+- [Quick Start](../QUICKSTART.md) (Build + Deploy one-stop guide)
+- [Helm Chart Deployment](../openan-chart/README.md)
+- [K8S Deployment Guide](../../k8s-deployment-guide.md)
+- [Docker Official Documentation](https://docs.docker.com/)

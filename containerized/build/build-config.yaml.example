@@ -1,48 +1,48 @@
-# OpenAN Platform 镜像构建配置文件
-# 复制此文件为 build-config.yaml 并修改配置
+# OpenAN Platform Image Build Configuration File
+# Copy this file to build-config.yaml and modify the configuration
 
-# 镜像仓库配置
+# Image registry configuration
 registry:
-  url: docker.io          # 镜像仓库地址
-  namespace: openan       # 镜像命名空间
-  tag: latest             # 镜像标签
+  url: docker.io          # Image registry address
+  namespace: openan       # Image namespace
+  tag: latest             # Image tag
 
-# Registry Center 配置
+# Registry Center configuration
 registry-center:
-  # 源码来源（二选一，优先级：source > repository）
-  source: ""              # 本地源码路径，例如: /path/to/registry-center
-  repository: ""          # Git 仓库地址，例如: https://github.com/org/registry-center.git
-  branch: main            # Git 分支（仅在使用 repository 时生效）
+  # Source code source (choose one, priority: source > repository)
+  source: ""              # Local source path, e.g.: /path/to/registry-center
+  repository: ""          # Git repository address, e.g.: https://github.com/org/registry-center.git
+  branch: main            # Git branch (only effective when using repository)
 
-# Orchestration Center 配置
+# Orchestration Center configuration
 orchestration-center:
-  source: ""              # 本地源码路径，例如: /path/to/orchestration-center
-  repository: ""          # Git 仓库地址
-  branch: main            # Git 分支
+  source: ""              # Local source path, e.g.: /path/to/orchestration-center
+  repository: ""          # Git repository address
+  branch: main            # Git branch
 
-# Workflow Designer 配置
-# 注意：Workflow Designer 是 Orchestration Center 的子目录
-# 默认使用 {orchestration-center}/workflow-designer
+# Workflow Designer configuration
+# Note: Workflow Designer is a subdirectory of Orchestration Center
+# Defaults to {orchestration-center}/workflow-designer
 workflow-designer:
-  source: ""              # 本地源码路径（可选，默认: {orchestration-center}/workflow-designer）
+  source: ""              # Local source path (optional, default: {orchestration-center}/workflow-designer)
 
-# 构建选项
+# Build options
 build:
-  push: false             # 构建后是否推送到仓库
-  no-cache: false         # 是否禁用构建缓存
-  platforms: "linux/amd64,linux/arm64"  # 目标平台架构
+  push: false             # Whether to push to registry after build
+  no-cache: false         # Whether to disable build cache
+  platforms: "linux/amd64,linux/arm64"  # Target platform architectures
 
-# 示例配置：
+# Example configuration:
 # 
-# 使用本地源码：
+# Using local source:
 # registry-center:
 #   source: /home/user/projects/registry-center
 # orchestration-center:
 #   source: /home/user/projects/orchestration-center
 # workflow-designer:
-#   source: /home/user/projects/orchestration-center/workflow-designer  # 可选
+#   source: /home/user/projects/orchestration-center/workflow-designer  # optional
 #
-# 使用 Git 仓库：
+# Using Git repository:
 # registry-center:
 #   repository: https://github.com/openan/registry-center.git
 #   branch: v1.0.0

@@ -1,63 +1,63 @@
 #!/bin/bash
-# OpenAN Platform - 镜像构建脚本（独立仓库版本）
-# 用法: ./build.sh [options]
+# OpenAN Platform - Image Build Script (Independent Repository Version)
+# Usage: ./build.sh [options]
 #
-# 选项:
-#   --registry <url>              镜像仓库地址 (默认: docker.io)
-#   --namespace <ns>              镜像命名空间 (默认: openan)
-#   --tag <tag>                   镜像标签 (默认: latest)
-#   --push                        构建后推送到仓库
-#   --config <file>               使用配置文件 (默认: build-config.yaml)
-#   --registry-src <path>         Registry Center 源码路径 (可选)
-#   --orchestration-src <path>    Orchestration Center 源码路径 (可选)
-#   --frontend-src <path>         Workflow Designer 源码路径 (默认: {orchestration-src}/workflow-designer)
-#   --registry-repo <url>         Registry Center Git 仓库 (可选)
-#   --orchestration-repo <url>    Orchestration Center Git 仓库 (可选)
-#   --registry-branch <branch>    Registry Center 分支 (默认: main)
-#   --orchestration-branch <branch>  Orchestration Center 分支 (默认: main)
-#   --platforms <platforms>       目标平台架构 (默认: linux/amd64,linux/arm64)
-#   --help                        显示帮助信息
+# Options:
+#   --registry <url>              Image registry address (default: docker.io)
+#   --namespace <ns>              Image namespace (default: openan)
+#   --tag <tag>                   Image tag (default: latest)
+#   --push                        Push to registry after build
+#   --config <file>               Use configuration file (default: build-config.yaml)
+#   --registry-src <path>         Registry Center source path (optional)
+#   --orchestration-src <path>    Orchestration Center source path (optional)
+#   --frontend-src <path>         Workflow Designer source path (default: {orchestration-src}/workflow-designer)
+#   --registry-repo <url>         Registry Center Git repository (optional)
+#   --orchestration-repo <url>    Orchestration Center Git repository (optional)
+#   --registry-branch <branch>    Registry Center branch (default: main)
+#   --orchestration-branch <branch>  Orchestration Center branch (default: main)
+#   --platforms <platforms>       Target platform architectures (default: linux/amd64,linux/arm64)
+#   --help                        Display help information
 #
-# 说明:
-#   - 至少需要指定一个组件的源码 (--registry-src 或 --orchestration-src)
-#   - Workflow Designer 默认跟随 Orchestration Center 构建
-#   - 未指定的组件将跳过构建
+# Notes:
+#   - At least one component source must be specified (--registry-src or --orchestration-src)
+#   - Workflow Designer is built together with Orchestration Center by default
+#   - Components not specified will be skipped
 
 set -e
 
-# 颜色定义
+# Color definitions
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# 默认配置
+# Default configuration
 REGISTRY="docker.io"
 NAMESPACE="openan"
 TAG="latest"
 PUSH=false
 CONFIG_FILE=""
 
-# 源码路径（优先级：命令行 > 配置文件 > 默认值）
+# Source paths (priority: command line > config file > defaults)
 REGISTRY_SRC=""
 ORCHESTRATION_SRC=""
 FRONTEND_SRC=""
 
-# Git 仓库
+# Git repositories
 REGISTRY_REPO=""
 ORCHESTRATION_REPO=""
 
-# Git 分支
+# Git branches
 REGISTRY_BRANCH="main"
 ORCHESTRATION_BRANCH="main"
 
-# 目标平台
+# Target platforms
 PLATFORMS="linux/amd64,linux/arm64"
 
-# 临时目录
+# Temporary directory
 TEMP_DIR=""
 
-# 日志函数
+# Log functions
 log_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
 }
@@ -70,80 +70,80 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# 清理函数
+# Cleanup function
 cleanup() {
     if [ -n "$TEMP_DIR" ] && [ -d "$TEMP_DIR" ]; then
-        log_info "清理临时目录: $TEMP_DIR"
+        log_info "Cleaning up temporary directory: $TEMP_DIR"
         rm -rf "$TEMP_DIR"
     fi
 }
 
-# 注册清理 trap
+# Register cleanup trap
 trap cleanup EXIT
 
-# 显示帮助
+# Display help
 show_help() {
     cat << EOF
-OpenAN Platform - 镜像构建脚本（独立仓库版本）
+OpenAN Platform - Image Build Script (Independent Repository Version)
 
-用法: $0 [options]
+Usage: $0 [options]
 
-镜像仓库选项:
-  --registry <url>              镜像仓库地址 (默认: docker.io)
-  --namespace <ns>              镜像命名空间 (默认: openan)
-  --tag <tag>                   镜像标签 (默认: latest)
-  --push                        构建后推送到仓库
+Image Registry Options:
+  --registry <url>              Image registry address (default: docker.io)
+  --namespace <ns>              Image namespace (default: openan)
+  --tag <tag>                   Image tag (default: latest)
+  --push                        Push to registry after build
 
-源码路径选项（本地路径）:
-  --registry-src <path>         Registry Center 源码路径 (可选)
-  --orchestration-src <path>    Orchestration Center 源码路径 (可选)
-  --frontend-src <path>         Workflow Designer 源码路径 (默认: {orchestration-src}/workflow-designer)
+Source Path Options (local paths):
+  --registry-src <path>         Registry Center source path (optional)
+  --orchestration-src <path>    Orchestration Center source path (optional)
+  --frontend-src <path>         Workflow Designer source path (default: {orchestration-src}/workflow-designer)
 
-Git 仓库选项:
-  --registry-repo <url>         Registry Center Git 仓库 (可选)
-  --orchestration-repo <url>    Orchestration Center Git 仓库 (可选)
-  --registry-branch <branch>    Registry Center 分支 (默认: main)
-  --orchestration-branch <branch>  Orchestration Center 分支 (默认: main)
+Git Repository Options:
+  --registry-repo <url>         Registry Center Git repository (optional)
+  --orchestration-repo <url>    Orchestration Center Git repository (optional)
+  --registry-branch <branch>    Registry Center branch (default: main)
+  --orchestration-branch <branch>  Orchestration Center branch (default: main)
 
-多架构构建选项:
-  --platforms <platforms>       目标平台架构 (默认: linux/amd64,linux/arm64)
-                                示例: linux/amd64,linux/arm64,linux/arm/v7
+Multi-architecture Build Options:
+  --platforms <platforms>       Target platform architectures (default: linux/amd64,linux/arm64)
+                                Example: linux/amd64,linux/arm64,linux/arm/v7
 
-配置选项:
-  --config <file>               使用配置文件 (默认: build-config.yaml)
-  --help                        显示帮助信息
+Configuration Options:
+  --config <file>               Use configuration file (default: build-config.yaml)
+  --help                        Display help information
 
-说明:
-  - 至少需要指定一个组件的源码
-  - Workflow Designer 默认跟随 Orchestration Center 构建
-  - 未指定的组件将跳过构建
+Notes:
+  - At least one component source must be specified
+  - Workflow Designer is built together with Orchestration Center by default
+  - Components not specified will be skipped
 
-示例:
-  # 仅构建 Registry Center
+Examples:
+  # Build Registry Center only
   $0 --registry-src /path/to/registry-center
 
-  # 仅构建 Orchestration Center (包含 Workflow Designer)
+  # Build Orchestration Center only (includes Workflow Designer)
   $0 --orchestration-src /path/to/orchestration-center
 
-  # 同时构建两个组件
+  # Build both components
   $0 --registry-src /path/to/registry-center \\
      --orchestration-src /path/to/orchestration-center
 
-  # 使用 Git 仓库
+  # Use Git repositories
   $0 --registry-repo https://github.com/org/registry-center.git \\
      --orchestration-repo https://github.com/org/orchestration-center.git
 
-  # 使用配置文件
+  # Use configuration file
   $0 --config build-config.yaml --push
 
-  # 构建并推送到私有仓库
+  # Build and push to private registry
   $0 --registry harbor.example.com --namespace openan --tag v1.0.0 --push
 
 EOF
     exit 0
 }
 
-# 解析命令行参数
+# Parse command line arguments
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -203,19 +203,19 @@ parse_args() {
                 show_help
                 ;;
             *)
-                log_error "未知选项: $1"
+                log_error "Unknown option: $1"
                 exit 1
                 ;;
         esac
     done
 }
 
-# 加载配置文件
+# Load configuration file
 load_config() {
     if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ]; then
-        log_info "加载配置文件: $CONFIG_FILE"
+        log_info "Loading configuration file: $CONFIG_FILE"
         
-        # 使用 Python 解析 YAML（更可靠）
+        # Use Python to parse YAML (more reliable)
         if command -v python3 &> /dev/null; then
             eval $(python3 << EOF
 import yaml
@@ -224,7 +224,7 @@ import sys
 with open('$CONFIG_FILE', 'r') as f:
     config = yaml.safe_load(f)
 
-# 输出配置（仅在命令行未指定时使用）
+# Output configuration (only used when not specified on command line)
 if config.get('registry', {}).get('url'):
     print(f'REGISTRY="{config["registry"]["url"]}"')
 if config.get('registry', {}).get('namespace'):
@@ -250,12 +250,12 @@ if config.get('build', {}).get('platforms'):
 EOF
 )
         else
-            log_warn "未找到 python3，无法解析 YAML 配置文件"
+            log_warn "python3 not found, cannot parse YAML configuration file"
         fi
     fi
 }
 
-# 克隆 Git 仓库
+# Clone Git repository
 clone_repo() {
     local repo_url=$1
     local branch=$2
@@ -266,7 +266,7 @@ clone_repo() {
         return 1
     fi
     
-    log_info "克隆 $component_name 仓库: $repo_url (分支: $branch)"
+    log_info "Cloning $component_name repository: $repo_url (branch: $branch)"
     
     if [ -z "$TEMP_DIR" ]; then
         TEMP_DIR=$(mktemp -d)
@@ -279,9 +279,9 @@ clone_repo() {
     return 0
 }
 
-# 准备源码
+# Prepare source code
 prepare_sources() {
-    log_info "准备源码..."
+    log_info "Preparing source code..."
     
     local has_registry=false
     local has_orchestration=false
@@ -289,89 +289,89 @@ prepare_sources() {
     # Registry Center
     if [ -n "$REGISTRY_SRC" ]; then
         if [ ! -d "$REGISTRY_SRC" ]; then
-            log_error "Registry Center 源码路径不存在: $REGISTRY_SRC"
+            log_error "Registry Center source path does not exist: $REGISTRY_SRC"
             exit 1
         fi
-        log_info "使用本地源码: Registry Center = $REGISTRY_SRC"
+        log_info "Using local source: Registry Center = $REGISTRY_SRC"
         has_registry=true
     elif [ -n "$REGISTRY_REPO" ]; then
         REGISTRY_SRC=$(clone_repo "$REGISTRY_REPO" "$REGISTRY_BRANCH" "registry-center" "Registry Center")
-        log_info "克隆完成: Registry Center = $REGISTRY_SRC"
+        log_info "Clone completed: Registry Center = $REGISTRY_SRC"
         has_registry=true
     fi
     
     # Orchestration Center
     if [ -n "$ORCHESTRATION_SRC" ]; then
         if [ ! -d "$ORCHESTRATION_SRC" ]; then
-            log_error "Orchestration Center 源码路径不存在: $ORCHESTRATION_SRC"
+            log_error "Orchestration Center source path does not exist: $ORCHESTRATION_SRC"
             exit 1
         fi
-        log_info "使用本地源码: Orchestration Center = $ORCHESTRATION_SRC"
+        log_info "Using local source: Orchestration Center = $ORCHESTRATION_SRC"
         has_orchestration=true
     elif [ -n "$ORCHESTRATION_REPO" ]; then
         ORCHESTRATION_SRC=$(clone_repo "$ORCHESTRATION_REPO" "$ORCHESTRATION_BRANCH" "orchestration-center" "Orchestration Center")
-        log_info "克隆完成: Orchestration Center = $ORCHESTRATION_SRC"
+        log_info "Clone completed: Orchestration Center = $ORCHESTRATION_SRC"
         has_orchestration=true
     fi
     
-    # Workflow Designer (orchestration-center 的子目录)
+    # Workflow Designer (subdirectory of orchestration-center)
     if [ "$has_orchestration" = true ]; then
         if [ -n "$FRONTEND_SRC" ]; then
             if [ ! -d "$FRONTEND_SRC" ]; then
-                log_error "Workflow Designer 源码路径不存在: $FRONTEND_SRC"
+                log_error "Workflow Designer source path does not exist: $FRONTEND_SRC"
                 exit 1
             fi
-            log_info "使用本地源码: Workflow Designer = $FRONTEND_SRC"
+            log_info "Using local source: Workflow Designer = $FRONTEND_SRC"
         else
-            # 默认使用 Orchestration Center 下的 workflow-designer 目录
+            # Default to workflow-designer directory under Orchestration Center
             FRONTEND_SRC="$ORCHESTRATION_SRC/workflow-designer"
             if [ ! -d "$FRONTEND_SRC" ]; then
-                log_warn "Workflow Designer 目录不存在: $FRONTEND_SRC，跳过前端构建"
+                log_warn "Workflow Designer directory does not exist: $FRONTEND_SRC, skipping frontend build"
                 FRONTEND_SRC=""
             else
-                log_info "使用默认路径: Workflow Designer = $FRONTEND_SRC"
+                log_info "Using default path: Workflow Designer = $FRONTEND_SRC"
             fi
         fi
     elif [ -n "$FRONTEND_SRC" ]; then
         if [ ! -d "$FRONTEND_SRC" ]; then
-            log_error "Workflow Designer 源码路径不存在: $FRONTEND_SRC"
+            log_error "Workflow Designer source path does not exist: $FRONTEND_SRC"
             exit 1
         fi
-        log_info "使用本地源码: Workflow Designer = $FRONTEND_SRC"
+        log_info "Using local source: Workflow Designer = $FRONTEND_SRC"
     fi
     
-    # 至少需要一个组件
+    # At least one component is required
     if [ "$has_registry" = false ] && [ "$has_orchestration" = false ]; then
-        log_error "未指定任何组件源码"
-        log_error "请使用以下选项之一："
-        log_error "  --registry-src <path>         Registry Center 源码路径"
-        log_error "  --orchestration-src <path>    Orchestration Center 源码路径"
-        log_error "  --registry-repo <url>         Registry Center Git 仓库"
-        log_error "  --orchestration-repo <url>    Orchestration Center Git 仓库"
+        log_error "No component source specified"
+        log_error "Please use one of the following options:"
+        log_error "  --registry-src <path>         Registry Center source path"
+        log_error "  --orchestration-src <path>    Orchestration Center source path"
+        log_error "  --registry-repo <url>         Registry Center Git repository"
+        log_error "  --orchestration-repo <url>    Orchestration Center Git repository"
         exit 1
     fi
     
-    # 设置构建标志
+    # Set build flags
     BUILD_REGISTRY="$has_registry"
     BUILD_ORCHESTRATION="$has_orchestration"
     BUILD_FRONTEND="$has_orchestration" && [ -n "$FRONTEND_SRC" ]
 }
 
-# 构建镜像
+# Build images
 build_images() {
-    log_info "开始构建多架构镜像..."
-    log_info "目标平台: $PLATFORMS"
+    log_info "Starting multi-architecture image build..."
+    log_info "Target platforms: $PLATFORMS"
     
-    # 检查是否启用了 buildx
+    # Check if buildx is enabled
     if ! docker buildx version &> /dev/null; then
-        log_error "docker buildx 未安装，无法构建多架构镜像"
-        log_error "请安装 Docker 19.03+ 并启用 buildx"
+        log_error "docker buildx is not installed, cannot build multi-architecture images"
+        log_error "Please install Docker 19.03+ and enable buildx"
         exit 1
     fi
     
-    # 创建或选择 builder
+    # Create or select builder
     if ! docker buildx inspect multiarch-builder &> /dev/null; then
-        log_info "创建 buildx builder: multiarch-builder"
+        log_info "Creating buildx builder: multiarch-builder"
         docker buildx create --name multiarch-builder --use
     else
         docker buildx use multiarch-builder
@@ -380,55 +380,55 @@ build_images() {
     local total=0
     local current=0
     
-    # 计算总数
+    # Calculate total
     [ "$BUILD_REGISTRY" = true ] && ((total++))
     [ "$BUILD_ORCHESTRATION" = true ] && ((total++))
     [ "$BUILD_FRONTEND" = true ] && ((total++))
     
-    # 构建 Registry Center
+    # Build Registry Center
     if [ "$BUILD_REGISTRY" = true ]; then
         ((current++))
         REGISTRY_IMAGE="$REGISTRY/$NAMESPACE/registry-center:$TAG"
-        log_info "[$current/$total] 构建 Registry Center..."
+        log_info "[$current/$total] Building Registry Center..."
         docker buildx build \
             --platform "$PLATFORMS" \
             -t "$REGISTRY_IMAGE" \
             --push \
             "$REGISTRY_SRC"
-        log_info "✓ Registry Center 镜像: $REGISTRY_IMAGE"
+        log_info "✓ Registry Center image: $REGISTRY_IMAGE"
     fi
     
-    # 构建 Orchestration Center
+    # Build Orchestration Center
     if [ "$BUILD_ORCHESTRATION" = true ]; then
         ((current++))
         ORCHESTRATION_IMAGE="$REGISTRY/$NAMESPACE/orchestration-center:$TAG"
-        log_info "[$current/$total] 构建 Orchestration Center..."
+        log_info "[$current/$total] Building Orchestration Center..."
         docker buildx build \
             --platform "$PLATFORMS" \
             -t "$ORCHESTRATION_IMAGE" \
             --push \
             "$ORCHESTRATION_SRC"
-        log_info "✓ Orchestration Center 镜像: $ORCHESTRATION_IMAGE"
+        log_info "✓ Orchestration Center image: $ORCHESTRATION_IMAGE"
     fi
     
-    # 构建 Workflow Designer
+    # Build Workflow Designer
     if [ "$BUILD_FRONTEND" = true ]; then
         ((current++))
         FRONTEND_IMAGE="$REGISTRY/$NAMESPACE/workflow-designer:$TAG"
-        log_info "[$current/$total] 构建 Workflow Designer..."
+        log_info "[$current/$total] Building Workflow Designer..."
         docker buildx build \
             --platform "$PLATFORMS" \
             -t "$FRONTEND_IMAGE" \
             --push \
             "$FRONTEND_SRC"
-        log_info "✓ Workflow Designer 镜像: $FRONTEND_IMAGE"
+        log_info "✓ Workflow Designer image: $FRONTEND_IMAGE"
     fi
 }
 
-# 推送镜像（多架构镜像已通过 --push 直接推送）
+# Push images (multi-architecture images are pushed directly via --push)
 push_images() {
-    log_info "多架构镜像已在构建时推送到仓库"
-    log_info "验证镜像架构:"
+    log_info "Multi-architecture images have been pushed to registry during build"
+    log_info "Verifying image architectures:"
     
     if [ "$BUILD_REGISTRY" = true ]; then
         REGISTRY_IMAGE="$REGISTRY/$NAMESPACE/registry-center:$TAG"
@@ -449,16 +449,16 @@ push_images() {
     fi
 }
 
-# 显示结果
+# Display results
 show_result() {
     echo ""
     echo "=========================================="
-    echo "多架构镜像构建完成！"
+    echo "Multi-architecture image build completed!"
     echo "=========================================="
     echo ""
-    echo "目标平台: $PLATFORMS"
+    echo "Target platforms: $PLATFORMS"
     echo ""
-    echo "镜像列表:"
+    echo "Image list:"
     
     if [ "$BUILD_REGISTRY" = true ]; then
         echo "  - $REGISTRY/$NAMESPACE/registry-center:$TAG"
@@ -471,7 +471,7 @@ show_result() {
     fi
     
     echo ""
-    echo "使用 Helm 部署:"
+    echo "Deploy using Helm:"
     echo "  helm install openan . \\"
     
     if [ "$BUILD_REGISTRY" = true ]; then
@@ -489,14 +489,14 @@ show_result() {
     echo ""
 }
 
-# 主函数
+# Main function
 main() {
     parse_args "$@"
     load_config
     
-    # 多架构构建必须推送
+    # Multi-architecture builds must be pushed
     if [ "$PUSH" = false ]; then
-        log_warn "多架构镜像必须推送到仓库，自动启用推送"
+        log_warn "Multi-architecture images must be pushed to registry, enabling push automatically"
         PUSH=true
     fi
     
@@ -506,5 +506,5 @@ main() {
     show_result
 }
 
-# 执行主函数
+# Execute main function
 main "$@"

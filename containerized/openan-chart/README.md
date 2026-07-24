@@ -1,62 +1,62 @@
 # OpenAN Platform Helm Chart
 
-OpenAN 平台 Helm Chart，用于在 Kubernetes 集群上一键部署完整的 OpenAN 平台。
+OpenAN Platform Helm Chart for deploying the complete OpenAN platform on a Kubernetes cluster.
 
-## 部署方式对比
+## Deployment Method Comparison
 
-| 特性 | 纯 YAML | Helm Chart（本文档） |
-|------|---------|---------------------|
-| 适用场景 | 简单部署、快速验证 | 生产环境、多配置管理 |
-| 部署命令 | `kubectl apply -f k8s/` | `helm install openan ./openan-chart` |
-| 可选组件 | 需手动排除文件 | `--set orchestration.enabled=false` |
-| 配置管理 | 直接编辑 YAML 文件 | `values.yaml` + 命令行覆盖 |
-| 多环境支持 | 需维护多套文件 | `values-dev.yaml` / `values-prod.yaml` |
-| 学习成本 | 低 | 需要 Helm 基础知识 |
+| Feature | Pure YAML | Helm Chart (this document) |
+|---------|-----------|---------------------------|
+| Use Case | Simple deployment, quick validation | Production environment, multi-config management |
+| Deploy Command | `kubectl apply -f k8s/` | `helm install openan ./openan-chart` |
+| Optional Components | Manually exclude files | `--set orchestration.enabled=false` |
+| Configuration | Edit YAML files directly | `values.yaml` + command-line overrides |
+| Multi-environment Support | Maintain multiple file sets | `values-dev.yaml` / `values-prod.yaml` |
+| Learning Curve | Low | Requires basic Helm knowledge |
 
-> 纯 YAML 部署请参考 [K8S 部署指南](../../k8s-deployment-guide.md)。
+> For pure YAML deployment, please refer to [K8S Deployment Guide](../../k8s-deployment-guide.md).
 
-## 组件说明
+## Components
 
-本 Chart 部署以下组件：
+This Chart deploys the following components:
 
-| 组件 | 说明 | 默认端口 |
-|------|------|----------|
-| **Registry Center** | Agent 注册中心，提供 Agent Card 注册、发现、语义搜索 | 5000 |
-| **Orchestration Center** | 工作流编排中心，提供 PSOP 生成、工作流执行 | 5001 |
-| **Workflow Designer** | 前端工作流设计器，提供可视化工作流编辑界面 | 80 |
-| **PostgreSQL** | 共享数据库，存储 registry_center 和 orchestration_center | 5432 |
+| Component | Description | Default Port |
+|-----------|-------------|--------------|
+| **Registry Center** | Agent registration center, provides Agent Card registration, discovery, and semantic search | 5000 |
+| **Orchestration Center** | Workflow orchestration center, provides PSOP generation and workflow execution | 5001 |
+| **Workflow Designer** | Frontend workflow designer, provides visual workflow editing interface | 80 |
+| **PostgreSQL** | Shared database, stores registry_center and orchestration_center | 5432 |
 
-## 前置要求
+## Prerequisites
 
 - Kubernetes 1.24+
 - Helm 3.x
-- kubectl 已配置
-- Ingress Controller (Nginx) 已安装（如需外部访问）
-- 容器镜像已推送到可访问的仓库（参考 [镜像构建指南](../build/README.md)）
+- kubectl configured
+- Ingress Controller (Nginx) installed (for external access)
+- Container images pushed to an accessible registry (see [Image Build Guide](../build/README.md))
 
-## 文件结构
+## File Structure
 
 ```
 openan-chart/
-├── Chart.yaml                           # Chart 元数据
-├── values.yaml                          # 默认配置
+├── Chart.yaml                           # Chart metadata
+├── values.yaml                          # Default configuration
 └── templates/
-    ├── _helpers.tpl                     # 模板函数
+    ├── _helpers.tpl                     # Template functions
     ├── namespace.yaml                   # openan namespace
-    ├── ingress.yaml                     # 统一入口（frontend / orchestration / registry）
-    ├── NOTES.txt                        # 部署提示
+    ├── ingress.yaml                     # Unified entry point (frontend / orchestration / registry)
+    ├── NOTES.txt                        # Deployment notes
     ├── postgres/
-    │   ├── storage.yaml                 # StorageClass / PV（可选）
-    │   └── statefulset.yaml             # 共享 PostgreSQL
+    │   ├── storage.yaml                 # StorageClass / PV (optional)
+    │   └── statefulset.yaml             # Shared PostgreSQL
     ├── registry-center/
-    │   ├── secret.yaml                  # registry 独立 secret
-    │   ├── configmap.yaml               # registry 配置
+    │   ├── secret.yaml                  # registry independent secret
+    │   ├── configmap.yaml               # registry configuration
     │   ├── deployment.yaml
     │   ├── service.yaml                 # port 5000
-    │   ├── tls-secret.yaml              # TLS 证书（auto 模式）
-    │   └── signing-secret.yaml          # JWS 签名证书（auto 模式）
+    │   ├── tls-secret.yaml              # TLS certificate (auto mode)
+    │   └── signing-secret.yaml          # JWS signing certificate (auto mode)
     ├── orchestration-center/
-    │   ├── secret.yaml                  # orchestration 独立 secret
+    │   ├── secret.yaml                  # orchestration independent secret
     │   ├── configmap.yaml
     │   ├── deployment.yaml
     │   ├── service.yaml                 # port 5001
@@ -67,25 +67,25 @@ openan-chart/
         └── hpa.yaml
 ```
 
-## 快速开始
+## Quick Start
 
-### 1. 添加 Helm 仓库（如已发布）
+### 1. Add Helm Repository (if published)
 
 ```bash
 helm repo add openan https://charts.openan.io
 helm repo update
 ```
 
-### 2. 准备配置
+### 2. Prepare Configuration
 
-创建 `values-custom.yaml`：
+Create `values-custom.yaml`:
 
 ```yaml
-# 数据库密码
+# Database password
 postgresql:
   password: "your-secure-password"
 
-# Registry Center LLM 配置
+# Registry Center LLM configuration
 registry:
   llm:
     chat:
@@ -95,7 +95,7 @@ registry:
     rerank:
       apiKey: "sk-registry-rerank-key"
 
-# Orchestration Center LLM 配置
+# Orchestration Center LLM configuration
 orchestration:
   llm:
     chat:
@@ -103,7 +103,7 @@ orchestration:
   a2at:
     apiKey: "sk-orchestration-a2at-key"
 
-# Ingress 配置
+# Ingress configuration
 ingress:
   host: openan.your-domain.com
   tls:
@@ -111,15 +111,15 @@ ingress:
     secretName: openan-tls
 ```
 
-### 3. 安装 Chart
+### 3. Install Chart
 
 ```bash
-# 使用自定义配置安装
+# Install with custom configuration
 helm install openan . \
   -n openan --create-namespace \
   -f values-custom.yaml
 
-# 或使用命令行覆盖
+# Or use command-line overrides
 helm install openan . \
   -n openan --create-namespace \
   --set postgresql.password=your-password \
@@ -127,7 +127,7 @@ helm install openan . \
   --set orchestration.llm.chat.apiKey=sk-yyy \
   --set ingress.host=openan.example.com
 
-# 自定义镜像仓库
+# Custom image registry
 helm install openan . \
   -n openan --create-namespace \
   --set registry.image.repository=harbor.example.com/openan/registry-center \
@@ -137,14 +137,14 @@ helm install openan . \
   --set frontend.image.repository=harbor.example.com/openan/workflow-designer \
   --set frontend.image.tag=v1.0.0
 
-# 如果命名空间已存在且不是由 Helm 管理的
+# If namespace already exists and is not managed by Helm
 kubectl create namespace openan
 helm install openan . -n openan --set createNamespace=false
 ```
 
-### 4. 配置 LLM API Key（使用外部 Secret）
+### 4. Configure LLM API Key (using external Secret)
 
-创建 Secret：
+Create Secret:
 
 ```bash
 kubectl create secret generic openan-llm-keys \
@@ -156,7 +156,7 @@ kubectl create secret generic openan-llm-keys \
   --from-literal=orchestration-a2at-key=sk-your-a2at-key
 ```
 
-在 `values-custom.yaml` 中引用：
+Reference in `values-custom.yaml`:
 
 ```yaml
 registry:
@@ -181,47 +181,47 @@ orchestration:
     existingSecretKey: orchestration-a2at-key
 ```
 
-### 5. 验证部署
+### 5. Verify Deployment
 
 ```bash
-# 查看 Helm 发布状态
+# Check Helm release status
 helm status openan -n openan
 
-# 查看 Pod 状态
+# Check Pod status
 kubectl get pods -n openan
 
-# 查看所有资源
+# Check all resources
 kubectl get all -n openan
 
-# 查看 Ingress
+# Check Ingress
 kubectl get ingress -n openan
 
-# 查看日志
+# Check logs
 kubectl logs -n openan -l app=registry-center -f
 kubectl logs -n openan -l app=orchestration-center -f
 ```
 
-### 6. 通过 Ingress 访问
+### 6. Access via Ingress
 
-**配置 hosts（如果使用自定义域名）：**
+**Configure hosts (if using custom domain):**
 
 ```bash
-# 添加以下到 /etc/hosts（Linux/Mac）或 C:\Windows\System32\drivers\etc\hosts（Windows）
-# 假设 Ingress Controller 的 IP 为 192.168.200.183
+# Add to /etc/hosts (Linux/Mac) or C:\Windows\System32\drivers\etc\hosts (Windows)
+# Assuming Ingress Controller IP is 192.168.200.183
 192.168.200.183  openan.local
 ```
 
-**访问 Workflow Designer（前端）：**
+**Access Workflow Designer (Frontend):**
 
-浏览器访问 `http://openan.local/`
+Open browser at `http://openan.local/`
 
-**访问 Registry API：**
+**Access Registry API:**
 
 ```bash
-# 查询所有 Agent
+# Query all Agents
 curl http://openan.local/registry/rest/v1/registry-center/agent-cards
 
-# 注册新 Agent
+# Register new Agent
 curl -X POST http://openan.local/registry/rest/v1/registry-center/agent-cards \
   -H "Content-Type: application/json" \
   -d '{
@@ -231,21 +231,21 @@ curl -X POST http://openan.local/registry/rest/v1/registry-center/agent-cards \
     "version": "1.0.0"
   }'
 
-# 查询特定 Agent
+# Query specific Agent
 curl http://openan.local/registry/rest/v1/registry-center/agent-cards/my-agent
 
-# 删除 Agent
+# Delete Agent
 curl -X DELETE http://openan.local/registry/rest/v1/registry-center/agent-cards/my-agent
 ```
 
-**访问 Orchestration API：**
+**Access Orchestration API:**
 
 ```bash
-# 查询 Agent 列表
+# Query Agent list
 curl http://openan.local/api/orchestrate/rest/v1/orchestrate/agent-cards
 ```
 
-**端口转发（调试用）：**
+**Port Forwarding (for debugging):**
 
 ```bash
 # Registry Center
@@ -257,38 +257,38 @@ kubectl -n openan port-forward svc/orchestration-center 5001:5001
 curl http://localhost:5001/rest/v1/orchestrate/agent-cards
 ```
 
-## 配置参数
+## Configuration Parameters
 
-### 全局配置
+### Global Configuration
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `namespace` | Kubernetes 命名空间 | `openan` |
-| `createNamespace` | 是否由 Helm 创建命名空间 | `true` |
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `namespace` | Kubernetes namespace | `openan` |
+| `createNamespace` | Whether Helm creates the namespace | `true` |
 
-**注意**：如果命名空间已存在且不是由 Helm 管理的，需要设置 `createNamespace=false`，否则会遇到 "namespace already exists" 错误。
+**Note**: If the namespace already exists and is not managed by Helm, set `createNamespace=false`, otherwise you will encounter a "namespace already exists" error.
 
-### PostgreSQL 配置
+### PostgreSQL Configuration
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `postgresql.enabled` | 是否启用内置 PostgreSQL | `true` |
-| `postgresql.externalHost` | 外部数据库地址 | `""` |
-| `postgresql.port` | 数据库端口 | `5432` |
-| `postgresql.password` | 数据库密码 | `"openan-db-password"` |
-| `postgresql.storage.size` | 存储大小 | `20Gi` |
-| `postgresql.storage.createStorageClass` | 是否自动创建 StorageClass | `false` |
-| `postgresql.storage.createPV` | 是否自动创建 PV | `false` |
-| `postgresql.storage.storageClassName` | StorageClass 名称 | `"openan-local"` |
-| `postgresql.storage.setDefault` | 是否设为默认 StorageClass | `false` |
-| `postgresql.storage.reclaimPolicy` | 回收策略（Retain/Delete） | `"Retain"` |
-| `postgresql.storage.useHostPath` | 是否使用 hostPath（单节点集群） | `true` |
-| `postgresql.storage.hostPath` | hostPath 目录 | `"/data/openan-postgres"` |
-| `postgresql.storage.nodeName` | 节点名称（useHostPath=false 时） | `""` |
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `postgresql.enabled` | Enable built-in PostgreSQL | `true` |
+| `postgresql.externalHost` | External database address | `""` |
+| `postgresql.port` | Database port | `5432` |
+| `postgresql.password` | Database password | `"openan-db-password"` |
+| `postgresql.storage.size` | Storage size | `20Gi` |
+| `postgresql.storage.createStorageClass` | Auto-create StorageClass | `false` |
+| `postgresql.storage.createPV` | Auto-create PV | `false` |
+| `postgresql.storage.storageClassName` | StorageClass name | `"openan-local"` |
+| `postgresql.storage.setDefault` | Set as default StorageClass | `false` |
+| `postgresql.storage.reclaimPolicy` | Reclaim policy (Retain/Delete) | `"Retain"` |
+| `postgresql.storage.useHostPath` | Use hostPath (single-node cluster) | `true` |
+| `postgresql.storage.hostPath` | hostPath directory | `"/data/openan-postgres"` |
+| `postgresql.storage.nodeName` | Node name (when useHostPath=false) | `""` |
 
-**存储配置说明：**
+**Storage Configuration Notes:**
 
-**场景一：集群已有默认 StorageClass**
+**Scenario 1: Cluster already has default StorageClass**
 ```yaml
 postgresql:
   storage:
@@ -296,7 +296,7 @@ postgresql:
     createPV: false
 ```
 
-**场景二：单节点集群，使用 hostPath**
+**Scenario 2: Single-node cluster, using hostPath**
 ```yaml
 postgresql:
   storage:
@@ -306,7 +306,7 @@ postgresql:
     hostPath: "/data/openan-postgres"
 ```
 
-**场景三：多节点集群，使用 local volume**
+**Scenario 3: Multi-node cluster, using local volume**
 ```yaml
 postgresql:
   storage:
@@ -317,103 +317,103 @@ postgresql:
     nodeName: "node185"
 ```
 
-**注意**：使用 hostPath 或 local volume 时，需要确保节点上已创建对应目录：
+**Note**: When using hostPath or local volume, ensure the directory exists on the target node:
 ```bash
-# 在目标节点上执行
+# Execute on target node
 mkdir -p /data/openan-postgres
 ```
 
-### Registry Center 配置
+### Registry Center Configuration
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `registry.enabled` | 是否启用 Registry Center | `true` |
-| `registry.replicas` | 副本数 | `2` |
-| `registry.image.repository` | 镜像仓库 | `registry-center` |
-| `registry.image.tag` | 镜像标签 | `latest` |
-| `registry.image.pullPolicy` | 镜像拉取策略 | `Always` |
-| `registry.port` | 服务端口 | `5000` |
-| `registry.llm.chat.model` | Chat 模型 | `deepseek-chat` |
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `registry.enabled` | Enable Registry Center | `true` |
+| `registry.replicas` | Replica count | `2` |
+| `registry.image.repository` | Image registry | `registry-center` |
+| `registry.image.tag` | Image tag | `latest` |
+| `registry.image.pullPolicy` | Image pull policy | `Always` |
+| `registry.port` | Service port | `5000` |
+| `registry.llm.chat.model` | Chat model | `deepseek-chat` |
 | `registry.llm.chat.url` | Chat API URL | `https://api.deepseek.com/v1/chat/completions` |
 | `registry.llm.chat.apiKey` | Chat API Key | `""` |
-| `registry.llm.chat.existingSecret` | 引用已有 Secret | `""` |
-| `registry.llm.embed.model` | Embed 模型 | `bge-m3` |
+| `registry.llm.chat.existingSecret` | Reference existing Secret | `""` |
+| `registry.llm.embed.model` | Embed model | `bge-m3` |
 | `registry.llm.embed.url` | Embed API URL | `""` |
 | `registry.llm.embed.apiKey` | Embed API Key | `""` |
-| `registry.llm.rerank.model` | Rerank 模型 | `bge-reranker-v2-m3` |
+| `registry.llm.rerank.model` | Rerank model | `bge-reranker-v2-m3` |
 | `registry.llm.rerank.url` | Rerank API URL | `""` |
 | `registry.llm.rerank.apiKey` | Rerank API Key | `""` |
-| `registry.vectordb.enabled` | 是否启用 VectorDB (Milvus) | `false` |
-| `registry.vectordb.host` | VectorDB 地址 | `""` |
-| `registry.vectordb.port` | VectorDB 端口 | `19530` |
-| `registry.tls.mode` | TLS 证书模式：`auto`/`secret`/`off` | `auto` |
-| `registry.tls.existingSecret` | TLS 证书 Secret 名称 | `""` |
-| `registry.signing.mode` | JWS 签名证书模式：`auto`/`secret`/`off` | `auto` |
-| `registry.signing.existingSecret` | JWS 签名证书 Secret 名称 | `""` |
-| `registry.resources.requests` | 资源请求 | `cpu: 250m, memory: 256Mi` |
-| `registry.resources.limits` | 资源限制 | `cpu: 500m, memory: 512Mi` |
-| `registry.livenessProbe` | 存活探针 | `path: /rest/v1/registry-center/agent-cards` |
-| `registry.readinessProbe` | 就绪探针 | `path: /rest/v1/registry-center/agent-cards` |
+| `registry.vectordb.enabled` | Enable VectorDB (Milvus) | `false` |
+| `registry.vectordb.host` | VectorDB address | `""` |
+| `registry.vectordb.port` | VectorDB port | `19530` |
+| `registry.tls.mode` | TLS certificate mode: `auto`/`secret`/`off` | `auto` |
+| `registry.tls.existingSecret` | TLS certificate Secret name | `""` |
+| `registry.signing.mode` | JWS signing certificate mode: `auto`/`secret`/`off` | `auto` |
+| `registry.signing.existingSecret` | JWS signing certificate Secret name | `""` |
+| `registry.resources.requests` | Resource requests | `cpu: 250m, memory: 256Mi` |
+| `registry.resources.limits` | Resource limits | `cpu: 500m, memory: 512Mi` |
+| `registry.livenessProbe` | Liveness probe | `path: /rest/v1/registry-center/agent-cards` |
+| `registry.readinessProbe` | Readiness probe | `path: /rest/v1/registry-center/agent-cards` |
 
-### Orchestration Center 配置
+### Orchestration Center Configuration
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `orchestration.enabled` | 是否启用 Orchestration Center | `true` |
-| `orchestration.replicas` | 副本数 | `2` |
-| `orchestration.image.repository` | 镜像仓库 | `orchestration-center` |
-| `orchestration.image.tag` | 镜像标签 | `latest` |
-| `orchestration.image.pullPolicy` | 镜像拉取策略 | `Always` |
-| `orchestration.port` | 服务端口 | `5001` |
-| `orchestration.agentRegistryUrl` | Registry Center URL | `""` (自动发现) |
-| `orchestration.llm.chat.model` | Chat 模型 | `deepseek-chat` |
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `orchestration.enabled` | Enable Orchestration Center | `true` |
+| `orchestration.replicas` | Replica count | `2` |
+| `orchestration.image.repository` | Image registry | `orchestration-center` |
+| `orchestration.image.tag` | Image tag | `latest` |
+| `orchestration.image.pullPolicy` | Image pull policy | `Always` |
+| `orchestration.port` | Service port | `5001` |
+| `orchestration.agentRegistryUrl` | Registry Center URL | `""` (auto-discovered) |
+| `orchestration.llm.chat.model` | Chat model | `deepseek-chat` |
 | `orchestration.llm.chat.url` | Chat API URL | `https://api.deepseek.com/v1/chat/completions` |
 | `orchestration.llm.chat.apiKey` | Chat API Key | `""` |
-| `orchestration.llm.chat.existingSecret` | 引用已有 Secret | `""` |
-| `orchestration.a2at.provider` | A2AT 提供商 | `deepseek` |
-| `orchestration.a2at.model` | A2AT 模型 | `deepseek-chat` |
+| `orchestration.llm.chat.existingSecret` | Reference existing Secret | `""` |
+| `orchestration.a2at.provider` | A2AT provider | `deepseek` |
+| `orchestration.a2at.model` | A2AT model | `deepseek-chat` |
 | `orchestration.a2at.baseUrl` | A2AT Base URL | `https://api.deepseek.com` |
 | `orchestration.a2at.apiKey` | A2AT API Key | `""` |
-| `orchestration.a2at.existingSecret` | 引用已有 Secret | `""` |
-| `orchestration.hpa.enabled` | 是否启用 HPA | `true` |
-| `orchestration.hpa.minReplicas` | 最小副本数 | `2` |
-| `orchestration.hpa.maxReplicas` | 最大副本数 | `10` |
-| `orchestration.resources.requests` | 资源请求 | `cpu: 250m, memory: 512Mi` |
-| `orchestration.resources.limits` | 资源限制 | `cpu: 1000m, memory: 1Gi` |
-| `orchestration.livenessProbe` | 存活探针 | `path: /rest/v1/orchestrate/agent-cards` |
-| `orchestration.readinessProbe` | 就绪探针 | `path: /rest/v1/orchestrate/agent-cards` |
-| `orchestration.startupProbe` | 启动探针 | `failureThreshold: 12` |
+| `orchestration.a2at.existingSecret` | Reference existing Secret | `""` |
+| `orchestration.hpa.enabled` | Enable HPA | `true` |
+| `orchestration.hpa.minReplicas` | Minimum replicas | `2` |
+| `orchestration.hpa.maxReplicas` | Maximum replicas | `10` |
+| `orchestration.resources.requests` | Resource requests | `cpu: 250m, memory: 512Mi` |
+| `orchestration.resources.limits` | Resource limits | `cpu: 1000m, memory: 1Gi` |
+| `orchestration.livenessProbe` | Liveness probe | `path: /rest/v1/orchestrate/agent-cards` |
+| `orchestration.readinessProbe` | Readiness probe | `path: /rest/v1/orchestrate/agent-cards` |
+| `orchestration.startupProbe` | Startup probe | `failureThreshold: 12` |
 
-### Workflow Designer 配置
+### Workflow Designer Configuration
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `frontend.enabled` | 是否启用 Workflow Designer | `true` |
-| `frontend.replicas` | 副本数 | `2` |
-| `frontend.image.repository` | 镜像仓库 | `workflow-designer` |
-| `frontend.image.tag` | 镜像标签 | `latest` |
-| `frontend.image.pullPolicy` | 镜像拉取策略 | `Always` |
-| `frontend.port` | 服务端口 | `80` |
-| `frontend.nodePort` | NodePort 端口 | `30080` |
-| `frontend.hpa.enabled` | 是否启用 HPA | `true` |
-| `frontend.hpa.minReplicas` | 最小副本数 | `2` |
-| `frontend.hpa.maxReplicas` | 最大副本数 | `10` |
-| `frontend.resources.requests` | 资源请求 | `cpu: 100m, memory: 128Mi` |
-| `frontend.resources.limits` | 资源限制 | `cpu: 500m, memory: 256Mi` |
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `frontend.enabled` | Enable Workflow Designer | `true` |
+| `frontend.replicas` | Replica count | `2` |
+| `frontend.image.repository` | Image registry | `workflow-designer` |
+| `frontend.image.tag` | Image tag | `latest` |
+| `frontend.image.pullPolicy` | Image pull policy | `Always` |
+| `frontend.port` | Service port | `80` |
+| `frontend.nodePort` | NodePort port | `30080` |
+| `frontend.hpa.enabled` | Enable HPA | `true` |
+| `frontend.hpa.minReplicas` | Minimum replicas | `2` |
+| `frontend.hpa.maxReplicas` | Maximum replicas | `10` |
+| `frontend.resources.requests` | Resource requests | `cpu: 100m, memory: 128Mi` |
+| `frontend.resources.limits` | Resource limits | `cpu: 500m, memory: 256Mi` |
 
-### Ingress 配置
+### Ingress Configuration
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `ingress.enabled` | 是否启用 Ingress | `true` |
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `ingress.enabled` | Enable Ingress | `true` |
 | `ingress.className` | Ingress Class | `nginx` |
-| `ingress.host` | 域名 | `openan.local` |
-| `ingress.tls.enabled` | 是否启用 TLS | `false` |
-| `ingress.tls.secretName` | TLS Secret 名称 | `openan-tls` |
+| `ingress.host` | Domain | `openan.local` |
+| `ingress.tls.enabled` | Enable TLS | `false` |
+| `ingress.tls.secretName` | TLS Secret name | `openan-tls` |
 
-## 部署场景
+## Deployment Scenarios
 
-### 开发环境
+### Development Environment
 
 ```bash
 helm install openan-dev . \
@@ -422,7 +422,7 @@ helm install openan-dev . \
   -f values-dev.yaml
 ```
 
-示例 `values-dev.yaml`：
+Example `values-dev.yaml`:
 
 ```yaml
 postgresql:
@@ -446,7 +446,7 @@ ingress:
   host: openan-dev.example.com
 ```
 
-### 生产环境
+### Production Environment
 
 ```bash
 helm install openan-prod . \
@@ -455,7 +455,7 @@ helm install openan-prod . \
   -f values-prod.yaml
 ```
 
-示例 `values-prod.yaml`：
+Example `values-prod.yaml`:
 
 ```yaml
 postgresql:
@@ -509,7 +509,7 @@ ingress:
     secretName: openan-tls
 ```
 
-### 仅部署 Registry Center
+### Deploy Registry Center Only
 
 ```bash
 helm install openan-registry . \
@@ -519,7 +519,7 @@ helm install openan-registry . \
   --set frontend.enabled=false
 ```
 
-### 使用外部数据库
+### Use External Database
 
 ```bash
 helm install openan . \
@@ -531,48 +531,48 @@ helm install openan . \
   --set postgresql.password=your-password
 ```
 
-### 命名空间已存在
+### Namespace Already Exists
 
-如果命名空间已存在且不是由 Helm 管理的，需要手动创建命名空间并设置 `createNamespace=false`：
+If the namespace already exists and is not managed by Helm, manually create the namespace and set `createNamespace=false`:
 
 ```bash
-# 手动创建命名空间
+# Manually create namespace
 kubectl create namespace openan
 
-# 安装时禁用 Helm 创建命名空间
+# Disable Helm namespace creation during install
 helm install openan . \
   --namespace openan \
   --set createNamespace=false
 ```
 
-## 常用操作
+## Common Operations
 
-### 升级
+### Upgrade
 
 ```bash
 helm upgrade openan . --namespace openan -f values.yaml
 ```
 
-### 回滚
+### Rollback
 
 ```bash
-# 查看历史版本
+# View release history
 helm history openan -n openan
 
-# 回滚到指定版本
+# Rollback to specific version
 helm rollback openan 1 -n openan
 ```
 
-### 卸载
+### Uninstall
 
 ```bash
 helm uninstall openan -n openan
 
-# 删除 PVC（可选）
+# Delete PVC (optional)
 kubectl delete pvc -n openan --all
 ```
 
-### 查看日志
+### View Logs
 
 ```bash
 # Registry Center
@@ -588,7 +588,7 @@ kubectl logs -n openan -l app=workflow-designer -f
 kubectl logs -n openan -l app=openan-postgres -f
 ```
 
-## 架构说明
+## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -596,7 +596,7 @@ kubectl logs -n openan -l app=openan-postgres -f
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────────┐      ┌───────────────────────────────────┐   │
-│  │   Ingress    │─────▶│  Workflow Designer (前端)         │   │
+│  │   Ingress    │─────▶│  Workflow Designer (Frontend)     │   │
 │  │  (Nginx)     │      │  - Deployment (2 pods)            │   │
 │  │  / → :80     │      │  - Service :80                    │   │
 │  │  /api/       │      │  - HPA                            │   │
@@ -620,7 +620,7 @@ kubectl logs -n openan -l app=openan-postgres -f
 │                                  │                             │
 │                                  ▼                             │
 │                        ┌───────────────────────────────────┐  │
-│                        │  PostgreSQL (共享)                 │  │
+│                        │  PostgreSQL (Shared)               │  │
 │                        │  - StatefulSet                     │  │
 │                        │  - registry_center DB              │  │
 │                        │  - orchestration_center DB         │  │
@@ -630,42 +630,42 @@ kubectl logs -n openan -l app=openan-postgres -f
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-**Ingress 路径重写规则：**
+**Ingress Path Rewrite Rules:**
 
-| 外部路径 | 转发到后端 | 说明 |
-|----------|-----------|------|
-| `/` | `workflow-designer:80/` | 前端页面 |
-| `/api/orchestrate/rest/v1/orchestrate/...` | `orchestration-center:5001/rest/v1/orchestrate/...` | 去掉 `/api/orchestrate` 前缀 |
-| `/registry/rest/v1/registry-center/...` | `registry-center:5000/rest/v1/registry-center/...` | 去掉 `/registry` 前缀 |
+| External Path | Forwarded to Backend | Description |
+|---------------|---------------------|-------------|
+| `/` | `workflow-designer:80/` | Frontend pages |
+| `/api/orchestrate/rest/v1/orchestrate/...` | `orchestration-center:5001/rest/v1/orchestrate/...` | Strip `/api/orchestrate` prefix |
+| `/registry/rest/v1/registry-center/...` | `registry-center:5000/rest/v1/registry-center/...` | Strip `/registry` prefix |
 
-## 证书管理
+## Certificate Management
 
-Registry Center 需要两类证书：
+Registry Center requires two types of certificates:
 
-| 证书类型 | 用途 | 挂载路径 | 文件 |
-|----------|------|----------|------|
-| TLS 证书 | HTTPS 通信 | `etc/ssl/` | server.cer, server_key.pem, trust.cer |
-| JWS 签名证书 | Agent Card 签名 | `etc/sign_cert/` | server.cer, server_key.pem, cert_pwd |
+| Certificate Type | Purpose | Mount Path | Files |
+|-----------------|---------|------------|-------|
+| TLS Certificate | HTTPS communication | `etc/ssl/` | server.cer, server_key.pem, trust.cer |
+| JWS Signing Certificate | Agent Card signing | `etc/sign_cert/` | server.cer, server_key.pem, cert_pwd |
 
-### 证书模式
+### Certificate Modes
 
-| 模式 | 说明 | 多副本一致性 | 适用场景 |
-|------|------|-------------|----------|
-| `auto` (默认) | Helm 用 `genCA`/`genSignedCert` 自动生成，存入 Secret | 一致 | 推荐，所有场景 |
-| `secret` | 从用户预创建的 K8S Secret 挂载 | 一致 | 需要正式证书 |
-| `off` | entrypoint 每次启动自动生成，不持久化 | 不一致 | 仅开发调试 |
+| Mode | Description | Multi-replica Consistency | Use Case |
+|------|-------------|---------------------------|----------|
+| `auto` (default) | Helm auto-generates using `genCA`/`genSignedCert`, stored in Secret | Consistent | Recommended for all scenarios |
+| `secret` | Mount from user-pre-created K8S Secret | Consistent | Requires official certificates |
+| `off` | Entrypoint auto-generates on each start, not persisted | Inconsistent | Development/debugging only |
 
-### `auto` 模式工作原理
+### How `auto` Mode Works
 
-1. `helm install` 时，Helm 模板调用 `genCA` + `genSignedCert` 生成自签名证书
-2. 证书数据写入 K8S Secret (`registry-center-tls` / `registry-center-signing`)
-3. Deployment 将 Secret 挂载到 `etc/ssl` 和 `etc/sign_cert`
-4. entrypoint 检测到证书文件已存在，跳过自动生成
-5. `helm upgrade` 时，通过 `lookup` 检测已有 Secret，**保留原证书不重新生成**
+1. During `helm install`, Helm templates call `genCA` + `genSignedCert` to generate self-signed certificates
+2. Certificate data is written to K8S Secrets (`registry-center-tls` / `registry-center-signing`)
+3. Deployment mounts Secrets to `etc/ssl` and `etc/sign_cert`
+4. Entrypoint detects certificate files already exist, skips auto-generation
+5. During `helm upgrade`, uses `lookup` to detect existing Secrets, **preserves original certificates without regeneration**
 
-**无需任何手动操作，开箱即用。**
+**Works out of the box with no manual intervention required.**
 
-### 使用自动生成的证书（默认）
+### Using Auto-generated Certificates (Default)
 
 ```yaml
 registry:
@@ -675,17 +675,17 @@ registry:
     mode: auto
 ```
 
-### 使用自定义证书
+### Using Custom Certificates
 
 ```bash
-# 创建 TLS 证书 Secret
+# Create TLS certificate Secret
 kubectl create secret generic registry-tls \
   --namespace openan \
   --from-file=server.cer=./server.crt \
   --from-file=server_key.pem=./server.key \
   --from-file=trust.cer=./ca.crt
 
-# 创建 JWS 签名证书 Secret
+# Create JWS signing certificate Secret
 kubectl create secret generic registry-signing \
   --namespace openan \
   --from-file=server.cer=./sign_cert/server.cer \
@@ -703,83 +703,83 @@ registry:
     existingSecret: registry-signing
 ```
 
-## 安全建议
+## Security Recommendations
 
-1. **证书管理**：默认 `auto` 模式自动生成自签名证书，生产环境建议使用 `secret` 模式配合正式 CA 证书
-2. **Secret 管理**：生产环境建议使用 Vault、AWS Secrets Manager 等管理敏感信息，通过 `existingSecret` 引用
-3. **启用 TLS**：配置 Ingress TLS 或使用 cert-manager 自动签发证书
-4. **网络策略**：使用 NetworkPolicy 限制 Pod 间通信
-5. **镜像安全**：使用私有镜像仓库，启用镜像签名验证
-6. **资源限制**：设置合理的 requests/limits 防止资源滥用
+1. **Certificate Management**: Default `auto` mode generates self-signed certificates; production environments should use `secret` mode with official CA certificates
+2. **Secret Management**: Production environments should use Vault, AWS Secrets Manager, etc. to manage sensitive information via `existingSecret` references
+3. **Enable TLS**: Configure Ingress TLS or use cert-manager for automatic certificate issuance
+4. **Network Policies**: Use NetworkPolicy to restrict Pod-to-Pod communication
+5. **Image Security**: Use private image registries and enable image signature verification
+6. **Resource Limits**: Set reasonable requests/limits to prevent resource abuse
 
-## 故障排查
+## Troubleshooting
 
-### Namespace 冲突
+### Namespace Conflict
 
-如果遇到 "namespace already exists" 错误：
+If you encounter a "namespace already exists" error:
 
 ```bash
-# 方案 1：删除现有命名空间后重新安装
+# Option 1: Delete existing namespace and reinstall
 kubectl delete namespace openan
 helm install openan . --namespace openan --create-namespace
 
-# 方案 2：手动创建命名空间并设置 createNamespace=false
+# Option 2: Manually create namespace and set createNamespace=false
 kubectl create namespace openan
 helm install openan . --namespace openan --set createNamespace=false
 
-# 方案 3：清理 Helm release 缓存
+# Option 3: Clean up Helm release cache
 kubectl get secrets --all-namespaces | grep "sh.helm.release" | grep openan
 kubectl delete secret -l owner=helm,name=openan --all-namespaces
 helm install openan . --namespace openan --create-namespace
 ```
 
-### Pod 无法启动
+### Pod Cannot Start
 
 ```bash
-# 查看 Pod 状态
+# Check Pod status
 kubectl describe pod -n openan <pod-name>
 
-# 查看日志
+# Check logs
 kubectl logs -n openan <pod-name>
 ```
 
-### 数据库连接失败
+### Database Connection Failed
 
 ```bash
-# 检查 PostgreSQL Pod
+# Check PostgreSQL Pod
 kubectl get pods -n openan -l app=openan-postgres
 
-# 测试数据库连接
+# Test database connection
 kubectl exec -n openan <postgres-pod> -- psql -U postgres -c "\l"
 ```
 
-### Ingress 无法访问
+### Ingress Not Accessible
 
 ```bash
-# 检查 Ingress 资源
+# Check Ingress resources
 kubectl describe ingress -n openan
 
-# 检查 Ingress Controller 日志
+# Check Ingress Controller logs
 kubectl logs -n ingress-nginx -l app.kubernetes.io/component=controller
 ```
 
-### 证书问题
+### Certificate Issues
 
 ```bash
-# 查看证书 Secret
+# Check certificate Secrets
 kubectl get secret -n openan registry-center-tls -o yaml
 kubectl get secret -n openan registry-center-signing -o yaml
 
-# 检查证书挂载
+# Check certificate mounts
 kubectl exec -n openan <registry-pod> -- ls -la /opt/registry-center/etc/ssl
 kubectl exec -n openan <registry-pod> -- ls -la /opt/registry-center/etc/sign_cert
 ```
 
-## 相关文档
+## Related Documentation
 
-- [快速体验](../QUICKSTART.md)（构建 + 部署一站式指南）
-- [K8S 部署指南](../../k8s-deployment-guide.md)（含纯 YAML 部署方式）
-- [镜像构建指南](../build/README.md)
+- [Quick Start](../QUICKSTART.md) (Build + Deploy one-stop guide)
+- [K8S Deployment Guide](../../k8s-deployment-guide.md) (includes pure YAML deployment)
+- [Image Build Guide](../build/README.md)
 
 ## License
 

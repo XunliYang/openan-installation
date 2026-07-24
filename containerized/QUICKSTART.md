@@ -1,43 +1,43 @@
-# OpenAN Platform 快速体验
+# OpenAN Platform Quick Start
 
-构建 + 部署一站式指南，从零到可访问的 OpenAN 平台。
+Build + Deploy one-stop guide, from zero to an accessible OpenAN platform.
 
-## 整体流程
+## Overall Process
 
 ```
-准备环境 → 构建镜像 → 部署到 K8S → 验证访问 → 清理
+Prepare Environment → Build Images → Deploy to K8S → Verify Access → Cleanup
 ```
 
-## 前置条件
+## Prerequisites
 
-| 工具 | 最低版本 | 用途 |
-|------|---------|------|
-| Docker | 20.10+ | 镜像构建 |
-| Docker Buildx | 0.8+ | 多架构构建 |
-| Kubernetes | 1.24+ | 运行平台 |
-| kubectl | 1.24+ | K8S 命令行 |
-| Helm | 3.x | 部署管理 |
-| Ingress Controller (Nginx) | - | 外部访问（可选） |
-| Git | - | 拉取源码 |
+| Tool | Minimum Version | Purpose |
+|------|----------------|---------|
+| Docker | 20.10+ | Image building |
+| Docker Buildx | 0.8+ | Multi-architecture builds |
+| Kubernetes | 1.24+ | Runtime platform |
+| kubectl | 1.24+ | K8S command line |
+| Helm | 3.x | Deployment management |
+| Ingress Controller (Nginx) | - | External access (optional) |
+| Git | - | Source code checkout |
 
-## Step 1: 准备源码
+## Step 1: Prepare Source Code
 
 ```bash
-# 克隆组件源码（按需选择）
+# Clone component source code (select as needed)
 git clone https://github.com/openan/registry-center.git
 git clone https://github.com/openan/orchestration-center.git
 ```
 
-> Workflow Designer 位于 `orchestration-center/workflow-designer`，无需单独克隆。
+> Workflow Designer is located at `orchestration-center/workflow-designer`, no need to clone separately.
 
-## Step 2: 构建镜像
+## Step 2: Build Images
 
-### 场景 A：单节点集群（镜像直接加载到本地 Docker）
+### Scenario A: Single-node Cluster (Load images directly to local Docker)
 
 ```bash
 cd containerized/build
 
-# 构建全部组件（仅当前架构，不推送）
+# Build all components (current architecture only, no push)
 docker buildx build --platform linux/amd64 \
   -t registry-center:latest --load \
   ../../registry-center
@@ -51,14 +51,14 @@ docker buildx build --platform linux/amd64 \
   ../../orchestration-center/workflow-designer
 ```
 
-> 将 `linux/amd64` 替换为你的节点架构（如 `linux/arm64`）。
+> Replace `linux/amd64` with your node architecture (e.g., `linux/arm64`).
 
-### 场景 B：私有镜像仓库（推荐多节点 / 生产环境）
+### Scenario B: Private Image Registry (Recommended for multi-node / production)
 
 ```bash
 cd containerized/build
 
-# 使用构建脚本，指定私有仓库并推送
+# Use build script, specify private registry and push
 ./build.sh \
   --registry harbor.example.com \
   --namespace openan \
@@ -68,7 +68,7 @@ cd containerized/build
   --push
 ```
 
-构建完成后镜像列表：
+After build, image list:
 
 ```
 harbor.example.com/openan/registry-center:v1.0.0
@@ -76,67 +76,67 @@ harbor.example.com/openan/orchestration-center:v1.0.0
 harbor.example.com/openan/workflow-designer:v1.0.0
 ```
 
-### 场景 C：使用配置文件
+### Scenario C: Using Configuration File
 
 ```bash
 cd containerized/build
 
 cp build-config.yaml.example build-config.yaml
-# 编辑 build-config.yaml，填写源码路径和仓库信息
+# Edit build-config.yaml, fill in source paths and registry info
 vim build-config.yaml
 
 ./build.sh --config build-config.yaml
 ```
 
-## Step 3: 部署到 Kubernetes
+## Step 3: Deploy to Kubernetes
 
-### 方式一：使用示例配置文件（推荐快速体验）
+### Method 1: Using Example Configuration File (Recommended for Quick Start)
 
 ```bash
 cd containerized
 
-# 复制示例配置文件
+# Copy example configuration file
 cp values-prod.yaml.example values-custom.yaml
 
-# 编辑配置文件，修改以下内容：
-# 1. 镜像仓库地址（如使用私有仓库）
-# 2. LLM API Key（替换为你自己的密钥）
-# 3. Ingress host（替换为你的域名或 IP）
-# 4. 数据库密码（修改默认密码）
+# Edit configuration file, modify the following:
+# 1. Image registry address (if using private registry)
+# 2. LLM API Key (replace with your own key)
+# 3. Ingress host (replace with your domain or IP)
+# 4. Database password (change default password)
 vim values-custom.yaml
 
-# 部署
+# Deploy
 helm install openan ./openan-chart \
   -n openan --create-namespace \
   -f values-custom.yaml
 ```
 
-**示例配置说明：**
+**Example Configuration Description:**
 
-`values-prod.yaml.example` 已包含完整的生产环境配置：
+`values-prod.yaml.example` contains complete production environment configuration:
 
-- **镜像仓库**：默认使用 `leoyy6/registry-center`、`leoyy6/orchestration-center`、`leoyy6/workflow-designer`
-- **LLM 模型**：
-  - Registry Center: `glm-5.1`（Chat）、`bge-m3`（Embed）、`bge-reranker-v2-m3`（Rerank）
-  - Orchestration Center: `qwen3.7-plus`（Chat 和 A2AT）
-- **API 端点**：使用阿里云 DashScope（`dashscope.aliyuncs.com`）
-- **Ingress**：默认域名 `openan.local`，NodePort `30191`
-- **副本数**：各组件 2 副本，启用 HPA 自动伸缩
+- **Image Registry**: Defaults to `leoyy6/registry-center`, `leoyy6/orchestration-center`, `leoyy6/workflow-designer`
+- **LLM Models**:
+  - Registry Center: `glm-5.1` (Chat), `bge-m3` (Embed), `bge-reranker-v2-m3` (Rerank)
+  - Orchestration Center: `qwen3.7-plus` (Chat and A2AT)
+- **API Endpoint**: Uses Alibaba Cloud DashScope (`dashscope.aliyuncs.com`)
+- **Ingress**: Default domain `openan.local`, NodePort `30191`
+- **Replicas**: 2 replicas per component, HPA auto-scaling enabled
 
-**快速修改示例：**
+**Quick Modification Examples:**
 
 ```bash
-# 替换镜像仓库为你的私有仓库
+# Replace image registry with your private registry
 sed -i 's|leoyy6/|harbor.example.com/openan/|g' values-custom.yaml
 
-# 替换 LLM API Key
-sed -i 's|sk-your-actual-api-key|sk-your-actual-api-key|g' values-custom.yaml
+# Replace LLM API Key
+sed -i 's|sk-3590ce6c3d2e4111b01f14125bc51fab|sk-your-actual-api-key|g' values-custom.yaml
 
-# 替换 Ingress 域名
+# Replace Ingress domain
 sed -i 's|openan.local|openan.example.com|g' values-custom.yaml
 ```
 
-### 方式二：命令行参数覆盖
+### Method 2: Command Line Parameter Override
 
 ```bash
 cd containerized/openan-chart
@@ -157,9 +157,9 @@ helm install openan . \
   --set ingress.host=openan.example.com
 ```
 
-### 方式三：单节点本地镜像
+### Method 3: Single-node Local Images
 
-确保 K8S 节点能访问到本地 Docker 镜像。如果使用 `kind` / `minikube` / `k3s`，需按各自方式加载镜像。
+Ensure K8S nodes can access local Docker images. If using `kind` / `minikube` / `k3s`, load images according to their respective methods.
 
 ```bash
 cd containerized/openan-chart
@@ -173,45 +173,45 @@ helm install openan . \
   --set orchestration.a2at.apiKey=sk-your-a2at-key
 ```
 
-## 配置说明
+## Configuration Description
 
-`values-prod.yaml.example` 中的关键配置项：
+Key configuration items in `values-prod.yaml.example`:
 
-### 必须修改的配置
+### Required Configuration
 
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `registry.llm.chat.apiKey` | `sk-your-actual-api-key` | Registry Center Chat 模型 API Key |
-| `orchestration.llm.chat.apiKey` | `sk-your-actual-api-key` | Orchestration Center Chat 模型 API Key |
-| `orchestration.a2at.apiKey` | `sk-your-actual-api-key` | A2AT SDK API Key |
-| `postgresql.password` | `openan-db-password` | 数据库密码（生产环境必须修改） |
-| `ingress.host` | `openan.local` | Ingress 域名（替换为你的域名或 IP） |
+| Config Item | Default | Description |
+|-------------|---------|-------------|
+| `registry.llm.chat.apiKey` | `sk-3590ce6c3d2e4111b01f14125bc51fab` | Registry Center Chat model API Key |
+| `orchestration.llm.chat.apiKey` | `sk-3590ce6c3d2e4111b01f14125bc51fab` | Orchestration Center Chat model API Key |
+| `orchestration.a2at.apiKey` | `sk-3590ce6c3d2e4111b01f14125bc51fab` | A2AT SDK API Key |
+| `postgresql.password` | `openan-db-password` | Database password (must change for production) |
+| `ingress.host` | `openan.local` | Ingress domain (replace with your domain or IP) |
 
-### 可选修改的配置
+### Optional Configuration
 
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `registry.image.repository` | `leoyy6/registry-center` | 镜像仓库地址 |
-| `orchestration.image.repository` | `leoyy6/orchestration-center` | 镜像仓库地址 |
-| `frontend.image.repository` | `leoyy6/workflow-designer` | 镜像仓库地址 |
-| `frontend.nodePort` | `30191` | 前端 NodePort 端口 |
-| `registry.llm.chat.model` | `glm-5.1` | Chat 模型名称 |
-| `orchestration.llm.chat.model` | `qwen3.7-plus` | Chat 模型名称 |
-| `registry.replicas` | `2` | Registry Center 副本数 |
-| `orchestration.replicas` | `2` | Orchestration Center 副本数 |
+| Config Item | Default | Description |
+|-------------|---------|-------------|
+| `registry.image.repository` | `leoyy6/registry-center` | Image registry address |
+| `orchestration.image.repository` | `leoyy6/orchestration-center` | Image registry address |
+| `frontend.image.repository` | `leoyy6/workflow-designer` | Image registry address |
+| `frontend.nodePort` | `30191` | Frontend NodePort |
+| `registry.llm.chat.model` | `glm-5.1` | Chat model name |
+| `orchestration.llm.chat.model` | `qwen3.7-plus` | Chat model name |
+| `registry.replicas` | `2` | Registry Center replica count |
+| `orchestration.replicas` | `2` | Orchestration Center replica count |
 
-### LLM 模型配置
+### LLM Model Configuration
 
-示例配置使用阿里云 DashScope 作为 LLM 提供商：
+Example configuration uses Alibaba Cloud DashScope as LLM provider:
 
-| 组件 | 模型 | 用途 |
-|------|------|------|
-| Registry Center | `glm-5.1` | Agent Card 语义搜索、智能匹配 |
-| Registry Center | `bge-m3` | 向量嵌入 |
-| Registry Center | `bge-reranker-v2-m3` | 结果重排序 |
-| Orchestration Center | `qwen3.7-plus` | 工作流编排、PSOP 生成 |
+| Component | Model | Purpose |
+|-----------|-------|---------|
+| Registry Center | `glm-5.1` | Agent Card semantic search, intelligent matching |
+| Registry Center | `bge-m3` | Vector embedding |
+| Registry Center | `bge-reranker-v2-m3` | Result reranking |
+| Orchestration Center | `qwen3.7-plus` | Workflow orchestration, PSOP generation |
 
-如需使用其他 LLM 提供商（如 OpenAI、DeepSeek），需同时修改 `model`、`url` 和 `apiKey`：
+To use other LLM providers (e.g., OpenAI, DeepSeek), modify `model`, `url`, and `apiKey` together:
 
 ```yaml
 registry:
@@ -222,13 +222,13 @@ registry:
       apiKey: "sk-your-openai-key"
 ```
 
-## Step 4: 验证部署
+## Step 4: Verify Deployment
 
 ```bash
-# 查看 Pod 状态（等待所有 Pod Running）
+# Check Pod status (wait for all Pods to be Running)
 kubectl -n openan get pods
 
-# 预期输出：
+# Expected output:
 # NAME                                    READY   STATUS    RESTARTS   AGE
 # openan-postgres-0                       1/1     Running   0          2m
 # registry-center-xxx                     1/1     Running   0          2m
@@ -238,122 +238,128 @@ kubectl -n openan get pods
 # workflow-designer-xxx                   1/1     Running   0          2m
 # workflow-designer-yyy                   1/1     Running   0          2m
 
-# 查看服务
+# Check services
 kubectl -n openan get svc
 
-# 查看 Ingress
+# Check Ingress
 kubectl -n openan get ingress
 
-# 查看日志
+# Check logs
 kubectl -n openan logs -l app=registry-center -f
 kubectl -n openan logs -l app=orchestration-center -f
 ```
 
-## Step 5: 访问平台
+## Step 5: Access Platform
 
-### 方式一：通过 Ingress（推荐）
+### Method 1: Via Ingress (Recommended)
 
-配置 hosts（使用 `values-custom.yaml` 中配置的域名，默认 `openan.local`）：
+Configure hosts (using domain configured in `values-custom.yaml`, default `openan.local`):
 
 ```bash
-# 获取 Ingress Controller IP
+# Get Ingress Controller IP
 kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
 
-# 添加到 /etc/hosts（Linux/Mac）或 C:\Windows\System32\drivers\etc\hosts（Windows）
+# Add to /etc/hosts (Linux/Mac) or C:\Windows\System32\drivers\etc\hosts (Windows)
 <ingress-ip>  openan.local
 ```
 
-访问：
+Access:
 
-| 服务 | 地址 |
-|------|------|
-| Workflow Designer（前端） | `http://openan.local/` |
+| Service | Address |
+|---------|---------|
+| Workflow Designer (Frontend) | `http://openan.local/` |
 | Registry API | `http://openan.local/registry/rest/v1/registry-center/agent-cards` |
 | Orchestration API | `http://openan.local/api/orchestrate/rest/v1/orchestrate/agent-cards` |
 
 ```bash
-# 测试 Registry API
+# Test Registry API
 curl http://openan.local/registry/rest/v1/registry-center/agent-cards
 
-# 测试 Orchestration API
+# Test Orchestration API
 curl http://openan.local/api/orchestrate/rest/v1/orchestrate/agent-cards
 ```
 
-### 方式二：通过 NodePort（无 Ingress 环境）
+### Method 2: Via NodePort (No Ingress Environment)
 
-如果未配置 Ingress，可通过 NodePort 直接访问（默认端口 30191）：
+If Ingress is not configured, access directly via NodePort (default port 30191):
 
 ```bash
-# 获取节点 IP
+# Get node IP
 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
 
-# 访问前端
+# Access frontend
 echo "http://${NODE_IP}:30191/"
 
-# 测试 Registry API（需要通过 Ingress 或端口转发，NodePort 仅暴露前端）
-curl http://openan.local/registry/rest/v1/registry-center/agent-cards
-
-# 测试 Orchestration API
-curl http://openan.local/api/orchestrate/rest/v1/orchestrate/agent-cards
-
+# Test Registry API (requires Ingress or port forwarding, NodePort only exposes frontend)
 ```
 
-## Step 6: 更新
+> Note: NodePort only exposes Workflow Designer frontend. Registry and Orchestration APIs require Ingress or port forwarding.
+
+### Method 3: Port Forwarding (For Debugging)
 
 ```bash
-# 更新 Helm 发布
-helm upgrade openan . -n openan -f values-custom.yaml
+# Frontend
+kubectl -n openan port-forward svc/workflow-designer 8080:80
+# Open browser at http://localhost:8080
+
+# Registry API
+kubectl -n openan port-forward svc/registry-center 5000:5000
+curl http://localhost:5000/rest/v1/registry-center/agent-cards
+
+# Orchestration API
+kubectl -n openan port-forward svc/orchestration-center 5001:5001
+curl http://localhost:5001/rest/v1/orchestrate/agent-cards
 ```
 
-## Step 7: 清理
+## Step 6: Cleanup
 
 ```bash
-# 卸载 Helm 发布
+# Uninstall Helm release
 helm uninstall openan -n openan
 
-# 删除命名空间（会清理所有资源）
+# Delete namespace (will clean up all resources)
 kubectl delete namespace openan
 
-# 删除 PVC（可选，会清除数据库数据）
+# Delete PVC (optional, will clear database data)
 kubectl delete pvc -n openan --all
 ```
 
-## 常见问题
+## FAQ
 
-### Q: Pod 一直处于 Pending 状态？
+### Q: Pod stuck in Pending state?
 
 ```bash
 kubectl -n openan describe pod <pod-name>
-# 常见原因：PVC 未绑定 → 检查 StorageClass
+# Common cause: PVC not bound → check StorageClass
 kubectl get sc
 ```
 
-### Q: 镜像拉取失败？
+### Q: Image pull failed?
 
 ```bash
-# 检查镜像名称和标签是否正确
+# Check if image name and tag are correct
 kubectl -n openan describe pod <pod-name> | grep -A5 Events
 
-# 私有仓库需要配置 imagePullSecrets
+# Private registry requires imagePullSecrets configuration
 kubectl -n openan create secret docker-registry harbor-cred \
   --docker-server=harbor.example.com \
   --docker-username=admin \
   --docker-password=your-password
 ```
 
-### Q: 数据库连接失败？
+### Q: Database connection failed?
 
 ```bash
-# 检查 PostgreSQL Pod 状态
+# Check PostgreSQL Pod status
 kubectl -n openan get pods -l app=openan-postgres
 
-# 查看 PostgreSQL 日志
+# Check PostgreSQL logs
 kubectl -n openan logs -l app=openan-postgres
 ```
 
-### Q: 证书报错？
+### Q: Certificate errors?
 
-默认使用 `auto` 模式自动生成自签名证书，无需手动操作。如需排查：
+Default uses `auto` mode to automatically generate self-signed certificates, no manual intervention required. For troubleshooting:
 
 ```bash
 kubectl -n openan get secret registry-center-tls
@@ -361,8 +367,8 @@ kubectl -n openan get secret registry-center-signing
 kubectl -n openan exec <registry-pod> -- ls -la /opt/registry-center/etc/ssl
 ```
 
-## 相关文档
+## Related Documentation
 
-- [Helm Chart 详细配置](./openan-chart/README.md)
-- [镜像构建指南](./build/README.md)
-- [K8S 部署指南](../k8s-deployment-guide.md)（含纯 YAML 部署方式）
+- [Helm Chart Detailed Configuration](./openan-chart/README.md)
+- [Image Build Guide](./build/README.md)
+- [K8S Deployment Guide](../k8s-deployment-guide.md) (includes pure YAML deployment)
