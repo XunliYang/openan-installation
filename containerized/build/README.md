@@ -238,104 +238,6 @@ helm install openan . \
   --set frontend.image.tag=v1.0.0
 ```
 
-## CI/CD 集成示例
-
-### GitHub Actions
-
-```yaml
-name: Build and Push Images
-
-on:
-  push:
-    tags:
-      - 'v*'
-
-jobs:
-  build-registry:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      
-      - name: Login to Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ${{ secrets.REGISTRY_URL }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
-      
-      - name: Build and Push Registry Center
-        run: |
-          cd k8s/openan-chart/build
-          ./build.sh \
-            --registry ${{ secrets.REGISTRY_URL }} \
-            --namespace openan \
-            --tag ${{ github.ref_name }} \
-            --registry-repo https://github.com/org/registry-center.git \
-            --push
-
-  build-orchestration:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      
-      - name: Login to Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ${{ secrets.REGISTRY_URL }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
-      
-      - name: Build and Push Orchestration Center
-        run: |
-          cd k8s/openan-chart/build
-          ./build.sh \
-            --registry ${{ secrets.REGISTRY_URL }} \
-            --namespace openan \
-            --tag ${{ github.ref_name }} \
-            --orchestration-repo https://github.com/org/orchestration-center.git \
-            --push
-```
-
-### GitLab CI
-
-```yaml
-build-registry:
-  stage: build
-  image: docker:latest
-  services:
-    - docker:dind
-  script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - cd k8s/openan-chart/build
-    - ./build.sh
-      --registry $CI_REGISTRY
-      --namespace openan
-      --tag $CI_COMMIT_TAG
-      --registry-repo https://github.com/org/registry-center.git
-      --push
-  only:
-    - tags
-
-build-orchestration:
-  stage: build
-  image: docker:latest
-  services:
-    - docker:dind
-  script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - cd k8s/openan-chart/build
-    - ./build.sh
-      --registry $CI_REGISTRY
-      --namespace openan
-      --tag $CI_COMMIT_TAG
-      --orchestration-repo https://github.com/org/orchestration-center.git
-      --push
-  only:
-    - tags
-```
-
 ## 常见问题
 
 ### Q: Workflow Designer 如何指定源码？
@@ -411,6 +313,7 @@ docker run --rm my-registry.com/openan/registry-center:v1.0.0 --help
 
 ## 相关文档
 
-- [Helm Chart 使用指南](../README.md)
-- [K8S 部署设计文档](../../../docs/k8s-deployment-design.md)
+- [快速体验](../QUICKSTART.md)（构建 + 部署一站式指南）
+- [Helm Chart 部署](../openan-chart/README.md)
+- [K8S 部署指南](../../k8s-deployment-guide.md)
 - [Docker 官方文档](https://docs.docker.com/)
