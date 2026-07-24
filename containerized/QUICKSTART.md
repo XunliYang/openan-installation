@@ -18,77 +18,54 @@ Prepare Environment → Build Images → Deploy to K8S → Verify Access → Cle
 | kubectl | 1.24+ | K8S command line |
 | Helm | 3.x | Deployment management |
 | Ingress Controller (Nginx) | - | External access (optional) |
-| Git | - | Source code checkout |
+| curl | - | Download release packages |
 
-## Step 1: Prepare Source Code
+## Step 1: Build Images
 
-```bash
-# Clone component source code (select as needed)
-git clone https://github.com/openan/registry-center.git
-git clone https://github.com/openan/orchestration-center.git
-```
-
-> Workflow Designer is located at `orchestration-center/workflow-designer`, no need to clone separately.
-
-## Step 2: Build Images
-
-### Scenario A: Single-node Cluster (Load images directly to local Docker)
+### One-line Build (Recommended)
 
 ```bash
 cd containerized/build
-
-# Build all components (current architecture only, no push)
-docker buildx build --platform linux/amd64 \
-  -t registry-center:latest --load \
-  ../../registry-center
-
-docker buildx build --platform linux/amd64 \
-  -t orchestration-center:latest --load \
-  ../../orchestration-center
-
-docker buildx build --platform linux/amd64 \
-  -t workflow-designer:latest --load \
-  ../../orchestration-center/workflow-designer
+./build.sh
 ```
 
-> Replace `linux/amd64` with your node architecture (e.g., `linux/arm64`).
+Downloads release v1.0.0 from GitHub, builds all images, and pushes to Docker Hub.
 
-### Scenario B: Private Image Registry (Recommended for multi-node / production)
+**Default configuration:**
+
+| Item | Default |
+|------|---------|
+| Registry Center | GitHub release v1.0.0 |
+| Orchestration Center | GitHub release v1.0.0 |
+| Image registry | `docker.io` |
+| Image namespace | `openan` |
+| Image tag | `v1.0.0` |
+| Platforms | `linux/amd64,linux/arm64` |
+
+### Custom Build
 
 ```bash
-cd containerized/build
+# Custom tag
+./build.sh --tag v1.1.0
 
-# Use build script, specify private registry and push
-./build.sh \
-  --registry harbor.example.com \
-  --namespace openan \
-  --tag v1.0.0 \
-  --registry-src ../../registry-center \
-  --orchestration-src ../../orchestration-center \
-  --push
+# Private registry
+./build.sh --registry harbor.example.com --namespace myorg --tag v1.0.0
+
+# Local single-arch build (no push)
+./build.sh --platforms linux/amd64 --no-push
 ```
 
 After build, image list:
 
 ```
-harbor.example.com/openan/registry-center:v1.0.0
-harbor.example.com/openan/orchestration-center:v1.0.0
-harbor.example.com/openan/workflow-designer:v1.0.0
+docker.io/openan/registry-center:v1.0.0
+docker.io/openan/orchestration-center:v1.0.0
+docker.io/openan/workflow-designer:v1.0.0
 ```
 
-### Scenario C: Using Configuration File
+> For detailed build options, see [Image Build Guide](./build/README.md).
 
-```bash
-cd containerized/build
-
-cp build-config.yaml.example build-config.yaml
-# Edit build-config.yaml, fill in source paths and registry info
-vim build-config.yaml
-
-./build.sh --config build-config.yaml
-```
-
-## Step 3: Deploy to Kubernetes
+## Step 2: Deploy to Kubernetes
 
 ### Method 1: Using Example Configuration File (Recommended for Quick Start)
 
@@ -222,7 +199,7 @@ registry:
       apiKey: "sk-your-openai-key"
 ```
 
-## Step 4: Verify Deployment
+## Step 3: Verify Deployment
 
 ```bash
 # Check Pod status (wait for all Pods to be Running)
@@ -249,7 +226,7 @@ kubectl -n openan logs -l app=registry-center -f
 kubectl -n openan logs -l app=orchestration-center -f
 ```
 
-## Step 5: Access Platform
+## Step 4: Access Platform
 
 ### Method 1: Via Ingress (Recommended)
 
@@ -311,7 +288,7 @@ kubectl -n openan port-forward svc/orchestration-center 5001:5001
 curl http://localhost:5001/rest/v1/orchestrate/agent-cards
 ```
 
-## Step 6: Cleanup
+## Step 5: Cleanup
 
 ```bash
 # Uninstall Helm release

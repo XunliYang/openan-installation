@@ -6,92 +6,114 @@ This document describes how to build the container images required for the OpenA
 
 ```
 build/
-├── build.sh                    # Main build script
-├── build-config.yaml.example   # Configuration file template
-└── README.md                   # This document
+├── build.sh          # One-line build script
+└── README.md         # This document
 ```
 
 ## Prerequisites
 
-- Docker installed and running
-- Git (if using Git repository method)
-- Python 3 (if using YAML configuration file)
+- Docker 20.10+ with buildx enabled
+- curl
+- (Optional) QEMU for multi-architecture builds
 
 ## Quick Start
 
-### Method 1: Using Local Source Code (Recommended for Development)
+### One-line Build
 
 ```bash
-# Enter build directory
 cd build
-
-# Build Registry Center only
-./build.sh --registry-src /path/to/registry-center
-
-# Build Orchestration Center only (includes Workflow Designer)
-./build.sh --orchestration-src /path/to/orchestration-center
-
-# Build both components
-./build.sh \
-  --registry-src /path/to/registry-center \
-  --orchestration-src /path/to/orchestration-center
-
-# Build and push to private registry
-./build.sh \
-  --registry harbor.example.com \
-  --namespace openan \
-  --tag v1.0.0 \
-  --orchestration-src /path/to/orchestration-center \
-  --push
+./build.sh
 ```
 
-### Method 2: Using Git Repository (Recommended for CI/CD)
+This single command downloads release v1.0.0 packages from GitHub, builds all component images, and pushes them to Docker Hub.
+
+### Build Specific Components
 
 ```bash
-# Build Registry Center only
-./build.sh \
-  --registry-repo https://github.com/org/registry-center.git \
-  --tag v1.0.0 \
-  --push
-
-# Build Orchestration Center only
-./build.sh \
-  --orchestration-repo https://github.com/org/orchestration-center.git \
-  --tag v1.0.0 \
-  --push
-
-# Build both components
-./build.sh \
-  --registry-repo https://github.com/org/registry-center.git \
-  --orchestration-repo https://github.com/org/orchestration-center.git \
-  --tag v1.0.0 \
-  --push
+./build.sh registry                 # Build Registry Center only
+./build.sh orchestration            # Build Orchestration Center + Workflow Designer
+./build.sh registry orchestration   # Build both (same as default)
 ```
 
-Note: Workflow Designer is a subdirectory of Orchestration Center and will be automatically included when building Orchestration Center.
-
-### Method 3: Using Configuration File
+### Custom Registry
 
 ```bash
-# Copy configuration file template
-cp build-config.yaml.example build-config.yaml
-
-# Edit configuration file
-vim build-config.yaml
-
-# Build using configuration file
-./build.sh --config build-config.yaml
+./build.sh --image-registry harbor.example.com --namespace openan --tag v1.0.0
 ```
 
-Note: Workflow Designer is a subdirectory of Orchestration Center and defaults to `{orchestration-center}/workflow-designer`, no separate configuration needed.
+### Local Build (No Push)
+
+```bash
+./build.sh --platforms linux/amd64 --no-push
+```
+
+## Command Line Options
+
+### Components (positional)
+
+| Component | Description |
+|-----------|-------------|
+| `registry` | Build Registry Center only |
+| `orchestration` | Build Orchestration Center + Workflow Designer |
+| (none) | Build all components |
+
+If no components specified, all components are built. Specify one or both to build selectively.
+
+### Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--image-registry <url>` | Image registry address | `docker.io` |
+| `--namespace <ns>` | Image namespace | `openan` |
+| `--tag <tag>` | Image tag | `v1.0.0` |
+| `--registry-release <url>` | Registry Center release tarball URL | GitHub release v1.0.0 |
+| `--orchestration-release <url>` | Orchestration Center release tarball URL | GitHub release v1.0.0 |
+| `--platforms <platforms>` | Target platform architectures | `linux/amd64,linux/arm64` |
+| `--no-push` | Build locally only (single-arch) | - |
+| `--help` | Show help information | - |
+
+### Examples
+
+```bash
+# Build all components (default)
+./build.sh
+
+# Build Registry Center only
+./build.sh registry
+
+# Build Orchestration Center + Workflow Designer only
+./build.sh orchestration
+
+# Build both explicitly
+./build.sh registry orchestration
+
+# Registry only, with custom registry and tag
+./build.sh registry --image-registry harbor.example.com --tag v1.1.0
+
+# Orchestration only, local single-arch build
+./build.sh orchestration --platforms linux/amd64 --no-push
+
+# All components, custom registry
+./build.sh --image-registry harbor.example.com --namespace myorg
+```
+
+### Default Release URLs
+
+The script downloads from these GitHub releases by default:
+
+- Registry Center: `https://github.com/project-openan/registry-center/releases/download/v1.0.0/registry-center-v1.0.0.tar.gz`
+- Orchestration Center: `https://github.com/project-openan/orchestration-center/releases/download/v1.0.0/orchestration-center-v1.0.0.tar.gz`
+
+Override with `--registry-release` and `--orchestration-release` to use custom URLs or different versions.
 
 ## Multi-architecture Build
 
-The build script supports multi-architecture (amd64 + arm64) by default, customizable via the `--platforms` parameter.
+The build script uses `docker buildx` to support multi-architecture images (amd64 + arm64).
 
 ### Prerequisites
 
 1. **Install QEMU** (for emulating different architectures)
+
    ```bash
    # Ubuntu/Debian
    sudo apt-get install qemu-user-static
@@ -100,43 +122,33 @@ The build script supports multi-architecture (amd64 + arm64) by default, customi
    docker run --privileged --rm tonistiigi/binfmt --install all
    ```
 
-2. **Create buildx builder**
+2. **Create buildx builder** (automatically done by the script)
+
    ```bash
-   docker buildx create --name multiarch --use
+   docker buildx create --name multiarch-builder --use
    ```
 
 ### Building Multi-architecture Images
 
 ```bash
-# Default: build amd64 + arm64
-./build.sh \
-  --registry-src /path/to/registry-center \
-  --orchestration-src /path/to/orchestration-center \
-  --push
+# Default: build amd64 + arm64 and push
+./build.sh
 
 # Custom target platforms
-./build.sh \
-  --registry-src /path/to/registry-center \
-  --orchestration-src /path/to/orchestration-center \
-  --platforms linux/amd64,linux/arm64,linux/arm/v7 \
-  --push
+./build.sh --platforms linux/amd64,linux/arm64,linux/arm/v7
 
 # Single architecture only (faster)
-./build.sh \
-  --registry-src /path/to/registry-center \
-  --orchestration-src /path/to/orchestration-center \
-  --platforms linux/amd64 \
-  --push
+./build.sh --platforms linux/amd64 --no-push
 ```
 
 ### Verifying Multi-architecture Images
 
 ```bash
 # View supported architectures for an image
-docker buildx imagetools inspect your-registry.com/openan/registry-center:latest
+docker buildx imagetools inspect docker.io/openan/registry-center:v1.0.0
 
 # Example output:
-# Name: your-registry.com/openan/registry-center:latest
+# Name: docker.io/openan/registry-center:v1.0.0
 # Manifests:
 #   Name: ...@sha256:abc123
 #   Platform: linux/amd64
@@ -151,51 +163,29 @@ docker buildx imagetools inspect your-registry.com/openan/registry-center:latest
 2. **Build time**: Multi-architecture build time is approximately N times single architecture (N = number of architectures)
 3. **Registry support**: Ensure your image registry supports multi-architecture manifests (Docker Hub, Harbor, ACR, etc. all support this)
 
-## Configuration Parameters
-
-### Command Line Parameters
-
-| Parameter | Description | Required | Example |
-|-----------|-------------|----------|---------|
-| `--registry` | Image registry address | No | `harbor.example.com` |
-| `--namespace` | Image namespace | No | `openan` |
-| `--tag` | Image tag | No | `v1.0.0` |
-| `--push` | Push after build | No | - |
-| `--config` | Configuration file path | No | `build-config.yaml` |
-| `--registry-src` | Registry Center local path | One of two | `/path/to/registry-center` |
-| `--orchestration-src` | Orchestration Center local path | One of two | `/path/to/orchestration-center` |
-| `--frontend-src` | Workflow Designer local path | No | `/path/to/workflow-designer` |
-| `--registry-repo` | Registry Center Git repository | One of two | `https://github.com/...` |
-| `--orchestration-repo` | Orchestration Center Git repository | One of two | `https://github.com/...` |
-| `--registry-branch` | Registry Center branch | No | `main` |
-| `--orchestration-branch` | Orchestration Center branch | No | `main` |
-| `--platforms` | Target platform architectures | No | `linux/amd64,linux/arm64` |
-
-**Note**: At least one component source must be specified (`--registry-src` or `--orchestration-src`), components not specified will be skipped.
-
-### Configuration File Parameters
-
-See comments in `build-config.yaml.example`.
-
-Note: Workflow Designer is a subdirectory of Orchestration Center, configuration only needs `orchestration-center`, `workflow-designer` will automatically use `{orchestration-center}/workflow-designer`.
-
 ## Build Process
 
 ```
-1. Parse arguments (command line > config file > defaults)
+1. Parse arguments and print configuration
    ↓
-2. Prepare source code
-   ├─ Local path: verify path exists
-   └─ Git repository: clone to temp directory
+2. Download release packages
+   ├─ Registry Center tarball → extract to temp directory
+   └─ Orchestration Center tarball → extract to temp directory
    ↓
-3. Build images (only builds components with specified source)
-   ├─ registry-center        (if --registry-src or --registry-repo specified)
-   ├─ orchestration-center   (if --orchestration-src or --orchestration-repo specified)
-   └─ workflow-designer      (if orchestration-center is built)
+3. Detect source directories (handle tarball extraction variations)
    ↓
-4. Push images (if --push specified)
+4. Create or select buildx builder
    ↓
-5. Clean up temp directories
+5. Build images
+   ├─ [1/3] registry-center
+   ├─ [2/3] orchestration-center
+   └─ [3/3] workflow-designer (if Dockerfile found in orchestration-center/workflow-designer)
+   ↓
+6. Push images to registry (if --push or multi-arch)
+   ↓
+7. Print result and Helm deploy command
+   ↓
+8. Clean up temp directories
 ```
 
 ## Image Naming Convention
@@ -207,87 +197,106 @@ Built images follow this naming format:
 ```
 
 Examples:
+- `docker.io/openan/registry-center:v1.0.0`
+- `docker.io/openan/orchestration-center:v1.0.0`
+- `docker.io/openan/workflow-designer:v1.0.0`
+
+Private registry examples:
 - `harbor.example.com/openan/registry-center:v1.0.0`
 - `harbor.example.com/openan/orchestration-center:v1.0.0`
 - `harbor.example.com/openan/workflow-designer:v1.0.0`
 
 ## Integration with Helm Chart
 
-After building, deploy using:
+After building, deploy using the Helm Chart:
 
 ```bash
-# Only built Registry Center
-helm install openan . \
-  --set registry.image.repository=harbor.example.com/openan/registry-center \
-  --set registry.image.tag=v1.0.0
-
-# Only built Orchestration Center
-helm install openan . \
-  --set orchestration.image.repository=harbor.example.com/openan/orchestration-center \
-  --set orchestration.image.tag=v1.0.0 \
-  --set frontend.image.repository=harbor.example.com/openan/workflow-designer \
-  --set frontend.image.tag=v1.0.0
-
-# Built both components
-helm install openan . \
-  --set registry.image.repository=harbor.example.com/openan/registry-center \
+# Using command-line overrides
+helm install openan ./openan-chart \
+  -n openan --create-namespace \
+  --set registry.image.repository=docker.io/openan/registry-center \
   --set registry.image.tag=v1.0.0 \
-  --set orchestration.image.repository=harbor.example.com/openan/orchestration-center \
+  --set orchestration.image.repository=docker.io/openan/orchestration-center \
   --set orchestration.image.tag=v1.0.0 \
-  --set frontend.image.repository=harbor.example.com/openan/workflow-designer \
+  --set frontend.image.repository=docker.io/openan/workflow-designer \
   --set frontend.image.tag=v1.0.0
+
+# Or edit values-custom.yaml
+# registry:
+#   image:
+#     repository: docker.io/openan/registry-center
+#     tag: v1.0.0
+# orchestration:
+#   image:
+#     repository: docker.io/openan/orchestration-center
+#     tag: v1.0.0
+# frontend:
+#   image:
+#     repository: docker.io/openan/workflow-designer
+#     tag: v1.0.0
+
+helm install openan ./openan-chart -n openan --create-namespace -f values-custom.yaml
 ```
 
 ## FAQ
 
-### Q: How to specify Workflow Designer source?
+### Q: How to build from local source code?
 
-A: Workflow Designer is a subdirectory of Orchestration Center, defaults to `{orchestration-src}/workflow-designer`. To use a different path, use `--frontend-src`:
+A: The simplified script downloads release packages. For local source builds, use `docker buildx` directly:
+
+```bash
+# Build Registry Center from local source
+docker buildx build --platform linux/amd64 \
+  -t registry-center:latest --load \
+  /path/to/registry-center
+
+# Build Orchestration Center from local source
+docker buildx build --platform linux/amd64 \
+  -t orchestration-center:latest --load \
+  /path/to/orchestration-center
+
+# Build Workflow Designer from local source
+docker buildx build --platform linux/amd64 \
+  -t workflow-designer:latest --load \
+  /path/to/orchestration-center/workflow-designer
+```
+
+### Q: How to use a different release version?
+
+A: Override the release URLs:
 
 ```bash
 ./build.sh \
-  --registry-src /path/to/registry-center \
-  --orchestration-src /path/to/orchestration-center \
-  --frontend-src /custom/path/to/workflow-designer
+  --tag v1.1.0 \
+  --registry-release https://github.com/project-openan/registry-center/releases/download/v1.1.0/registry-center-v1.1.0.tar.gz \
+  --orchestration-release https://github.com/project-openan/orchestration-center/releases/download/v1.1.0/orchestration-center-v1.1.0.tar.gz
 ```
 
-### Q: How to build only one component?
+### Q: How to skip Workflow Designer?
 
-A: The script supports selective builds, just specify one component's source:
+A: If the orchestration-center release doesn't contain a `workflow-designer` directory with a Dockerfile, it's skipped automatically with a warning.
+
+### Q: Build failed with "docker buildx not installed"?
+
+A: Ensure Docker 20.10+ is installed and buildx is enabled:
 
 ```bash
-# Build Registry Center only
-./build.sh --registry-src /path/to/registry-center
-
-# Build Orchestration Center only (automatically includes Workflow Designer)
-./build.sh --orchestration-src /path/to/orchestration-center
+docker buildx version
+docker buildx create --name default --use
 ```
 
-### Q: How to skip Workflow Designer build?
+### Q: How to use private image registry?
 
-A: If Orchestration Center source doesn't have a `workflow-designer` directory, the script will automatically skip frontend build. You can also explicitly skip with `--frontend-src ""`.
-
-### Q: How to debug build failures?
-
-A: Use `--no-cache` to disable cache and view detailed build logs:
+A: Specify registry and namespace:
 
 ```bash
-docker build --no-cache -t my-image /path/to/source
+./build.sh --image-registry harbor.example.com --namespace openan --tag v1.0.0
 ```
 
-### Q: How to use private Git repositories?
-
-A: Configure Git authentication:
+Ensure you're logged in:
 
 ```bash
-# Method 1: Using SSH
-git clone git@github.com:org/repo.git
-
-# Method 2: Using HTTPS + Token
-git clone https://token@github.com/org/repo.git
-
-# Method 3: Configure Git credential
-git config --global credential.helper store
+docker login harbor.example.com
 ```
 
 ### Q: How to verify successful image build?
@@ -298,18 +307,18 @@ A: Use these commands to check:
 # List images
 docker images | grep openan
 
-# Test run
-docker run --rm my-registry.com/openan/registry-center:v1.0.0 --help
+# For multi-arch images, inspect manifest
+docker buildx imagetools inspect docker.io/openan/registry-center:v1.0.0
 ```
 
 ## Best Practices
 
-1. **Selective builds**: Only build components with changes to save build time
-2. **Version tags**: Use semantic versioning (e.g., `v1.0.0`) for production, `latest` or git commit hash for development
-3. **Image scanning**: Scan images for vulnerabilities using `trivy` or `snyk` before pushing
-4. **Multi-architecture support**: Use `docker buildx` to build multi-architecture images (amd64/arm64)
-5. **Cache optimization**: Write Dockerfiles to leverage build cache for faster builds
-6. **Secure storage**: Use Kubernetes Secrets or Vault to store image registry credentials
+1. **Version tags**: Use semantic versioning (e.g., `v1.0.0`) for production, `latest` for development
+2. **Image scanning**: Scan images for vulnerabilities using `trivy` or `snyk` before pushing to production
+3. **Multi-architecture support**: Use the default multi-arch build for cross-platform compatibility
+4. **Private registry**: Use private registries for production deployments with proper access control
+5. **Resource limits**: Set appropriate resource limits in Helm values to prevent resource abuse
+6. **Cache optimization**: The build script uses buildx which leverages Docker layer cache automatically
 
 ## Related Documentation
 
