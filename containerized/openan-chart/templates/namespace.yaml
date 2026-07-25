@@ -9,4 +9,8 @@ metadata:
   name: {{ .Values.namespace }}
   labels:
     {{- include "openan.labels" . | nindent 4 }}
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    meta.helm.sh/release-name: {{ .Release.Name }}
+    meta.helm.sh/release-namespace: {{ .Release.Namespace }}
 {{- end }}

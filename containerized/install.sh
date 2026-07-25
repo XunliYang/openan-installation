@@ -16,6 +16,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
 CHART_DIR="$SCRIPT_DIR/openan-chart"
 
+# Ensure scripts are executable
+chmod +x "$BUILD_DIR/build.sh" 2>/dev/null || true
+
 log_info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
@@ -485,7 +488,8 @@ if [ "$CONFIG_IMAGE_SOURCE" = "build" ]; then
     [ "$CONFIG_ORCHESTRATION" = true ] && BUILD_ARGS="$BUILD_ARGS orchestration"
     
     cd "$BUILD_DIR"
-    ./build.sh $BUILD_ARGS \
+    chmod +x build.sh
+    bash build.sh $BUILD_ARGS \
         --image-registry "$CONFIG_IMAGE_REGISTRY" \
         --namespace "$CONFIG_NAMESPACE" \
         --tag "$CONFIG_TAG"
@@ -529,9 +533,23 @@ HELM_ARGS="$HELM_ARGS --set postgresql.password=$CONFIG_DB_PASSWORD"
 HELM_ARGS="$HELM_ARGS --set ingress.host=$CONFIG_INGRESS_HOST"
 
 cd "$CHART_DIR"
-helm upgrade --install openan . \
-    -n "$CONFIG_NAMESPACE" --create-namespace \
-    $HELM_ARGS
+
+# Let Helm manage namespace creation to avoid ownership conflicts
+HELM_ARGS="$HELM_ARGS --set createNamespace=true"
+
+# Check if release already exists
+if helm status openan -n "$CONFIG_NAMESPACE" &>/dev/null 2>&1; then
+    log_info "Upgrading existing release..."
+    helm upgrade openan . \
+        -n "$CONFIG_NAMESPACE" \
+        $HELM_ARGS
+else
+    log_info "Installing new release..."
+    helm install openan . \
+        -n "$CONFIG_NAMESPACE" \
+        --create-namespace \
+        $HELM_ARGS
+fi
 
 # ===== Final Summary =====
 echo ""
