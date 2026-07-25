@@ -23,7 +23,7 @@ metadata:
     {{- include "openan.postgres.labels" . | nindent 4 }}
 spec:
   capacity:
-    storage: {{ .Values.postgresql.storage }}
+    storage: {{ .Values.postgresql.storage.size }}
   volumeMode: Filesystem
   accessModes:
   - ReadWriteOnce

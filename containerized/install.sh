@@ -524,6 +524,17 @@ fi
 HELM_ARGS="$HELM_ARGS --set postgresql.password=$CONFIG_DB_PASSWORD"
 HELM_ARGS="$HELM_ARGS --set ingress.host=$CONFIG_INGRESS_HOST"
 
+# Check if default StorageClass exists
+if kubectl get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}' 2>/dev/null | grep -q .; then
+    log_info "Default StorageClass found, using existing storage"
+else
+    log_info "No default StorageClass found, creating local storage"
+    HELM_ARGS="$HELM_ARGS --set postgresql.storage.createStorageClass=true"
+    HELM_ARGS="$HELM_ARGS --set postgresql.storage.createPV=true"
+    HELM_ARGS="$HELM_ARGS --set postgresql.storage.useHostPath=true"
+    HELM_ARGS="$HELM_ARGS --set postgresql.storage.hostPath=/data/openan-postgres"
+fi
+
 cd "$CHART_DIR"
 
 # Check if release already exists
