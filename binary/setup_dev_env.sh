@@ -119,7 +119,7 @@ fi
 # Install frontend dependencies
 echo "[NPM] Installing orchestration-center frontend dependencies..."
 cd "${ORCHESTRATION_DIR}/workflow-designer"
-npm install
+npm install --force
 
 cd "${ORCHESTRATION_DIR}"
 
@@ -139,16 +139,16 @@ nohup python -m agent_registry.start > "${REGISTRY_DIR}/registry-center.log" 2>&
 REGISTRY_PID=$!
 echo "  PID: ${REGISTRY_PID}"
 
-# Start orchestration-center backend
-echo "[START] orchestration-center backend..."
+# Start orchestration-center backend (port 5001)
+echo "[START] orchestration-center backend (http://127.0.0.1:5001)..."
 cd "${ORCHESTRATION_DIR}"
 source venv/bin/activate
-nohup bash bin/start.sh > "${ORCHESTRATION_DIR}/backend.log" 2>&1 &
+nohup python -m orchestrate.start > "${ORCHESTRATION_DIR}/backend.log" 2>&1 &
 OC_BACKEND_PID=$!
 echo "  PID: ${OC_BACKEND_PID}"
 
-# Start orchestration-center frontend
-echo "[START] orchestration-center frontend..."
+# Start orchestration-center frontend (port 3000)
+echo "[START] orchestration-center frontend (http://localhost:3000)..."
 cd "${ORCHESTRATION_DIR}/workflow-designer"
 nohup npm run dev > "${ORCHESTRATION_DIR}/frontend.log" 2>&1 &
 OC_FRONTEND_PID=$!
@@ -162,8 +162,8 @@ echo "=========================================="
 echo " All services started!"
 echo "=========================================="
 echo " registry-center:        http://127.0.0.1:5000  (PID: ${REGISTRY_PID})"
-echo " orchestration backend:  PID: ${OC_BACKEND_PID}"
-echo " orchestration frontend: PID: ${OC_FRONTEND_PID}"
+echo " orchestration backend:  http://127.0.0.1:5001  (PID: ${OC_BACKEND_PID})"
+echo " orchestration frontend: http://localhost:3000   (PID: ${OC_FRONTEND_PID})"
 echo ""
 echo " Logs:"
 echo "   ${REGISTRY_DIR}/registry-center.log"
