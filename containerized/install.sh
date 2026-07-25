@@ -533,6 +533,7 @@ else
     HELM_ARGS="$HELM_ARGS --set postgresql.storage.createPV=true"
     HELM_ARGS="$HELM_ARGS --set postgresql.storage.useHostPath=true"
     HELM_ARGS="$HELM_ARGS --set postgresql.storage.hostPath=/data/openan-postgres"
+    HELM_ARGS="$HELM_ARGS --set postgresql.storage.storageClassName=openan-local"
 fi
 
 cd "$CHART_DIR"

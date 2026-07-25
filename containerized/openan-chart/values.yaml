@@ -27,7 +27,16 @@ postgresql:
   # Storage
   storage: 
     size: 20Gi
-  storageClassName: ""
+    storageClassName: ""
+    createStorageClass: false
+    createPV: false
+    useHostPath: false
+    hostPath: "/data/openan-postgres"
+    localPath: "/data/openan-postgres"
+    nodeName: ""
+    reclaimPolicy: "Retain"
+    setDefault: false
+    pvName: "openan-postgres-pv"
   # Resource limits
   resources:
     requests:
