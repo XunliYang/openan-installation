@@ -119,7 +119,7 @@ registry:
 orchestration:
   # Set to false to skip orchestration-center deployment
   enabled: true
-  replicas: 2
+  replicas: 1
   image:
     repository: leoyy6/orchestration-center
     tag: V1.0.0

@@ -29,7 +29,8 @@ log_prompt(){ echo -e "${BLUE}[?]${NC} $1"; }
 CONFIG_REGISTRY=true
 CONFIG_ORCHESTRATION=true
 CONFIG_IMAGE_REGISTRY="docker.io"
-CONFIG_NAMESPACE="leoyy6"
+CONFIG_IMAGE_NAMESPACE="leoyy6"
+CONFIG_K8S_NAMESPACE="openan"
 CONFIG_TAG="v1.0.0"
 
 # LLM Configuration for Registry Center
@@ -473,7 +474,7 @@ else
 fi
 
 if [ "$CONFIG_REGISTRY" = true ]; then
-    HELM_ARGS="$HELM_ARGS --set registry.image.repository=$CONFIG_IMAGE_REGISTRY/$CONFIG_NAMESPACE/registry-center"
+    HELM_ARGS="$HELM_ARGS --set registry.image.repository=$CONFIG_IMAGE_REGISTRY/$CONFIG_IMAGE_NAMESPACE/registry-center"
     HELM_ARGS="$HELM_ARGS --set registry.image.tag=$CONFIG_TAG"
     
     # Registry LLM Chat
@@ -489,9 +490,9 @@ if [ "$CONFIG_REGISTRY" = true ]; then
 fi
 
 if [ "$CONFIG_ORCHESTRATION" = true ]; then
-    HELM_ARGS="$HELM_ARGS --set orchestration.image.repository=$CONFIG_IMAGE_REGISTRY/$CONFIG_NAMESPACE/orchestration-center"
+    HELM_ARGS="$HELM_ARGS --set orchestration.image.repository=$CONFIG_IMAGE_REGISTRY/$CONFIG_IMAGE_NAMESPACE/orchestration-center"
     HELM_ARGS="$HELM_ARGS --set orchestration.image.tag=$CONFIG_TAG"
-    HELM_ARGS="$HELM_ARGS --set frontend.image.repository=$CONFIG_IMAGE_REGISTRY/$CONFIG_NAMESPACE/workflow-designer"
+    HELM_ARGS="$HELM_ARGS --set frontend.image.repository=$CONFIG_IMAGE_REGISTRY/$CONFIG_IMAGE_NAMESPACE/workflow-designer"
     HELM_ARGS="$HELM_ARGS --set frontend.image.tag=$CONFIG_TAG"
     
     # Orchestration LLM Chat
@@ -529,17 +530,36 @@ cd "$CHART_DIR"
 HELM_ARGS="$HELM_ARGS --set createNamespace=true"
 
 # Check if release already exists
-if helm status openan -n "$CONFIG_NAMESPACE" &>/dev/null 2>&1; then
+if helm status openan -n "$CONFIG_K8S_NAMESPACE" &>/dev/null 2>&1; then
     log_info "Upgrading existing release..."
     helm upgrade openan . \
-        -n "$CONFIG_NAMESPACE" \
+        -n "$CONFIG_K8S_NAMESPACE" \
         $HELM_ARGS
 else
     log_info "Installing new release..."
     helm install openan . \
-        -n "$CONFIG_NAMESPACE" \
+        -n "$CONFIG_K8S_NAMESPACE" \
         --create-namespace \
         $HELM_ARGS
+fi
+
+# ===== Start Agents Server =====
+if [ "$CONFIG_ORCHESTRATION" = true ]; then
+    echo ""
+    log_step "Waiting for Orchestration Center to be ready..."
+    
+    # Wait for orchestration-center pod to be running
+    kubectl wait --for=condition=ready pod -l app=orchestration-center -n "$CONFIG_K8S_NAMESPACE" --timeout=300s
+    
+    # Get the first orchestration-center pod name
+    ORCH_POD=$(kubectl get pods -l app=orchestration-center -n "$CONFIG_K8S_NAMESPACE" -o jsonpath='{.items[0].metadata.name}')
+    
+    if [ -n "$ORCH_POD" ]; then
+        log_info "Starting agents server in $ORCH_POD..."
+        kubectl exec "$ORCH_POD" -n "$CONFIG_K8S_NAMESPACE" -- /bin/sh -c "PYTHONPATH=. python3 samples/start_agents_server.py"
+    else
+        log_warn "Could not find orchestration-center pod"
+    fi
 fi
 
 # ===== Final Summary =====
@@ -557,9 +577,9 @@ echo "  Add to /etc/hosts:"
 echo "    <ingress-ip>  $CONFIG_INGRESS_HOST"
 echo ""
 echo "  Check status:"
-echo "    kubectl -n $CONFIG_NAMESPACE get pods"
-echo "    kubectl -n $CONFIG_NAMESPACE get ingress"
+echo "    kubectl -n $CONFIG_K8S_NAMESPACE get pods"
+echo "    kubectl -n $CONFIG_K8S_NAMESPACE get ingress"
 echo ""
 echo "  Uninstall:"
-echo "    helm uninstall openan -n $CONFIG_NAMESPACE"
+echo "    helm uninstall openan -n $CONFIG_K8S_NAMESPACE"
 echo ""
