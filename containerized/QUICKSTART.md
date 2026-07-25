@@ -1,205 +1,67 @@
 # OpenAN Platform Quick Start
 
-Build + Deploy one-stop guide, from zero to an accessible OpenAN platform.
-
-## Overall Process
-
-```
-Prepare Environment → Build Images → Deploy to K8S → Verify Access → Cleanup
-```
+One-click deployment guide using the automated setup script.
 
 ## Prerequisites
 
-| Tool | Minimum Version | Purpose |
-|------|----------------|---------|
-| Docker | 20.10+ | Image building |
-| Docker Buildx | 0.8+ | Multi-architecture builds |
-| Kubernetes | 1.24+ | Runtime platform |
-| kubectl | 1.24+ | K8S command line |
-| Helm | 3.x | Deployment management |
-| Ingress Controller (Nginx) | - | External access (optional) |
-| curl | - | Download release packages |
+Before running the setup script, ensure you have:
 
-## Step 1: Build Images
+- **Linux or macOS** system (Windows not yet supported for automated setup)
+- **Kubernetes cluster** (v1.24+) with `kubectl` configured
+- **Internet connection** for downloading dependencies and images
 
-### One-line Build (Recommended)
+The setup script will automatically install missing tools (Docker, kubectl, Helm, Ingress Controller).
+
+## Step 1: Clone Deployment Repository
 
 ```bash
-cd containerized/build
-./build.sh
+git clone https://github.com/XunliYang/openan-deployment.git
+cd openan-deployment/containerized
 ```
 
-Downloads release v1.0.0 from GitHub, builds all images, and pushes to Docker Hub.
-
-**Default configuration:**
-
-| Item | Default |
-|------|---------|
-| Registry Center | GitHub release v1.0.0 |
-| Orchestration Center | GitHub release v1.0.0 |
-| Image registry | `docker.io` |
-| Image namespace | `openan` |
-| Image tag | `v1.0.0` |
-| Platforms | `linux/amd64,linux/arm64` |
-
-### Custom Build
+## Step 2: Run Install Script
 
 ```bash
-# Custom tag
-./build.sh --tag v1.1.0
-
-# Private registry
-./build.sh --registry harbor.example.com --namespace myorg --tag v1.0.0
-
-# Local single-arch build (no push)
-./build.sh --platforms linux/amd64 --no-push
+./install.sh
 ```
 
-After build, image list:
+The script will guide you through an interactive setup:
 
-```
-docker.io/openan/registry-center:v1.0.0
-docker.io/openan/orchestration-center:v1.0.0
-docker.io/openan/workflow-designer:v1.0.0
-```
+1. **Environment Check** - Detects and auto-installs missing dependencies:
+   - Docker (Linux only, auto-install)
+   - kubectl (auto-install)
+   - Helm (auto-install)
+   - Nginx Ingress Controller (auto-install)
 
-> For detailed build options, see [Image Build Guide](./build/README.md).
+2. **Component Selection** - Choose what to deploy:
+   - All components (default): Registry Center + Orchestration Center + Workflow Designer
+   - Registry Center only
+   - Orchestration Center + Workflow Designer only
+   - Custom selection
 
-## Step 2: Deploy to Kubernetes
+3. **Image Source** - Choose how to get images:
+   - Build from source (downloads release packages from GitHub)
+   - Pull pre-built images from registry
 
-### Method 1: Using Example Configuration File (Recommended for Quick Start)
+4. **Local Registry** (optional) - Deploy a local registry in the cluster:
+   - Useful for air-gapped environments
+   - Configurable NodePort
 
-```bash
-cd containerized
+5. **API Keys** (optional) - Configure LLM API keys:
+   - Chat API Key
+   - Embed API Key
+   - Rerank API Key
+   - A2AT API Key
 
-# Copy example configuration file
-cp values-prod.yaml.example values-custom.yaml
+6. **Database & Ingress** - Configure:
+   - Database password
+   - Ingress host (default: `openan.local`)
 
-# Edit configuration file, modify the following:
-# 1. Image registry address (if using private registry)
-# 2. LLM API Key (replace with your own key)
-# 3. Ingress host (replace with your domain or IP)
-# 4. Database password (change default password)
-vim values-custom.yaml
-
-# Deploy
-helm install openan ./openan-chart \
-  -n openan --create-namespace \
-  -f values-custom.yaml
-```
-
-**Example Configuration Description:**
-
-`values-prod.yaml.example` contains complete production environment configuration:
-
-- **Image Registry**: Defaults to `leoyy6/registry-center`, `leoyy6/orchestration-center`, `leoyy6/workflow-designer`
-- **LLM Models**:
-  - Registry Center: `glm-5.1` (Chat), `bge-m3` (Embed), `bge-reranker-v2-m3` (Rerank)
-  - Orchestration Center: `qwen3.7-plus` (Chat and A2AT)
-- **API Endpoint**: Uses Alibaba Cloud DashScope (`dashscope.aliyuncs.com`)
-- **Ingress**: Default domain `openan.local`, NodePort `30191`
-- **Replicas**: 2 replicas per component, HPA auto-scaling enabled
-
-**Quick Modification Examples:**
-
-```bash
-# Replace image registry with your private registry
-sed -i 's|leoyy6/|harbor.example.com/openan/|g' values-custom.yaml
-
-# Replace LLM API Key
-sed -i 's|sk-3590ce6c3d2e4111b01f14125bc51fab|sk-your-actual-api-key|g' values-custom.yaml
-
-# Replace Ingress domain
-sed -i 's|openan.local|openan.example.com|g' values-custom.yaml
-```
-
-### Method 2: Command Line Parameter Override
-
-```bash
-cd containerized/openan-chart
-
-helm install openan . \
-  -n openan --create-namespace \
-  --set registry.image.repository=harbor.example.com/openan/registry-center \
-  --set registry.image.tag=v1.0.0 \
-  --set orchestration.image.repository=harbor.example.com/openan/orchestration-center \
-  --set orchestration.image.tag=v1.0.0 \
-  --set frontend.image.repository=harbor.example.com/openan/workflow-designer \
-  --set frontend.image.tag=v1.0.0 \
-  --set registry.llm.chat.apiKey=sk-your-chat-key \
-  --set registry.llm.embed.apiKey=sk-your-embed-key \
-  --set registry.llm.rerank.apiKey=sk-your-rerank-key \
-  --set orchestration.llm.chat.apiKey=sk-your-chat-key \
-  --set orchestration.a2at.apiKey=sk-your-a2at-key \
-  --set ingress.host=openan.example.com
-```
-
-### Method 3: Single-node Local Images
-
-Ensure K8S nodes can access local Docker images. If using `kind` / `minikube` / `k3s`, load images according to their respective methods.
-
-```bash
-cd containerized/openan-chart
-
-helm install openan . \
-  -n openan --create-namespace \
-  --set registry.llm.chat.apiKey=sk-your-chat-key \
-  --set registry.llm.embed.apiKey=sk-your-embed-key \
-  --set registry.llm.rerank.apiKey=sk-your-rerank-key \
-  --set orchestration.llm.chat.apiKey=sk-your-chat-key \
-  --set orchestration.a2at.apiKey=sk-your-a2at-key
-```
-
-## Configuration Description
-
-Key configuration items in `values-prod.yaml.example`:
-
-### Required Configuration
-
-| Config Item | Default | Description |
-|-------------|---------|-------------|
-| `registry.llm.chat.apiKey` | `sk-3590ce6c3d2e4111b01f14125bc51fab` | Registry Center Chat model API Key |
-| `orchestration.llm.chat.apiKey` | `sk-3590ce6c3d2e4111b01f14125bc51fab` | Orchestration Center Chat model API Key |
-| `orchestration.a2at.apiKey` | `sk-3590ce6c3d2e4111b01f14125bc51fab` | A2AT SDK API Key |
-| `postgresql.password` | `openan-db-password` | Database password (must change for production) |
-| `ingress.host` | `openan.local` | Ingress domain (replace with your domain or IP) |
-
-### Optional Configuration
-
-| Config Item | Default | Description |
-|-------------|---------|-------------|
-| `registry.image.repository` | `leoyy6/registry-center` | Image registry address |
-| `orchestration.image.repository` | `leoyy6/orchestration-center` | Image registry address |
-| `frontend.image.repository` | `leoyy6/workflow-designer` | Image registry address |
-| `frontend.nodePort` | `30191` | Frontend NodePort |
-| `registry.llm.chat.model` | `glm-5.1` | Chat model name |
-| `orchestration.llm.chat.model` | `qwen3.7-plus` | Chat model name |
-| `registry.replicas` | `2` | Registry Center replica count |
-| `orchestration.replicas` | `2` | Orchestration Center replica count |
-
-### LLM Model Configuration
-
-Example configuration uses Alibaba Cloud DashScope as LLM provider:
-
-| Component | Model | Purpose |
-|-----------|-------|---------|
-| Registry Center | `glm-5.1` | Agent Card semantic search, intelligent matching |
-| Registry Center | `bge-m3` | Vector embedding |
-| Registry Center | `bge-reranker-v2-m3` | Result reranking |
-| Orchestration Center | `qwen3.7-plus` | Workflow orchestration, PSOP generation |
-
-To use other LLM providers (e.g., OpenAI, DeepSeek), modify `model`, `url`, and `apiKey` together:
-
-```yaml
-registry:
-  llm:
-    chat:
-      model: "gpt-4"
-      url: "https://api.openai.com/v1/chat/completions"
-      apiKey: "sk-your-openai-key"
-```
+7. **Deploy** - Automatically builds images and deploys with Helm
 
 ## Step 3: Verify Deployment
+
+After setup completes, verify the deployment:
 
 ```bash
 # Check Pod status (wait for all Pods to be Running)
@@ -209,44 +71,37 @@ kubectl -n openan get pods
 # NAME                                    READY   STATUS    RESTARTS   AGE
 # openan-postgres-0                       1/1     Running   0          2m
 # registry-center-xxx                     1/1     Running   0          2m
-# registry-center-yyy                     1/1     Running   0          2m
 # orchestration-center-xxx                1/1     Running   0          2m
-# orchestration-center-yyy                1/1     Running   0          2m
 # workflow-designer-xxx                   1/1     Running   0          2m
-# workflow-designer-yyy                   1/1     Running   0          2m
 
 # Check services
 kubectl -n openan get svc
 
 # Check Ingress
 kubectl -n openan get ingress
-
-# Check logs
-kubectl -n openan logs -l app=registry-center -f
-kubectl -n openan logs -l app=orchestration-center -f
 ```
 
 ## Step 4: Access Platform
 
-### Method 1: Via Ingress (Recommended)
+### Configure Hosts
 
-Configure hosts (using domain configured in `values-custom.yaml`, default `openan.local`):
+Add the Ingress host to your `/etc/hosts` file:
 
 ```bash
 # Get Ingress Controller IP
-kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
-
-# Add to /etc/hosts (Linux/Mac) or C:\Windows\System32\drivers\etc\hosts (Windows)
-<ingress-ip>  openan.local
+INGRESS_IP=$(kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+echo "$INGRESS_IP  openan.local" | sudo tee -a /etc/hosts
 ```
 
-Access:
+### Access Services
 
-| Service | Address |
-|---------|---------|
-| Workflow Designer (Frontend) | `http://openan.local/` |
-| Registry API | `http://openan.local/registry/rest/v1/registry-center/agent-cards` |
-| Orchestration API | `http://openan.local/api/orchestrate/rest/v1/orchestrate/agent-cards` |
+| Service | URL |
+|---------|-----|
+| **Workflow Designer** (Frontend) | `http://openan.local/` |
+| **Registry API** | `http://openan.local/registry/rest/v1/registry-center/agent-cards` |
+| **Orchestration API** | `http://openan.local/api/orchestrate/rest/v1/orchestrate/agent-cards` |
+
+### Test APIs
 
 ```bash
 # Test Registry API
@@ -256,54 +111,24 @@ curl http://openan.local/registry/rest/v1/registry-center/agent-cards
 curl http://openan.local/api/orchestrate/rest/v1/orchestrate/agent-cards
 ```
 
-### Method 2: Via NodePort (No Ingress Environment)
+## Cleanup
 
-If Ingress is not configured, access directly via NodePort (default port 30191):
-
-```bash
-# Get node IP
-NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-
-# Access frontend
-echo "http://${NODE_IP}:30191/"
-
-# Test Registry API (requires Ingress or port forwarding, NodePort only exposes frontend)
-```
-
-> Note: NodePort only exposes Workflow Designer frontend. Registry and Orchestration APIs require Ingress or port forwarding.
-
-### Method 3: Port Forwarding (For Debugging)
-
-```bash
-# Frontend
-kubectl -n openan port-forward svc/workflow-designer 8080:80
-# Open browser at http://localhost:8080
-
-# Registry API
-kubectl -n openan port-forward svc/registry-center 5000:5000
-curl http://localhost:5000/rest/v1/registry-center/agent-cards
-
-# Orchestration API
-kubectl -n openan port-forward svc/orchestration-center 5001:5001
-curl http://localhost:5001/rest/v1/orchestrate/agent-cards
-```
-
-## Step 5: Cleanup
+To uninstall the platform:
 
 ```bash
 # Uninstall Helm release
 helm uninstall openan -n openan
 
-# Delete namespace (will clean up all resources)
+# Delete namespace (removes all resources)
 kubectl delete namespace openan
 
-# Delete PVC (optional, will clear database data)
+# Delete PVC (optional, clears database data)
 kubectl delete pvc -n openan --all
 ```
 
-## FAQ
+## Troubleshooting
 
-### Q: Pod stuck in Pending state?
+### Pod stuck in Pending state
 
 ```bash
 kubectl -n openan describe pod <pod-name>
@@ -311,20 +136,20 @@ kubectl -n openan describe pod <pod-name>
 kubectl get sc
 ```
 
-### Q: Image pull failed?
+### Image pull failed
 
 ```bash
 # Check if image name and tag are correct
 kubectl -n openan describe pod <pod-name> | grep -A5 Events
 
-# Private registry requires imagePullSecrets configuration
+# For private registry, configure imagePullSecrets
 kubectl -n openan create secret docker-registry harbor-cred \
   --docker-server=harbor.example.com \
   --docker-username=admin \
   --docker-password=your-password
 ```
 
-### Q: Database connection failed?
+### Database connection failed
 
 ```bash
 # Check PostgreSQL Pod status
@@ -334,18 +159,18 @@ kubectl -n openan get pods -l app=openan-postgres
 kubectl -n openan logs -l app=openan-postgres
 ```
 
-### Q: Certificate errors?
-
-Default uses `auto` mode to automatically generate self-signed certificates, no manual intervention required. For troubleshooting:
+### Ingress not accessible
 
 ```bash
-kubectl -n openan get secret registry-center-tls
-kubectl -n openan get secret registry-center-signing
-kubectl -n openan exec <registry-pod> -- ls -la /opt/registry-center/etc/ssl
+# Check Ingress resources
+kubectl -n openan get ingress
+
+# Check Ingress Controller logs
+kubectl -n ingress-nginx logs -l app.kubernetes.io/component=controller
 ```
 
 ## Related Documentation
 
-- [Helm Chart Detailed Configuration](./openan-chart/README.md)
-- [Image Build Guide](./build/README.md)
-- [K8S Deployment Guide](../k8s-deployment-guide.md) (includes pure YAML deployment)
+- [Helm Chart Configuration](./openan-chart/README.md) - Detailed Helm values
+- [Image Build Guide](./build/README.md) - Manual image building
+- [K8S Deployment Guide](../k8s-deployment-guide.md) - Pure YAML deployment
