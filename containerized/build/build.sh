@@ -19,7 +19,7 @@
 #   --no-push                  Build local only (single-arch only)
 #   --help                     Show help
 
-set -e
+set -o pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -48,7 +48,9 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_step()  { echo -e "${CYAN}[STEP]${NC} $1"; }
 
 cleanup() {
-    [ -n "$TEMP_DIR" ] && [ -d "$TEMP_DIR" ] && rm -rf "$TEMP_DIR"
+    if [ -n "$TEMP_DIR" ] && [ -d "$TEMP_DIR" ]; then
+        rm -rf "$TEMP_DIR"
+    fi
 }
 trap cleanup EXIT
 
@@ -124,17 +126,24 @@ fi
 
 # ===== Print configuration =====
 COMPONENTS=""
-[ "$BUILD_REGISTRY" = true ]      && COMPONENTS="${COMPONENTS}registry-center "
-[ "$BUILD_ORCHESTRATION" = true ] && COMPONENTS="${COMPONENTS}orchestration-center"
-[ "$BUILD_ORCHESTRATION" = true ] && COMPONENTS="${COMPONENTS} workflow-designer"
+if [ "$BUILD_REGISTRY" = true ]; then
+    COMPONENTS="${COMPONENTS}registry-center "
+fi
+if [ "$BUILD_ORCHESTRATION" = true ]; then
+    COMPONENTS="${COMPONENTS}orchestration-center workflow-designer"
+fi
 
 echo ""
 echo "=========================================="
 echo "  OpenAN Platform Image Build"
 echo "=========================================="
 echo ""
-[ "$BUILD_REGISTRY" = true ]      && echo "  Registry Center release:  $REGISTRY_RELEASE"
-[ "$BUILD_ORCHESTRATION" = true ] && echo "  Orchestration release:    $ORCHESTRATION_RELEASE"
+if [ "$BUILD_REGISTRY" = true ]; then
+    echo "  Registry Center release:  $REGISTRY_RELEASE"
+fi
+if [ "$BUILD_ORCHESTRATION" = true ]; then
+    echo "  Orchestration release:    $ORCHESTRATION_RELEASE"
+fi
 echo "  Image registry:           $IMAGE_REGISTRY"
 echo "  Image namespace:          $NAMESPACE"
 echo "  Image tag:                $TAG"
@@ -162,8 +171,12 @@ download_release() {
     log_info "$name downloaded and extracted to $dest"
 }
 
-[ "$BUILD_REGISTRY" = true ]      && download_release "$REGISTRY_RELEASE" "registry-center"
-[ "$BUILD_ORCHESTRATION" = true ] && download_release "$ORCHESTRATION_RELEASE" "orchestration-center"
+if [ "$BUILD_REGISTRY" = true ]; then
+    download_release "$REGISTRY_RELEASE" "registry-center"
+fi
+if [ "$BUILD_ORCHESTRATION" = true ]; then
+    download_release "$ORCHESTRATION_RELEASE" "orchestration-center"
+fi
 
 # ===== Detect source directories =====
 REGISTRY_IMAGE="$IMAGE_REGISTRY/$NAMESPACE/registry-center:$TAG"
@@ -173,18 +186,39 @@ FRONTEND_IMAGE="$IMAGE_REGISTRY/$NAMESPACE/workflow-designer:$TAG"
 RC_SRC=""
 OC_SRC=""
 
-if [ "$BUILD_REGISTRY" = true ]; then
-    RC_SRC="$TEMP_DIR/registry-center"
-    for d in "$TEMP_DIR/registry-center"/*/; do
-        [ -f "$d/Dockerfile" ] && RC_SRC="$d" && break
+detect_src_dir() {
+    local base_dir="$1"
+    # Check if Dockerfile is directly in base_dir
+    if [ -f "$base_dir/Dockerfile" ]; then
+        echo "$base_dir"
+        return 0
+    fi
+    # Check subdirectories (GitHub archive extracts to repo-tag/ subfolder)
+    for d in "$base_dir"/*/; do
+        if [ -f "$d/Dockerfile" ]; then
+            echo "$d"
+            return 0
+        fi
     done
+    return 1
+}
+
+if [ "$BUILD_REGISTRY" = true ]; then
+    RC_SRC=$(detect_src_dir "$TEMP_DIR/registry-center") || true
+    if [ -z "$RC_SRC" ]; then
+        log_error "Cannot find Dockerfile for registry-center in $TEMP_DIR/registry-center"
+        exit 1
+    fi
+    log_info "Registry Center source: $RC_SRC"
 fi
 
 if [ "$BUILD_ORCHESTRATION" = true ]; then
-    OC_SRC="$TEMP_DIR/orchestration-center"
-    for d in "$TEMP_DIR/orchestration-center"/*/; do
-        [ -f "$d/Dockerfile" ] && OC_SRC="$d" && break
-    done
+    OC_SRC=$(detect_src_dir "$TEMP_DIR/orchestration-center") || true
+    if [ -z "$OC_SRC" ]; then
+        log_error "Cannot find Dockerfile for orchestration-center in $TEMP_DIR/orchestration-center"
+        exit 1
+    fi
+    log_info "Orchestration Center source: $OC_SRC"
 fi
 
 # ===== Build images =====
@@ -201,23 +235,33 @@ else
 fi
 
 BUILD_CMD="docker buildx build --platform $PLATFORMS"
-[ "$PUSH" = true ] && BUILD_CMD="$BUILD_CMD --push" || BUILD_CMD="$BUILD_CMD --load"
+if [ "$PUSH" = true ]; then
+    BUILD_CMD="$BUILD_CMD --push"
+else
+    BUILD_CMD="$BUILD_CMD --load"
+fi
 
 TOTAL=0
-[ "$BUILD_REGISTRY" = true ] && [ -n "$RC_SRC" ] && ((TOTAL++))
-[ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ] && ((TOTAL++))
-[ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ] && [ -d "$OC_SRC/workflow-designer" ] && ((TOTAL++))
+if [ "$BUILD_REGISTRY" = true ] && [ -n "$RC_SRC" ]; then
+    TOTAL=$((TOTAL + 1))
+fi
+if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ]; then
+    TOTAL=$((TOTAL + 1))
+fi
+if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ] && [ -d "$OC_SRC/workflow-designer" ]; then
+    TOTAL=$((TOTAL + 1))
+fi
 CURRENT=0
 
 if [ "$BUILD_REGISTRY" = true ] && [ -n "$RC_SRC" ]; then
-    ((CURRENT++))
+    CURRENT=$((CURRENT + 1))
     log_step "[$CURRENT/$TOTAL] Building Registry Center..."
     $BUILD_CMD -t "$REGISTRY_IMAGE" "$RC_SRC"
     log_info "Done: $REGISTRY_IMAGE"
 fi
 
 if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ]; then
-    ((CURRENT++))
+    CURRENT=$((CURRENT + 1))
     log_step "[$CURRENT/$TOTAL] Building Orchestration Center..."
     $BUILD_CMD -t "$ORCHESTRATION_IMAGE" "$OC_SRC"
     log_info "Done: $ORCHESTRATION_IMAGE"
@@ -225,9 +269,11 @@ fi
 
 WD_SRC=""
 if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ]; then
-    [ -f "$OC_SRC/workflow-designer/Dockerfile" ] && WD_SRC="$OC_SRC/workflow-designer"
+    if [ -f "$OC_SRC/workflow-designer/Dockerfile" ]; then
+        WD_SRC="$OC_SRC/workflow-designer"
+    fi
     if [ -n "$WD_SRC" ]; then
-        ((CURRENT++))
+        CURRENT=$((CURRENT + 1))
         log_step "[$CURRENT/$TOTAL] Building Workflow Designer..."
         $BUILD_CMD -t "$FRONTEND_IMAGE" "$WD_SRC"
         log_info "Done: $FRONTEND_IMAGE"
@@ -243,13 +289,25 @@ echo "  Build completed!"
 echo "=========================================="
 echo ""
 echo "  Images:"
-[ "$BUILD_REGISTRY" = true ]      && [ -n "$RC_SRC" ] && echo "    - $REGISTRY_IMAGE"
-[ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ] && echo "    - $ORCHESTRATION_IMAGE"
-[ -n "$WD_SRC" ]                  && echo "    - $FRONTEND_IMAGE"
+if [ "$BUILD_REGISTRY" = true ] && [ -n "$RC_SRC" ]; then
+    echo "    - $REGISTRY_IMAGE"
+fi
+if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ]; then
+    echo "    - $ORCHESTRATION_IMAGE"
+fi
+if [ -n "$WD_SRC" ]; then
+    echo "    - $FRONTEND_IMAGE"
+fi
 echo ""
 echo "  Deploy:"
 echo "    helm install openan ./openan-chart -n openan --create-namespace \\"
-[ "$BUILD_REGISTRY" = true ]      && [ -n "$RC_SRC" ] && echo "      --set registry.image.repository=$IMAGE_REGISTRY/$NAMESPACE/registry-center --set registry.image.tag=$TAG \\"
-[ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ] && echo "      --set orchestration.image.repository=$IMAGE_REGISTRY/$NAMESPACE/orchestration-center --set orchestration.image.tag=$TAG \\"
-[ -n "$WD_SRC" ]                  && echo "      --set frontend.image.repository=$IMAGE_REGISTRY/$NAMESPACE/workflow-designer --set frontend.image.tag=$TAG"
+if [ "$BUILD_REGISTRY" = true ] && [ -n "$RC_SRC" ]; then
+    echo "      --set registry.image.repository=$IMAGE_REGISTRY/$NAMESPACE/registry-center --set registry.image.tag=$TAG \\"
+fi
+if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ]; then
+    echo "      --set orchestration.image.repository=$IMAGE_REGISTRY/$NAMESPACE/orchestration-center --set orchestration.image.tag=$TAG \\"
+fi
+if [ -n "$WD_SRC" ]; then
+    echo "      --set frontend.image.repository=$IMAGE_REGISTRY/$NAMESPACE/workflow-designer --set frontend.image.tag=$TAG"
+fi
 echo ""

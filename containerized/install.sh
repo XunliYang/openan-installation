@@ -2,7 +2,7 @@
 # OpenAN Platform - One-click Setup Script
 # Interactive setup: environment check, build, and deploy
 
-set -e
+set -o pipefail
 
 # Colors
 RED='\033[0;31m'
@@ -50,11 +50,15 @@ ask_yes_no() {
     if [ "$default" = "yes" ]; then
         log_prompt "$prompt [Y/n]:" >&2
         read -r answer
-        [ -z "$answer" ] && answer="y"
+        if [ -z "$answer" ]; then
+            answer="y"
+        fi
     else
         log_prompt "$prompt [y/N]:" >&2
         read -r answer
-        [ -z "$answer" ] && answer="n"
+        if [ -z "$answer" ]; then
+            answer="n"
+        fi
     fi
     
     [[ "$answer" =~ ^[Yy] ]]
@@ -318,10 +322,18 @@ if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
         fi
     else
         log_error "Please install dependencies manually:"
-        [ "${MISSING_DEPS[*]}" =~ "docker" ] && log_info "  Docker: https://docs.docker.com/get-docker/"
-        [ "${MISSING_DEPS[*]}" =~ "kubectl" ] && log_info "  kubectl: https://kubernetes.io/docs/tasks/tools/"
-        [ "${MISSING_DEPS[*]}" =~ "helm" ] && log_info "  Helm: https://helm.sh/docs/intro/install/"
-        [ "${MISSING_DEPS[*]}" =~ "ingress-nginx" ] && log_info "  Ingress: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.2/deploy/static/provider/cloud/deploy.yaml"
+        if [[ "${MISSING_DEPS[*]}" =~ "docker" ]]; then
+            log_info "  Docker: https://docs.docker.com/get-docker/"
+        fi
+        if [[ "${MISSING_DEPS[*]}" =~ "kubectl" ]]; then
+            log_info "  kubectl: https://kubernetes.io/docs/tasks/tools/"
+        fi
+        if [[ "${MISSING_DEPS[*]}" =~ "helm" ]]; then
+            log_info "  Helm: https://helm.sh/docs/intro/install/"
+        fi
+        if [[ "${MISSING_DEPS[*]}" =~ "ingress-nginx" ]]; then
+            log_info "  Ingress: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.2/deploy/static/provider/cloud/deploy.yaml"
+        fi
         exit 1
     fi
 fi
@@ -416,9 +428,13 @@ echo "  Configuration Summary"
 echo "=========================================="
 echo ""
 echo "  Components:"
-[ "$CONFIG_REGISTRY" = true ] && echo "    - Registry Center"
-[ "$CONFIG_ORCHESTRATION" = true ] && echo "    - Orchestration Center"
-[ "$CONFIG_ORCHESTRATION" = true ] && echo "    - Workflow Designer"
+if [ "$CONFIG_REGISTRY" = true ]; then
+    echo "    - Registry Center"
+fi
+if [ "$CONFIG_ORCHESTRATION" = true ]; then
+    echo "    - Orchestration Center"
+    echo "    - Workflow Designer"
+fi
 echo ""
 echo "  Image Source:     $CONFIG_IMAGE_SOURCE"
 echo "  Image Registry:   $CONFIG_IMAGE_REGISTRY"
@@ -484,8 +500,12 @@ if [ "$CONFIG_IMAGE_SOURCE" = "build" ]; then
     log_step "Building images..."
     
     BUILD_ARGS=""
-    [ "$CONFIG_REGISTRY" = true ] && BUILD_ARGS="$BUILD_ARGS registry"
-    [ "$CONFIG_ORCHESTRATION" = true ] && BUILD_ARGS="$BUILD_ARGS orchestration"
+    if [ "$CONFIG_REGISTRY" = true ]; then
+        BUILD_ARGS="$BUILD_ARGS registry"
+    fi
+    if [ "$CONFIG_ORCHESTRATION" = true ]; then
+        BUILD_ARGS="$BUILD_ARGS orchestration"
+    fi
     
     cd "$BUILD_DIR"
     chmod +x build.sh
@@ -507,17 +527,29 @@ fi
 log_step "Deploying with Helm..."
 
 HELM_ARGS=""
-[ "$CONFIG_REGISTRY" = true ] && HELM_ARGS="$HELM_ARGS --set registry.enabled=true"
-[ "$CONFIG_REGISTRY" = false ] && HELM_ARGS="$HELM_ARGS --set registry.enabled=false"
-[ "$CONFIG_ORCHESTRATION" = true ] && HELM_ARGS="$HELM_ARGS --set orchestration.enabled=true --set frontend.enabled=true"
-[ "$CONFIG_ORCHESTRATION" = false ] && HELM_ARGS="$HELM_ARGS --set orchestration.enabled=false --set frontend.enabled=false"
+if [ "$CONFIG_REGISTRY" = true ]; then
+    HELM_ARGS="$HELM_ARGS --set registry.enabled=true"
+else
+    HELM_ARGS="$HELM_ARGS --set registry.enabled=false"
+fi
+if [ "$CONFIG_ORCHESTRATION" = true ]; then
+    HELM_ARGS="$HELM_ARGS --set orchestration.enabled=true --set frontend.enabled=true"
+else
+    HELM_ARGS="$HELM_ARGS --set orchestration.enabled=false --set frontend.enabled=false"
+fi
 
 if [ "$CONFIG_REGISTRY" = true ]; then
     HELM_ARGS="$HELM_ARGS --set registry.image.repository=$CONFIG_IMAGE_REGISTRY/$CONFIG_NAMESPACE/registry-center"
     HELM_ARGS="$HELM_ARGS --set registry.image.tag=$CONFIG_TAG"
-    [ -n "$CONFIG_API_KEY_CHAT" ] && HELM_ARGS="$HELM_ARGS --set registry.llm.chat.apiKey=$CONFIG_API_KEY_CHAT"
-    [ -n "$CONFIG_API_KEY_EMBED" ] && HELM_ARGS="$HELM_ARGS --set registry.llm.embed.apiKey=$CONFIG_API_KEY_EMBED"
-    [ -n "$CONFIG_API_KEY_RERANK" ] && HELM_ARGS="$HELM_ARGS --set registry.llm.rerank.apiKey=$CONFIG_API_KEY_RERANK"
+    if [ -n "$CONFIG_API_KEY_CHAT" ]; then
+        HELM_ARGS="$HELM_ARGS --set registry.llm.chat.apiKey=$CONFIG_API_KEY_CHAT"
+    fi
+    if [ -n "$CONFIG_API_KEY_EMBED" ]; then
+        HELM_ARGS="$HELM_ARGS --set registry.llm.embed.apiKey=$CONFIG_API_KEY_EMBED"
+    fi
+    if [ -n "$CONFIG_API_KEY_RERANK" ]; then
+        HELM_ARGS="$HELM_ARGS --set registry.llm.rerank.apiKey=$CONFIG_API_KEY_RERANK"
+    fi
 fi
 
 if [ "$CONFIG_ORCHESTRATION" = true ]; then
@@ -525,8 +557,12 @@ if [ "$CONFIG_ORCHESTRATION" = true ]; then
     HELM_ARGS="$HELM_ARGS --set orchestration.image.tag=$CONFIG_TAG"
     HELM_ARGS="$HELM_ARGS --set frontend.image.repository=$CONFIG_IMAGE_REGISTRY/$CONFIG_NAMESPACE/workflow-designer"
     HELM_ARGS="$HELM_ARGS --set frontend.image.tag=$CONFIG_TAG"
-    [ -n "$CONFIG_API_KEY_CHAT" ] && HELM_ARGS="$HELM_ARGS --set orchestration.llm.chat.apiKey=$CONFIG_API_KEY_CHAT"
-    [ -n "$CONFIG_API_KEY_A2AT" ] && HELM_ARGS="$HELM_ARGS --set orchestration.a2at.apiKey=$CONFIG_API_KEY_A2AT"
+    if [ -n "$CONFIG_API_KEY_CHAT" ]; then
+        HELM_ARGS="$HELM_ARGS --set orchestration.llm.chat.apiKey=$CONFIG_API_KEY_CHAT"
+    fi
+    if [ -n "$CONFIG_API_KEY_A2AT" ]; then
+        HELM_ARGS="$HELM_ARGS --set orchestration.a2at.apiKey=$CONFIG_API_KEY_A2AT"
+    fi
 fi
 
 HELM_ARGS="$HELM_ARGS --set postgresql.password=$CONFIG_DB_PASSWORD"
