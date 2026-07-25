@@ -45,11 +45,11 @@ ask_yes_no() {
     local answer
     
     if [ "$default" = "yes" ]; then
-        log_prompt "$prompt [Y/n]:"
+        log_prompt "$prompt [Y/n]:" >&2
         read -r answer
         [ -z "$answer" ] && answer="y"
     else
-        log_prompt "$prompt [y/N]:"
+        log_prompt "$prompt [y/N]:" >&2
         read -r answer
         [ -z "$answer" ] && answer="n"
     fi
@@ -63,11 +63,11 @@ ask_input() {
     local value
     
     if [ -n "$default" ]; then
-        log_prompt "$prompt [$default]:"
+        log_prompt "$prompt [$default]:" >&2
     else
-        log_prompt "$prompt:"
+        log_prompt "$prompt:" >&2
     fi
-    read -r value
+    read -r value >&2
     echo "${value:-$default}"
 }
 
@@ -77,12 +77,12 @@ ask_choice() {
     local options=("$@")
     local choice
     
-    echo ""
-    log_prompt "$prompt"
+    echo "" >&2
+    log_prompt "$prompt" >&2
     for i in "${!options[@]}"; do
-        echo "  $((i+1)). ${options[$i]}"
+        echo "  $((i+1)). ${options[$i]}" >&2
     done
-    read -r choice
+    read -r choice >&2
     
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
         echo "${options[$((choice-1))]}"
