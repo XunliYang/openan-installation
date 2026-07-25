@@ -526,9 +526,6 @@ HELM_ARGS="$HELM_ARGS --set ingress.host=$CONFIG_INGRESS_HOST"
 
 cd "$CHART_DIR"
 
-# Let Helm manage namespace creation to avoid ownership conflicts
-HELM_ARGS="$HELM_ARGS --set createNamespace=true"
-
 # Check if release already exists
 if helm status openan -n "$CONFIG_K8S_NAMESPACE" &>/dev/null 2>&1; then
     log_info "Upgrading existing release..."
