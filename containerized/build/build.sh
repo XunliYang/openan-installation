@@ -31,8 +31,8 @@ NC='\033[0m'
 IMAGE_REGISTRY="docker.io"
 NAMESPACE="openan"
 TAG="v1.0.0"
-REGISTRY_RELEASE="https://github.com/project-openan/registry-center/releases/download/v1.0.0/registry-center-v1.0.0.tar.gz"
-ORCHESTRATION_RELEASE="https://github.com/project-openan/orchestration-center/releases/download/v1.0.0/orchestration-center-v1.0.0.tar.gz"
+REGISTRY_RELEASE=""
+ORCHESTRATION_RELEASE=""
 PLATFORMS="linux/amd64,linux/arm64"
 PUSH=true
 
@@ -106,6 +106,14 @@ done
 if [ "$COMPONENTS_SPECIFIED" = false ]; then
     BUILD_REGISTRY=true
     BUILD_ORCHESTRATION=true
+fi
+
+# Auto-generate release URLs based on TAG if not explicitly specified
+if [ -z "$REGISTRY_RELEASE" ]; then
+    REGISTRY_RELEASE="https://github.com/project-openan/registry-center/archive/refs/tags/${TAG}.tar.gz"
+fi
+if [ -z "$ORCHESTRATION_RELEASE" ]; then
+    ORCHESTRATION_RELEASE="https://github.com/project-openan/orchestration-center/archive/refs/tags/${TAG}.tar.gz"
 fi
 
 # Multi-arch requires push
