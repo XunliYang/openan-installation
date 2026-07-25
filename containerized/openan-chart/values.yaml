@@ -25,33 +25,9 @@ postgresql:
   existingSecret: ""
   password: "openan-db-password"
   # Storage
-  storage: 20Gi
-  storageClassName: ""
-  # Storage infrastructure (StorageClass and PV)
-  # Set to true to create StorageClass and PV automatically
-  storage:
-    # Storage size
+  storage: 
     size: 20Gi
-    # Create StorageClass automatically
-    createStorageClass: false
-    # Create PV automatically
-    createPV: false
-    # StorageClass name
-    storageClassName: "openan-local"
-    # Set as default StorageClass
-    setDefault: false
-    # Reclaim policy: Retain or Delete
-    reclaimPolicy: "Retain"
-    # PV name
-    pvName: "openan-postgres-pv"
-    # Use hostPath (for single-node clusters)
-    useHostPath: true
-    # hostPath directory (when useHostPath=true)
-    hostPath: "/data/openan-postgres"
-    # Local path (when useHostPath=false)
-    localPath: "/data/openan-postgres"
-    # Node name (when useHostPath=false)
-    nodeName: ""
+  storageClassName: ""
   # Resource limits
   resources:
     requests:
@@ -74,16 +50,16 @@ registry:
   enabled: true
   replicas: 2
   image:
-    repository: registry-center
-    tag: latest
+    repository: leoyy6/registry-center
+    tag: V1.0.0
     pullPolicy: Always
   port: 5000
   # LLM configuration for registry-center
   llm:
     chat:
-      model: "deepseek-chat"
-      url: "https://api.deepseek.com/v1/chat/completions"
-      apiKey: ""
+      model: "glm-5.1"
+      url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+      apiKey: "sk-your-actual-api-key"
       existingSecret: ""
       existingSecretKey: "registry-llm-chat-api-key"
     embed:
@@ -145,8 +121,8 @@ orchestration:
   enabled: true
   replicas: 2
   image:
-    repository: orchestration-center
-    tag: latest
+    repository: leoyy6/orchestration-center
+    tag: V1.0.0
     pullPolicy: Always
   port: 5001
   # Registry Center URL (auto-discovered if registry.enabled=true)
@@ -154,17 +130,17 @@ orchestration:
   # LLM configuration for orchestration-center
   llm:
     chat:
-      model: "deepseek-chat"
-      url: "https://api.deepseek.com/v1/chat/completions"
-      apiKey: ""
+      model: "qwen3.7-plus"
+      url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+      apiKey: "sk-your-actual-api-key"
       existingSecret: ""
       existingSecretKey: "orchestration-llm-chat-api-key"
   # A2AT SDK configuration
   a2at:
-    provider: "deepseek"
-    model: "deepseek-chat"
-    baseUrl: "https://api.deepseek.com"
-    apiKey: ""
+    provider: "openai"
+    model: "qwen3.7-plus"
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    apiKey: "sk-your-actual-api-key"
     existingSecret: ""
     existingSecretKey: "orchestration-a2at-llm-api-key"
   # Resource limits
@@ -210,13 +186,11 @@ frontend:
   enabled: true
   replicas: 2
   image:
-    repository: workflow-designer
-    tag: latest
+    repository: leoyy6/workflow-designer
+    tag: V1.0.0
     pullPolicy: Always
   port: 80
-  # NodePort configuration (only used when service type is NodePort)
-  # Range: 30000-32767
-  nodePort: 30080
+  nodePort: 30191
   # Resource limits
   resources:
     requests:

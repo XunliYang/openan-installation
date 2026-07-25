@@ -29,7 +29,7 @@ NC='\033[0m'
 
 # ===== Defaults =====
 IMAGE_REGISTRY="docker.io"
-NAMESPACE="openan"
+NAMESPACE="leoyy6"
 TAG="v1.0.0"
 REGISTRY_RELEASE=""
 ORCHESTRATION_RELEASE=""

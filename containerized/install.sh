@@ -28,16 +28,24 @@ log_prompt(){ echo -e "${BLUE}[?]${NC} $1"; }
 # ===== Configuration =====
 CONFIG_REGISTRY=true
 CONFIG_ORCHESTRATION=true
-CONFIG_IMAGE_SOURCE="build"  # build or pull
 CONFIG_IMAGE_REGISTRY="docker.io"
-CONFIG_NAMESPACE="openan"
+CONFIG_NAMESPACE="leoyy6"
 CONFIG_TAG="v1.0.0"
-CONFIG_LOCAL_REGISTRY=false
-CONFIG_LOCAL_REGISTRY_PORT="5000"
-CONFIG_API_KEY_CHAT=""
-CONFIG_API_KEY_EMBED=""
-CONFIG_API_KEY_RERANK=""
-CONFIG_API_KEY_A2AT=""
+
+# LLM Configuration for Registry Center
+CONFIG_REGISTRY_CHAT_MODEL="glm-5.1"
+CONFIG_REGISTRY_CHAT_URL="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+CONFIG_REGISTRY_CHAT_APIKEY=""
+
+# LLM Configuration for Orchestration Center
+CONFIG_ORCH_CHAT_MODEL="qwen3.7-plus"
+CONFIG_ORCH_CHAT_URL="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+CONFIG_ORCH_CHAT_APIKEY=""
+CONFIG_ORCH_A2AT_PROVIDER="openai"
+CONFIG_ORCH_A2AT_MODEL="qwen3.7-plus"
+CONFIG_ORCH_A2AT_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+CONFIG_ORCH_A2AT_APIKEY=""
+
 CONFIG_DB_PASSWORD="openan-db-password"
 CONFIG_INGRESS_HOST="openan.local"
 
@@ -256,7 +264,7 @@ echo "=========================================="
 echo ""
 
 # Step 1: Environment Check
-log_step "Checking prerequisites..."
+log_step "[1/4] Checking prerequisites..."
 echo ""
 
 MISSING_DEPS=()
@@ -351,7 +359,7 @@ log_info "All prerequisites satisfied!"
 
 # Step 2: Component Selection
 echo ""
-log_step "Select components to build and deploy:"
+log_step "[2/4] Select components to deploy:"
 echo ""
 log_prompt "Components:"
 echo "  1. All components (Registry Center + Orchestration Center + Workflow Designer)"
@@ -365,61 +373,50 @@ case "$choice" in
     2) CONFIG_REGISTRY=true; CONFIG_ORCHESTRATION=false ;;
     3) CONFIG_REGISTRY=false; CONFIG_ORCHESTRATION=true ;;
     4)
-        CONFIG_REGISTRY=$(ask_yes_no "Build Registry Center?" "yes") && CONFIG_REGISTRY=true || CONFIG_REGISTRY=false
-        CONFIG_ORCHESTRATION=$(ask_yes_no "Build Orchestration Center?" "yes") && CONFIG_ORCHESTRATION=true || CONFIG_ORCHESTRATION=false
+        CONFIG_REGISTRY=$(ask_yes_no "Deploy Registry Center?" "yes") && CONFIG_REGISTRY=true || CONFIG_REGISTRY=false
+        CONFIG_ORCHESTRATION=$(ask_yes_no "Deploy Orchestration Center?" "yes") && CONFIG_ORCHESTRATION=true || CONFIG_ORCHESTRATION=false
         ;;
     *) CONFIG_REGISTRY=true; CONFIG_ORCHESTRATION=true ;;
 esac
 
-# Step 3: Image Source
-echo ""
-log_step "Image source:"
-CONFIG_IMAGE_SOURCE=$(ask_choice "Select image source:" "Build from source (download release packages)" "Pull pre-built images from registry")
-
-if [[ "$CONFIG_IMAGE_SOURCE" == "Build"* ]]; then
-    CONFIG_IMAGE_SOURCE="build"
-else
-    CONFIG_IMAGE_SOURCE="pull"
-fi
-
-# Step 4: Local Registry
-if [ "$CONFIG_IMAGE_SOURCE" = "build" ]; then
+# Step 3: LLM Configuration for Registry Center
+if [ "$CONFIG_REGISTRY" = true ]; then
     echo ""
-    log_step "Local registry:"
-    if ask_yes_no "Deploy a local registry in the cluster to store images?" "no"; then
-        CONFIG_LOCAL_REGISTRY=true
-        CONFIG_LOCAL_REGISTRY_PORT=$(ask_input "Local registry NodePort" "5000")
-        CONFIG_IMAGE_REGISTRY="localhost:$CONFIG_LOCAL_REGISTRY_PORT"
-    else
-        CONFIG_IMAGE_REGISTRY=$(ask_input "Image registry" "docker.io")
+    log_step "[3/4] Registry Center LLM Configuration (press Enter to use default):"
+    
+    echo ""
+    log_info "Chat Model:"
+    chat_model=$(ask_input "  Model name" "$CONFIG_REGISTRY_CHAT_MODEL")
+    if [ "$chat_model" != "$CONFIG_REGISTRY_CHAT_MODEL" ]; then
+        CONFIG_REGISTRY_CHAT_MODEL="$chat_model"
+        CONFIG_REGISTRY_CHAT_URL=$(ask_input "  API URL" "$CONFIG_REGISTRY_CHAT_URL")
     fi
-else
-    CONFIG_IMAGE_REGISTRY=$(ask_input "Image registry" "docker.io")
+    CONFIG_REGISTRY_CHAT_APIKEY=$(ask_input "  API Key" "$CONFIG_REGISTRY_CHAT_APIKEY")
 fi
 
-# Step 5: Image Configuration
-echo ""
-log_step "Image configuration:"
-CONFIG_NAMESPACE=$(ask_input "Image namespace" "openan")
-CONFIG_TAG=$(ask_input "Image tag" "v1.0.0")
-
-# Step 6: API Keys
-echo ""
-log_step "LLM API Keys (press Enter to skip):"
-CONFIG_API_KEY_CHAT=$(ask_input "Chat API Key" "")
-CONFIG_API_KEY_EMBED=$(ask_input "Embed API Key" "")
-CONFIG_API_KEY_RERANK=$(ask_input "Rerank API Key" "")
-CONFIG_API_KEY_A2AT=$(ask_input "A2AT API Key" "")
-
-# Step 7: Database Password
-echo ""
-log_step "Database configuration:"
-CONFIG_DB_PASSWORD=$(ask_input "Database password" "openan-db-password")
-
-# Step 8: Ingress Configuration
-echo ""
-log_step "Ingress configuration:"
-CONFIG_INGRESS_HOST=$(ask_input "Ingress host" "openan.local")
+# Step 4: LLM Configuration for Orchestration Center
+if [ "$CONFIG_ORCHESTRATION" = true ]; then
+    echo ""
+    log_step "[4/4] Orchestration Center LLM Configuration (press Enter to use default):"
+    
+    echo ""
+    log_info "Chat Model:"
+    orch_chat_model=$(ask_input "  Model name" "$CONFIG_ORCH_CHAT_MODEL")
+    if [ "$orch_chat_model" != "$CONFIG_ORCH_CHAT_MODEL" ]; then
+        CONFIG_ORCH_CHAT_MODEL="$orch_chat_model"
+        CONFIG_ORCH_CHAT_URL=$(ask_input "  API URL" "$CONFIG_ORCH_CHAT_URL")
+    fi
+    CONFIG_ORCH_CHAT_APIKEY=$(ask_input "  API Key" "$CONFIG_ORCH_CHAT_APIKEY")
+    
+    echo ""
+    log_info "A2AT Model:"
+    orch_a2at_model=$(ask_input "  Model name" "$CONFIG_ORCH_A2AT_MODEL")
+    if [ "$orch_a2at_model" != "$CONFIG_ORCH_A2AT_MODEL" ]; then
+        CONFIG_ORCH_A2AT_MODEL="$orch_a2at_model"
+        CONFIG_ORCH_A2AT_URL=$(ask_input "  API URL" "$CONFIG_ORCH_A2AT_URL")
+    fi
+    CONFIG_ORCH_A2AT_APIKEY=$(ask_input "  API Key" "$CONFIG_ORCH_A2AT_APIKEY")
+fi
 
 # ===== Summary =====
 echo ""
@@ -435,13 +432,18 @@ if [ "$CONFIG_ORCHESTRATION" = true ]; then
     echo "    - Orchestration Center"
     echo "    - Workflow Designer"
 fi
+
 echo ""
-echo "  Image Source:     $CONFIG_IMAGE_SOURCE"
-echo "  Image Registry:   $CONFIG_IMAGE_REGISTRY"
-echo "  Image Namespace:  $CONFIG_NAMESPACE"
-echo "  Image Tag:        $CONFIG_TAG"
-echo "  Local Registry:   $CONFIG_LOCAL_REGISTRY"
-echo "  Ingress Host:     $CONFIG_INGRESS_HOST"
+echo "  LLM Configuration:"
+if [ "$CONFIG_REGISTRY" = true ]; then
+    echo "    Registry Center:"
+    echo "      Chat:   $CONFIG_REGISTRY_CHAT_MODEL"
+fi
+if [ "$CONFIG_ORCHESTRATION" = true ]; then
+    echo "    Orchestration Center:"
+    echo "      Chat:   $CONFIG_ORCH_CHAT_MODEL"
+    echo "      A2AT:   $CONFIG_ORCH_A2AT_MODEL"
+fi
 echo ""
 echo "=========================================="
 echo ""
@@ -453,75 +455,7 @@ fi
 
 # ===== Execute Setup =====
 
-# Deploy local registry if requested
-if [ "$CONFIG_LOCAL_REGISTRY" = true ]; then
-    log_step "Deploying local registry..."
-    kubectl apply -f - <<EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: local-registry
-  namespace: default
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: local-registry
-  template:
-    metadata:
-      labels:
-        app: local-registry
-    spec:
-      containers:
-      - name: registry
-        image: registry:2
-        ports:
-        - containerPort: 5000
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: local-registry
-  namespace: default
-spec:
-  type: NodePort
-  ports:
-  - port: 5000
-    nodePort: $CONFIG_LOCAL_REGISTRY_PORT
-  selector:
-    app: local-registry
-EOF
-    log_info "Local registry deployed on port $CONFIG_LOCAL_REGISTRY_PORT"
-    sleep 5
-fi
-
-# Build or pull images
-if [ "$CONFIG_IMAGE_SOURCE" = "build" ]; then
-    log_step "Building images..."
-    
-    BUILD_ARGS=""
-    if [ "$CONFIG_REGISTRY" = true ]; then
-        BUILD_ARGS="$BUILD_ARGS registry"
-    fi
-    if [ "$CONFIG_ORCHESTRATION" = true ]; then
-        BUILD_ARGS="$BUILD_ARGS orchestration"
-    fi
-    
-    cd "$BUILD_DIR"
-    chmod +x build.sh
-    bash build.sh $BUILD_ARGS \
-        --image-registry "$CONFIG_IMAGE_REGISTRY" \
-        --namespace "$CONFIG_NAMESPACE" \
-        --tag "$CONFIG_TAG"
-    
-    # If local registry, push images
-    if [ "$CONFIG_LOCAL_REGISTRY" = true ]; then
-        log_step "Pushing images to local registry..."
-        # Images are already pushed by build.sh
-    fi
-else
-    log_step "Skipping build (using pre-built images)"
-fi
+log_step "Using pre-built images from $CONFIG_IMAGE_REGISTRY"
 
 # Deploy with Helm
 log_step "Deploying with Helm..."
@@ -541,14 +475,16 @@ fi
 if [ "$CONFIG_REGISTRY" = true ]; then
     HELM_ARGS="$HELM_ARGS --set registry.image.repository=$CONFIG_IMAGE_REGISTRY/$CONFIG_NAMESPACE/registry-center"
     HELM_ARGS="$HELM_ARGS --set registry.image.tag=$CONFIG_TAG"
-    if [ -n "$CONFIG_API_KEY_CHAT" ]; then
-        HELM_ARGS="$HELM_ARGS --set registry.llm.chat.apiKey=$CONFIG_API_KEY_CHAT"
-    fi
-    if [ -n "$CONFIG_API_KEY_EMBED" ]; then
-        HELM_ARGS="$HELM_ARGS --set registry.llm.embed.apiKey=$CONFIG_API_KEY_EMBED"
-    fi
-    if [ -n "$CONFIG_API_KEY_RERANK" ]; then
-        HELM_ARGS="$HELM_ARGS --set registry.llm.rerank.apiKey=$CONFIG_API_KEY_RERANK"
+    
+    # Registry LLM Chat
+    if [ -n "$CONFIG_REGISTRY_CHAT_MODEL" ]; then
+        HELM_ARGS="$HELM_ARGS --set registry.llm.chat.model=$CONFIG_REGISTRY_CHAT_MODEL"
+        if [ -n "$CONFIG_REGISTRY_CHAT_URL" ]; then
+            HELM_ARGS="$HELM_ARGS --set registry.llm.chat.url=$CONFIG_REGISTRY_CHAT_URL"
+        fi
+        if [ -n "$CONFIG_REGISTRY_CHAT_APIKEY" ]; then
+            HELM_ARGS="$HELM_ARGS --set registry.llm.chat.apiKey=$CONFIG_REGISTRY_CHAT_APIKEY"
+        fi
     fi
 fi
 
@@ -557,11 +493,30 @@ if [ "$CONFIG_ORCHESTRATION" = true ]; then
     HELM_ARGS="$HELM_ARGS --set orchestration.image.tag=$CONFIG_TAG"
     HELM_ARGS="$HELM_ARGS --set frontend.image.repository=$CONFIG_IMAGE_REGISTRY/$CONFIG_NAMESPACE/workflow-designer"
     HELM_ARGS="$HELM_ARGS --set frontend.image.tag=$CONFIG_TAG"
-    if [ -n "$CONFIG_API_KEY_CHAT" ]; then
-        HELM_ARGS="$HELM_ARGS --set orchestration.llm.chat.apiKey=$CONFIG_API_KEY_CHAT"
+    
+    # Orchestration LLM Chat
+    if [ -n "$CONFIG_ORCH_CHAT_MODEL" ]; then
+        HELM_ARGS="$HELM_ARGS --set orchestration.llm.chat.model=$CONFIG_ORCH_CHAT_MODEL"
+        if [ -n "$CONFIG_ORCH_CHAT_URL" ]; then
+            HELM_ARGS="$HELM_ARGS --set orchestration.llm.chat.url=$CONFIG_ORCH_CHAT_URL"
+        fi
+        if [ -n "$CONFIG_ORCH_CHAT_APIKEY" ]; then
+            HELM_ARGS="$HELM_ARGS --set orchestration.llm.chat.apiKey=$CONFIG_ORCH_CHAT_APIKEY"
+        fi
     fi
-    if [ -n "$CONFIG_API_KEY_A2AT" ]; then
-        HELM_ARGS="$HELM_ARGS --set orchestration.a2at.apiKey=$CONFIG_API_KEY_A2AT"
+    
+    # Orchestration A2AT
+    if [ -n "$CONFIG_ORCH_A2AT_PROVIDER" ]; then
+        HELM_ARGS="$HELM_ARGS --set orchestration.a2at.provider=$CONFIG_ORCH_A2AT_PROVIDER"
+    fi
+    if [ -n "$CONFIG_ORCH_A2AT_MODEL" ]; then
+        HELM_ARGS="$HELM_ARGS --set orchestration.a2at.model=$CONFIG_ORCH_A2AT_MODEL"
+        if [ -n "$CONFIG_ORCH_A2AT_URL" ]; then
+            HELM_ARGS="$HELM_ARGS --set orchestration.a2at.baseUrl=$CONFIG_ORCH_A2AT_URL"
+        fi
+        if [ -n "$CONFIG_ORCH_A2AT_APIKEY" ]; then
+            HELM_ARGS="$HELM_ARGS --set orchestration.a2at.apiKey=$CONFIG_ORCH_A2AT_APIKEY"
+        fi
     fi
 fi
 
