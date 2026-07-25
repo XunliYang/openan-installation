@@ -532,15 +532,20 @@ HELM_ARGS="$HELM_ARGS --set createNamespace=true"
 # Check if release already exists
 if helm status openan -n "$CONFIG_K8S_NAMESPACE" &>/dev/null 2>&1; then
     log_info "Upgrading existing release..."
-    helm upgrade openan . \
+    if ! helm upgrade openan . \
         -n "$CONFIG_K8S_NAMESPACE" \
-        $HELM_ARGS
+        $HELM_ARGS; then
+        log_error "Helm upgrade failed"
+        exit 1
+    fi
 else
     log_info "Installing new release..."
-    helm install openan . \
+    if ! helm install openan . \
         -n "$CONFIG_K8S_NAMESPACE" \
-        --create-namespace \
-        $HELM_ARGS
+        $HELM_ARGS; then
+        log_error "Helm install failed"
+        exit 1
+    fi
 fi
 
 # ===== Start Agents Server =====
