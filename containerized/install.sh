@@ -542,6 +542,7 @@ else
     log_info "Installing new release..."
     if ! helm install openan . \
         -n "$CONFIG_K8S_NAMESPACE" \
+        --create-namespace \
         $HELM_ARGS; then
         log_error "Helm install failed"
         exit 1
