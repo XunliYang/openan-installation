@@ -114,6 +114,29 @@ curl http://openan.local/registry/rest/v1/registry-center/agent-cards
 curl http://openan.local/api/orchestrate/rest/v1/orchestrate/agent-cards
 ```
 
+### Access via NodePort (Alternative)
+
+If Ingress is not available, you can access the frontend via NodePort:
+
+```bash
+# Get NodePort
+NODE_PORT=$(kubectl get svc -n openan workflow-designer -o jsonpath='{.spec.ports[0].nodePort}')
+
+# Get any node IP
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
+
+# Access frontend
+echo "http://$NODE_IP:$NODE_PORT"
+```
+
+**Configure Nginx Gateway URL:**
+
+When using NodePort access, you need to configure the frontend to connect to the backend services:
+
+* In frontend settings, set Nginx Gateway URL to: http://$NODE_IP:$NODE_PORT
+
+Note: The Nginx Gateway URL should be the same as the frontend access URL, as nginx will proxy the API requests.
+
 ## Cleanup
 
 To uninstall the platform:
