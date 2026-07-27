@@ -49,6 +49,7 @@ CONFIG_ORCH_A2AT_APIKEY=""
 
 CONFIG_DB_PASSWORD="openan-db-password"
 CONFIG_INGRESS_HOST="openan.local"
+CONFIG_START_AGENTS_SERVER=true
 
 # ===== Helper Functions =====
 ask_yes_no() {
@@ -360,7 +361,7 @@ log_info "All prerequisites satisfied!"
 
 # Step 2: Component Selection
 echo ""
-log_step "[2/4] Select components to deploy:"
+log_step "[2/5] Select components to deploy:"
 echo ""
 log_prompt "Components:"
 echo "  1. All components (Registry Center + Orchestration Center + Workflow Designer)"
@@ -383,40 +384,42 @@ esac
 # Step 3: LLM Configuration for Registry Center
 if [ "$CONFIG_REGISTRY" = true ]; then
     echo ""
-    log_step "[3/4] Registry Center LLM Configuration (press Enter to use default):"
+    log_step "[3/5] Registry Center LLM Configuration (press Enter to use default):"
     
     echo ""
     log_info "Chat Model:"
-    chat_model=$(ask_input "  Model name" "$CONFIG_REGISTRY_CHAT_MODEL")
-    if [ "$chat_model" != "$CONFIG_REGISTRY_CHAT_MODEL" ]; then
-        CONFIG_REGISTRY_CHAT_MODEL="$chat_model"
-        CONFIG_REGISTRY_CHAT_URL=$(ask_input "  API URL" "$CONFIG_REGISTRY_CHAT_URL")
-    fi
+    CONFIG_REGISTRY_CHAT_MODEL=$(ask_input "  Model name" "$CONFIG_REGISTRY_CHAT_MODEL")
+    CONFIG_REGISTRY_CHAT_URL=$(ask_input "  API URL" "$CONFIG_REGISTRY_CHAT_URL")
     CONFIG_REGISTRY_CHAT_APIKEY=$(ask_input "  API Key" "$CONFIG_REGISTRY_CHAT_APIKEY")
 fi
 
 # Step 4: LLM Configuration for Orchestration Center
 if [ "$CONFIG_ORCHESTRATION" = true ]; then
     echo ""
-    log_step "[4/4] Orchestration Center LLM Configuration (press Enter to use default):"
+    log_step "[4/5] Orchestration Center LLM Configuration (press Enter to use default):"
     
     echo ""
     log_info "Chat Model:"
-    orch_chat_model=$(ask_input "  Model name" "$CONFIG_ORCH_CHAT_MODEL")
-    if [ "$orch_chat_model" != "$CONFIG_ORCH_CHAT_MODEL" ]; then
-        CONFIG_ORCH_CHAT_MODEL="$orch_chat_model"
-        CONFIG_ORCH_CHAT_URL=$(ask_input "  API URL" "$CONFIG_ORCH_CHAT_URL")
-    fi
+    CONFIG_ORCH_CHAT_MODEL=$(ask_input "  Model name" "$CONFIG_ORCH_CHAT_MODEL")
+    CONFIG_ORCH_CHAT_URL=$(ask_input "  API URL" "$CONFIG_ORCH_CHAT_URL")
     CONFIG_ORCH_CHAT_APIKEY=$(ask_input "  API Key" "$CONFIG_ORCH_CHAT_APIKEY")
     
     echo ""
     log_info "A2AT Model:"
-    orch_a2at_model=$(ask_input "  Model name" "$CONFIG_ORCH_A2AT_MODEL")
-    if [ "$orch_a2at_model" != "$CONFIG_ORCH_A2AT_MODEL" ]; then
-        CONFIG_ORCH_A2AT_MODEL="$orch_a2at_model"
-        CONFIG_ORCH_A2AT_URL=$(ask_input "  API URL" "$CONFIG_ORCH_A2AT_URL")
-    fi
+    CONFIG_ORCH_A2AT_MODEL=$(ask_input "  Model name" "$CONFIG_ORCH_A2AT_MODEL")
+    CONFIG_ORCH_A2AT_URL=$(ask_input "  API URL" "$CONFIG_ORCH_A2AT_URL")
     CONFIG_ORCH_A2AT_APIKEY=$(ask_input "  API Key" "$CONFIG_ORCH_A2AT_APIKEY")
+fi
+
+# Step 5: Agent Examples Server
+if [ "$CONFIG_ORCHESTRATION" = true ]; then
+    echo ""
+    log_step "[5/5] Agent Examples Configuration:"
+    if ask_yes_no "Start agent examples server (required for demo agents)?" "yes"; then
+        CONFIG_START_AGENTS_SERVER=true
+    else
+        CONFIG_START_AGENTS_SERVER=false
+    fi
 fi
 
 # ===== Summary =====
@@ -444,6 +447,11 @@ if [ "$CONFIG_ORCHESTRATION" = true ]; then
     echo "    Orchestration Center:"
     echo "      Chat:   $CONFIG_ORCH_CHAT_MODEL"
     echo "      A2AT:   $CONFIG_ORCH_A2AT_MODEL"
+fi
+
+if [ "$CONFIG_ORCHESTRATION" = true ]; then
+    echo ""
+    echo "  Agent Examples Server: $CONFIG_START_AGENTS_SERVER"
 fi
 echo ""
 echo "=========================================="
@@ -559,9 +567,11 @@ else
 fi
 
 # ===== Start Agents Server =====
-if [ "$CONFIG_ORCHESTRATION" = true ]; then
+if [ "$CONFIG_ORCHESTRATION" = true ] && [ "$CONFIG_START_AGENTS_SERVER" = true ]; then
     echo ""
-    log_step "Waiting for Orchestration Center to be ready..."
+    log_step "Starting Agent Examples Server..."
+    
+    log_info "Waiting for Orchestration Center to be ready..."
     
     # Wait for orchestration-center pod to be running
     kubectl wait --for=condition=ready pod -l app=orchestration-center -n "$CONFIG_K8S_NAMESPACE" --timeout=300s
@@ -571,8 +581,20 @@ if [ "$CONFIG_ORCHESTRATION" = true ]; then
     
     if [ -n "$ORCH_POD" ]; then
         log_info "Starting agents server in $ORCH_POD..."
-        kubectl exec "$ORCH_POD" -n "$CONFIG_K8S_NAMESPACE" -- /bin/sh -c "nohup python3 samples/start_agents_server.py > /tmp/agents-server.log 2>&1 &"
-        log_info "Agents server started in background (logs: /tmp/agents-server.log)"
+        
+        # Start agents server in background
+        kubectl exec "$ORCH_POD" -n "$CONFIG_K8S_NAMESPACE" -- /bin/sh -c "cd /opt/orchestration-center && nohup python3 samples/start_agents_server.py > /tmp/agents-server.log 2>&1 &"
+        
+        # Wait for agents server to start
+        log_info "Waiting for agents server to initialize..."
+        sleep 10
+        
+        # Verify agents server is running
+        if kubectl exec "$ORCH_POD" -n "$CONFIG_K8S_NAMESPACE" -- /bin/sh -c "curl -s http://127.0.0.1:8903/health > /dev/null 2>&1"; then
+            log_info "✓ Agents server started successfully (port 8903)"
+        else
+            log_warn "Agents server may not be ready yet. Check logs: kubectl exec $ORCH_POD -n $CONFIG_K8S_NAMESPACE -- cat /tmp/agents-server.log"
+        fi
     else
         log_warn "Could not find orchestration-center pod"
     fi
