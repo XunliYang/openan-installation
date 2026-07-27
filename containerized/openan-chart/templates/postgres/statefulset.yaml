@@ -94,8 +94,8 @@ spec:
       resources:
         requests:
           storage: {{ .Values.postgresql.storage.size }}
-      {{- if .Values.postgresql.storage.storageClassName }}
-      storageClassName: {{ .Values.postgresql.storage.storageClassName | quote }}
+      {{- if or .Values.postgresql.storage.storageClassName .Values.postgresql.storage.createStorageClass .Values.postgresql.storage.createPV }}
+      storageClassName: {{ .Values.postgresql.storage.storageClassName | default "openan-local" }}
       {{- end }}
 
 ---

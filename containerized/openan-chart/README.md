@@ -286,42 +286,21 @@ curl http://localhost:5001/rest/v1/orchestrate/agent-cards
 | `postgresql.storage.hostPath` | hostPath directory | `"/data/openan-postgres"` |
 | `postgresql.storage.nodeName` | Node name (when useHostPath=false) | `""` |
 
-**Storage Configuration Notes:**
+**Production Storage Recommendations:**
 
-**Scenario 1: Cluster already has default StorageClass**
+The default configuration uses hostPath for quick setup in development/testing environments. For production deployments, it is recommended to use NFS or cloud storage:
+
+- **NFS**: Configure an external NFS server for shared storage across nodes
+- **Cloud Storage**: Use cloud provider's block storage (e.g., AWS EBS, Alibaba Cloud Disk, Tencent Cloud CBS)
+- **External Database**: Use managed database services (e.g., RDS, PolarDB) for high availability
+
+To use an existing StorageClass in your cluster:
 ```yaml
 postgresql:
   storage:
-    createStorageClass: false
-    createPV: false
+    storageClassName: "your-storage-class"
 ```
 
-**Scenario 2: Single-node cluster, using hostPath**
-```yaml
-postgresql:
-  storage:
-    createStorageClass: true
-    createPV: true
-    useHostPath: true
-    hostPath: "/data/openan-postgres"
-```
-
-**Scenario 3: Multi-node cluster, using local volume**
-```yaml
-postgresql:
-  storage:
-    createStorageClass: true
-    createPV: true
-    useHostPath: false
-    localPath: "/data/openan-postgres"
-    nodeName: "node185"
-```
-
-**Note**: When using hostPath or local volume, ensure the directory exists on the target node:
-```bash
-# Execute on target node
-mkdir -p /data/openan-postgres
-```
 
 ### Registry Center Configuration
 
@@ -412,39 +391,6 @@ mkdir -p /data/openan-postgres
 | `ingress.tls.secretName` | TLS Secret name | `openan-tls` |
 
 ## Deployment Scenarios
-
-### Development Environment
-
-```bash
-helm install openan-dev . \
-  --namespace openan-dev \
-  --create-namespace \
-  -f values-dev.yaml
-```
-
-Example `values-dev.yaml`:
-
-```yaml
-postgresql:
-  storage:
-    size: 10Gi
-
-registry:
-  replicas: 1
-
-orchestration:
-  replicas: 1
-  hpa:
-    enabled: false
-
-frontend:
-  replicas: 1
-  hpa:
-    enabled: false
-
-ingress:
-  host: openan-dev.example.com
-```
 
 ### Production Environment
 
@@ -778,7 +724,6 @@ kubectl exec -n openan <registry-pod> -- ls -la /opt/registry-center/etc/sign_ce
 ## Related Documentation
 
 - [Quick Start](../QUICKSTART.md) (Build + Deploy one-stop guide)
-- [K8S Deployment Guide](../../k8s-deployment-guide.md) (includes pure YAML deployment)
 - [Image Build Guide](../build/README.md)
 
 ## License
