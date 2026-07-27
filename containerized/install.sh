@@ -581,7 +581,7 @@ if [ "$CONFIG_ORCHESTRATION" = true ] && [ "$CONFIG_START_AGENTS_SERVER" = true 
         log_info "Starting agents server in $ORCH_POD..."
         
         # Start agents server in background
-        kubectl exec "$ORCH_POD" -n "$CONFIG_K8S_NAMESPACE" -- /bin/sh -c "cd /opt/orchestration-center && nohup python3 samples/start_agents_server.py > /tmp/agents-server.log 2>&1 &"
+        kubectl exec "$ORCH_POD" -n "$CONFIG_K8S_NAMESPACE" -- /bin/sh -c "cd /opt/orchestration-center && PYTHONPATH=/opt/orchestration-center nohup python3 samples/start_agents_server.py > /tmp/agents-server.log 2>&1 &"
         
         # Wait for agents server to start
         log_info "Waiting for agents server to initialize..."
