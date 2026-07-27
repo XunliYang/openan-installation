@@ -88,7 +88,16 @@ else:
 #   - Enable agent approval: n
 #   - Storage mode: file
 echo "[INIT] Running registry-center initialization..."
-printf '\n\nn\nn\nn\nn\nfile\n' | python -m agent_registry.init
+# Use here-document instead of printf pipe to avoid SIGPIPE with set -o pipefail
+python -m agent_registry.init <<'INIT_INPUT' || true
+
+
+n
+n
+n
+n
+file
+INIT_INPUT
 
 echo "[DONE] registry-center initialized."
 
@@ -117,11 +126,15 @@ if [ -f "requirements.txt" ]; then
 fi
 
 # Install frontend dependencies
-echo "[NPM] Installing orchestration-center frontend dependencies..."
-cd "${ORCHESTRATION_DIR}/workflow-designer"
-npm install --force
-
-cd "${ORCHESTRATION_DIR}"
+if ! command -v npm &>/dev/null; then
+    echo "[WARN] npm not found. Skipping frontend setup."
+    echo "       Install Node.js 20.19+ and npm to enable the workflow designer."
+else
+    echo "[NPM] Installing orchestration-center frontend dependencies..."
+    cd "${ORCHESTRATION_DIR}/workflow-designer"
+    npm install --force || echo "[WARN] npm install had issues, frontend may not work correctly"
+    cd "${ORCHESTRATION_DIR}"
+fi
 
 # =============================================================================
 # Step 4: Start all services
@@ -148,11 +161,16 @@ OC_BACKEND_PID=$!
 echo "  PID: ${OC_BACKEND_PID}"
 
 # Start orchestration-center frontend (port 3000)
-echo "[START] orchestration-center frontend (http://localhost:3000)..."
-cd "${ORCHESTRATION_DIR}/workflow-designer"
-nohup npm run dev > "${ORCHESTRATION_DIR}/frontend.log" 2>&1 &
-OC_FRONTEND_PID=$!
-echo "  PID: ${OC_FRONTEND_PID}"
+if ! command -v npm &>/dev/null; then
+    echo "[SKIP] orchestration-center frontend (npm not found)"
+    OC_FRONTEND_PID="N/A"
+else
+    echo "[START] orchestration-center frontend (http://localhost:3000)..."
+    cd "${ORCHESTRATION_DIR}/workflow-designer"
+    nohup npm run dev > "${ORCHESTRATION_DIR}/frontend.log" 2>&1 &
+    OC_FRONTEND_PID=$!
+    echo "  PID: ${OC_FRONTEND_PID}"
+fi
 
 # =============================================================================
 # Summary
@@ -170,5 +188,9 @@ echo "   ${REGISTRY_DIR}/registry-center.log"
 echo "   ${ORCHESTRATION_DIR}/backend.log"
 echo "   ${ORCHESTRATION_DIR}/frontend.log"
 echo ""
-echo " To stop all: kill ${REGISTRY_PID} ${OC_BACKEND_PID} ${OC_FRONTEND_PID}"
+if [ "${OC_FRONTEND_PID}" != "N/A" ]; then
+    echo " To stop all: kill ${REGISTRY_PID} ${OC_BACKEND_PID} ${OC_FRONTEND_PID}"
+else
+    echo " To stop all: kill ${REGISTRY_PID} ${OC_BACKEND_PID}"
+fi
 echo "=========================================="
