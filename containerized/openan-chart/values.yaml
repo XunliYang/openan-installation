@@ -162,7 +162,7 @@ orchestration:
       memory: 1Gi
   # HPA
   hpa:
-    enabled: true
+    enabled: false
     minReplicas: 1
     maxReplicas: 10
     targetCPUUtilization: 70
