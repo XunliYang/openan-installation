@@ -27,37 +27,40 @@ cd openan-deployment/containerized
 
 The script will guide you through an interactive setup:
 
-1. **Environment Check** - Detects and auto-installs missing dependencies:
+1. **[1/5] Environment Check** - Detects and auto-installs missing dependencies:
    - Docker (Linux only, auto-install)
    - kubectl (auto-install)
    - Helm (auto-install)
    - Nginx Ingress Controller (auto-install)
 
-2. **Component Selection** - Choose what to deploy:
+2. **[2/5] Component Selection** - Choose what to deploy:
    - All components (default): Registry Center + Orchestration Center + Workflow Designer
    - Registry Center only
    - Orchestration Center + Workflow Designer only
    - Custom selection
 
-3. **Image Source** - Choose how to get images:
-   - Build from source (downloads release packages from GitHub)
-   - Pull pre-built images from registry
+3. **[3/5] Registry Center LLM Configuration** - Configure LLM for Registry Center:
+   - Chat Model (default: `glm-5.1`)
+   - API URL (default: `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`)
+   - API Key (required)
 
-4. **Local Registry** (optional) - Deploy a local registry in the cluster:
-   - Useful for air-gapped environments
-   - Configurable NodePort
+4. **[4/5] Orchestration Center LLM Configuration** - Configure LLM for Orchestration Center:
+   - Chat Model (default: `qwen3.7-plus`)
+   - Chat API URL (default: `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`)
+   - Chat API Key (required)
+   - A2AT Model (default: `qwen3.7-plus`)
+   - A2AT API URL (default: `https://dashscope.aliyuncs.com/compatible-mode/v1`)
+   - A2AT API Key (required)
 
-5. **API Keys** (optional) - Configure LLM API keys:
-   - Chat API Key
-   - Embed API Key
-   - Rerank API Key
-   - A2AT API Key
+5. **[5/5] Agent Examples Configuration** - Start demo agents server:
+   - Start agent examples server (default: Yes)
+   - Required for testing demo workflows
 
-6. **Database & Ingress** - Configure:
-   - Database password
-   - Ingress host (default: `openan.local`)
+**Storage Configuration:**
+- If cluster has default StorageClass → uses existing storage
+- If no default StorageClass → automatically creates PV with hostPath (`/data/openan-postgres`)
 
-7. **Deploy** - Automatically builds images and deploys with Helm
+**Deploy** - Automatically deploys with Helm and starts agents server (if enabled)
 
 ## Step 3: Verify Deployment
 
@@ -132,8 +135,27 @@ kubectl delete pvc -n openan --all
 
 ```bash
 kubectl -n openan describe pod <pod-name>
-# Common cause: PVC not bound → check StorageClass
-kubectl get sc
+# Common cause: PVC not bound
+kubectl -n openan get pvc
+kubectl get pv
+
+# If PVC is Pending and PV is Available, check:
+# - Storage capacity matches (both should be 20Gi)
+# - Access modes match (both should be ReadWriteOnce)
+# - No storageClassName mismatch
+```
+
+### Agents server not starting
+
+```bash
+# Check agents server logs
+kubectl exec -n openan $(kubectl get pods -n openan -l app=orchestration-center -o jsonpath='{.items[0].metadata.name}') -- cat /tmp/agents-server.log
+
+# Manually start agents server
+kubectl exec -n openan $(kubectl get pods -n openan -l app=orchestration-center -o jsonpath='{.items[0].metadata.name}') -- /bin/sh -c "cd /opt/orchestration-center && PYTHONPATH=/opt/orchestration-center nohup python3 samples/start_agents_server.py > /tmp/agents-server.log 2>&1 &"
+
+# Verify agents server is running
+kubectl exec -n openan $(kubectl get pods -n openan -l app=orchestration-center -o jsonpath='{.items[0].metadata.name}') -- curl -s http://127.0.0.1:8903/health
 ```
 
 ### Image pull failed
