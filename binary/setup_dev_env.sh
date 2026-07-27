@@ -166,6 +166,7 @@ echo "  PID: ${OC_FRONTEND_PID}"
 
 # Wait and verify the frontend is actually listening
 FRONTEND_OK=false
+FRONTEND_REAL_PID=""
 echo "  [WAIT] Verifying frontend startup..."
 for _ in $(seq 1 20); do
     if ! kill -0 "${OC_FRONTEND_PID}" 2>/dev/null; then
@@ -173,8 +174,10 @@ for _ in $(seq 1 20); do
         echo "          Check log: ${ORCHESTRATION_DIR}/frontend.log"
         break
     fi
-    if ss -lnt 2>/dev/null | grep -q ":${FRONTEND_PORT}\b"; then
-        echo "  [OK] Frontend is listening on port ${FRONTEND_PORT}"
+    # Capture the PID that actually owns the port (npm spawns a node child)
+    FRONTEND_REAL_PID=$(ss -lntp 2>/dev/null | grep ":${FRONTEND_PORT}\b" | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2)
+    if [ -n "${FRONTEND_REAL_PID}" ]; then
+        echo "  [OK] Frontend is listening on port ${FRONTEND_PORT} (PID: ${FRONTEND_REAL_PID})"
         FRONTEND_OK=true
         break
     fi
@@ -182,6 +185,7 @@ for _ in $(seq 1 20); do
 done
 if [ "${FRONTEND_OK}" = "false" ]; then
     echo "  [WARN] Frontend may not have started. Check ${ORCHESTRATION_DIR}/frontend.log"
+    FRONTEND_REAL_PID="${OC_FRONTEND_PID}"
 fi
 
 # =============================================================================
@@ -193,12 +197,12 @@ echo " All services started!"
 echo "=========================================="
 echo " registry-center:        http://127.0.0.1:5000  (PID: ${REGISTRY_PID})"
 echo " orchestration backend:  http://127.0.0.1:5001  (PID: ${OC_BACKEND_PID})"
-echo " orchestration frontend: http://localhost:3003   (PID: ${OC_FRONTEND_PID})"
+echo " orchestration frontend: http://localhost:3003   (PID: ${FRONTEND_REAL_PID})"
 echo ""
 echo " Logs:"
 echo "   ${REGISTRY_DIR}/registry-center.log"
 echo "   ${ORCHESTRATION_DIR}/backend.log"
 echo "   ${ORCHESTRATION_DIR}/frontend.log"
 echo ""
-echo " To stop all: kill ${REGISTRY_PID} ${OC_BACKEND_PID} ${OC_FRONTEND_PID}"
+echo " To stop all: kill ${REGISTRY_PID} ${OC_BACKEND_PID} ${FRONTEND_REAL_PID}"
 echo "=========================================="
