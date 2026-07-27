@@ -88,16 +88,7 @@ else:
 #   - Enable agent approval: n
 #   - Storage mode: file
 echo "[INIT] Running registry-center initialization..."
-# Use here-document instead of printf pipe to avoid SIGPIPE with set -o pipefail
-python -m agent_registry.init <<'INIT_INPUT' || true
-
-
-n
-n
-n
-n
-file
-INIT_INPUT
+printf '\n\nn\nn\nn\nn\nfile\n' | python -m agent_registry.init
 
 echo "[DONE] registry-center initialized."
 
@@ -126,15 +117,11 @@ if [ -f "requirements.txt" ]; then
 fi
 
 # Install frontend dependencies
-if ! command -v npm &>/dev/null; then
-    echo "[WARN] npm not found. Skipping frontend setup."
-    echo "       Install Node.js 20.19+ and npm to enable the workflow designer."
-else
-    echo "[NPM] Installing orchestration-center frontend dependencies..."
-    cd "${ORCHESTRATION_DIR}/workflow-designer"
-    npm install --force || echo "[WARN] npm install had issues, frontend may not work correctly"
-    cd "${ORCHESTRATION_DIR}"
-fi
+echo "[NPM] Installing orchestration-center frontend dependencies..."
+cd "${ORCHESTRATION_DIR}/workflow-designer"
+npm install --force
+
+cd "${ORCHESTRATION_DIR}"
 
 # =============================================================================
 # Step 4: Start all services
@@ -160,16 +147,41 @@ nohup python -m orchestrate.start > "${ORCHESTRATION_DIR}/backend.log" 2>&1 &
 OC_BACKEND_PID=$!
 echo "  PID: ${OC_BACKEND_PID}"
 
-# Start orchestration-center frontend (port 3000)
-if ! command -v npm &>/dev/null; then
-    echo "[SKIP] orchestration-center frontend (npm not found)"
-    OC_FRONTEND_PID="N/A"
-else
-    echo "[START] orchestration-center frontend (http://localhost:3000)..."
-    cd "${ORCHESTRATION_DIR}/workflow-designer"
-    nohup npm run dev > "${ORCHESTRATION_DIR}/frontend.log" 2>&1 &
-    OC_FRONTEND_PID=$!
-    echo "  PID: ${OC_FRONTEND_PID}"
+# Start orchestration-center frontend (port 3003)
+FRONTEND_PORT=3003
+echo "[START] orchestration-center frontend (http://localhost:${FRONTEND_PORT})..."
+
+# Free the port if already in use (e.g. leftover process from a previous run)
+if command -v fuser >/dev/null 2>&1; then
+    fuser -k "${FRONTEND_PORT}/tcp" 2>/dev/null || true
+elif command -v lsof >/dev/null 2>&1; then
+    lsof -t -i:"${FRONTEND_PORT}" 2>/dev/null | xargs -r kill 2>/dev/null || true
+fi
+sleep 1
+
+cd "${ORCHESTRATION_DIR}/workflow-designer"
+nohup npm run dev > "${ORCHESTRATION_DIR}/frontend.log" 2>&1 &
+OC_FRONTEND_PID=$!
+echo "  PID: ${OC_FRONTEND_PID}"
+
+# Wait and verify the frontend is actually listening
+FRONTEND_OK=false
+echo "  [WAIT] Verifying frontend startup..."
+for _ in $(seq 1 20); do
+    if ! kill -0 "${OC_FRONTEND_PID}" 2>/dev/null; then
+        echo "  [ERROR] Frontend process exited unexpectedly."
+        echo "          Check log: ${ORCHESTRATION_DIR}/frontend.log"
+        break
+    fi
+    if ss -lnt 2>/dev/null | grep -q ":${FRONTEND_PORT}\b"; then
+        echo "  [OK] Frontend is listening on port ${FRONTEND_PORT}"
+        FRONTEND_OK=true
+        break
+    fi
+    sleep 1
+done
+if [ "${FRONTEND_OK}" = "false" ]; then
+    echo "  [WARN] Frontend may not have started. Check ${ORCHESTRATION_DIR}/frontend.log"
 fi
 
 # =============================================================================
@@ -181,16 +193,12 @@ echo " All services started!"
 echo "=========================================="
 echo " registry-center:        http://127.0.0.1:5000  (PID: ${REGISTRY_PID})"
 echo " orchestration backend:  http://127.0.0.1:5001  (PID: ${OC_BACKEND_PID})"
-echo " orchestration frontend: http://localhost:3000   (PID: ${OC_FRONTEND_PID})"
+echo " orchestration frontend: http://localhost:3003   (PID: ${OC_FRONTEND_PID})"
 echo ""
 echo " Logs:"
 echo "   ${REGISTRY_DIR}/registry-center.log"
 echo "   ${ORCHESTRATION_DIR}/backend.log"
 echo "   ${ORCHESTRATION_DIR}/frontend.log"
 echo ""
-if [ "${OC_FRONTEND_PID}" != "N/A" ]; then
-    echo " To stop all: kill ${REGISTRY_PID} ${OC_BACKEND_PID} ${OC_FRONTEND_PID}"
-else
-    echo " To stop all: kill ${REGISTRY_PID} ${OC_BACKEND_PID}"
-fi
+echo " To stop all: kill ${REGISTRY_PID} ${OC_BACKEND_PID} ${OC_FRONTEND_PID}"
 echo "=========================================="
