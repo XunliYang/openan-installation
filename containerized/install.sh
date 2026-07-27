@@ -571,7 +571,8 @@ if [ "$CONFIG_ORCHESTRATION" = true ]; then
     
     if [ -n "$ORCH_POD" ]; then
         log_info "Starting agents server in $ORCH_POD..."
-        kubectl exec "$ORCH_POD" -n "$CONFIG_K8S_NAMESPACE" -- /bin/sh -c "PYTHONPATH=. python3 samples/start_agents_server.py"
+        kubectl exec "$ORCH_POD" -n "$CONFIG_K8S_NAMESPACE" -- /bin/sh -c "nohup python3 samples/start_agents_server.py > /tmp/agents-server.log 2>&1 &"
+        log_info "Agents server started in background (logs: /tmp/agents-server.log)"
     else
         log_warn "Could not find orchestration-center pod"
     fi
