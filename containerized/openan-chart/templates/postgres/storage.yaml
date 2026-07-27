@@ -28,7 +28,9 @@ spec:
   accessModes:
   - ReadWriteOnce
   persistentVolumeReclaimPolicy: {{ .Values.postgresql.storage.reclaimPolicy | default "Retain" }}
-  storageClassName: {{ .Values.postgresql.storage.storageClassName | default "openan-local" }}
+  {{- if .Values.postgresql.storage.storageClassName }}
+  storageClassName: {{ .Values.postgresql.storage.storageClassName }}
+  {{- end }}
   {{- if .Values.postgresql.storage.useHostPath }}
   hostPath:
     path: {{ .Values.postgresql.storage.hostPath | default "/data/openan-postgres" }}
