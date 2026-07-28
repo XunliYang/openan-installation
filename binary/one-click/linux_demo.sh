@@ -249,7 +249,7 @@ fi
 # Update chat model in both registry-center and orchestration-center.
 # Only modifies the "chat" section (model, url, api_key);
 # embed/rerank sections and template variables ($MODEL, $PROMPT) are preserved.
-LLM_MODEL="GLM5.1"
+LLM_MODEL="glm-5.1"
 LLM_URL="https://open.bigmodel.cn/api/paas/v4/chat/completions"
 
 # Export API key as env var so Python can read it safely (avoids shell
