@@ -15,12 +15,13 @@ The setup script will automatically install missing tools (Docker, kubectl, Helm
 ## Step 1: Install OpenAN Platform
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/XunliYang/openan-installation/main/containerized/install.sh | bash
-```
+# Clone the repository
+git clone https://github.com/XunliYang/openan-installation.git
+cd openan-installation/containerized
 
-This command downloads and executes the install script, which will:
-- Clone the installation repository
-- Run the interactive setup wizard
+# Run the interactive installation script
+./install.sh
+```
 
 The script will guide you through an interactive setup:
 

@@ -5,7 +5,7 @@ System-level installation tooling for OpenAN, providing one-click binary install
 ## Project Structure
 
 ```
-openan-deployment/
+openan-installation/
 ├── binary/                          # Binary deployment
 │   ├── one-click/                   # One-click installation scripts
 │   ├── orchestration-center/        # Orchestration Center binaries
@@ -24,7 +24,9 @@ openan-deployment/
 Production-grade installation using Helm charts. Supports multi-node clusters, HPA auto-scaling, and TLS certificates.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/XunliYang/openan-installation/main/containerized/install.sh | bash
+git clone https://github.com/XunliYang/openan-installation.git
+cd openan-installation/containerized
+./install.sh
 ```
 
 **Features:**
