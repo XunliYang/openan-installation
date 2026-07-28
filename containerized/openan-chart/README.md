@@ -584,6 +584,11 @@ kubectl logs -n openan -l app=openan-postgres -f
 | `/api/orchestrate/rest/v1/orchestrate/...` | `orchestration-center:5001/rest/v1/orchestrate/...` | Strip `/api/orchestrate` prefix |
 | `/registry/rest/v1/registry-center/...` | `registry-center:5000/rest/v1/registry-center/...` | Strip `/registry` prefix |
 
+**Why use Ingress Host?**
+
+- Provides a unified entry point for all services
+- Provides url matching isolation and path rewriting. If not config ingress.host, the frontend will accept any host, which may cause conflicts with other services in the cluster.
+
 ## Certificate Management
 
 Registry Center requires two types of certificates:

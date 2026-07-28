@@ -88,7 +88,7 @@ If no components specified, all components are built. Specify one or both to bui
 ./build.sh registry orchestration
 
 # Registry only, with custom registry and tag
-./build.sh registry --image-registry harbor.example.com --tag v1.1.0
+./build.sh registry --image-registry harbor.example.com --tag v1.0.0
 
 # Orchestration only, local single-arch build
 ./build.sh orchestration --platforms linux/amd64 --no-push
