@@ -174,16 +174,37 @@ else:
     print('  [SKIP] Certificate already exists')
 "
 
+# Prepare etc/ssl/ directory with certificate copies expected by server.conf.
+# generate_self_signed_cert creates server_RSA.cer and server_key_RSA.pem in etc/cert/,
+# but server.conf defaults reference etc/ssl/server.cer and etc/ssl/server_key.pem.
+# init.py validates these paths (file exists, correct extension, 0o600 permissions).
+echo "[SSL] Preparing SSL directory for init..."
+SSL_DIR="${REGISTRY_DIR}/etc/ssl"
+mkdir -p "${SSL_DIR}"
+cp -f "${CERT_DIR}/server_RSA.cer" "${SSL_DIR}/server.cer"
+cp -f "${CERT_DIR}/server_RSA.cer" "${SSL_DIR}/trust.cer"
+cp -f "${CERT_DIR}/server_key_RSA.pem" "${SSL_DIR}/server_key.pem"
+chmod 600 "${SSL_DIR}/server.cer" "${SSL_DIR}/trust.cer" "${SSL_DIR}/server_key.pem"
+
+# Update jwk_private_key_path in server.conf to point to a valid .pem file.
+# Default template has jwk_private_key_path=etc/sign_cert (wrong extension, file missing).
+SERVER_CONF="${REGISTRY_DIR}/etc/conf/server.conf"
+if [ -f "${SERVER_CONF}" ]; then
+    sed -i 's|^jwk_private_key_path=.*|jwk_private_key_path=etc/ssl/server_key.pem|' "${SERVER_CONF}"
+fi
+
 # Run init with automated input:
 #   - IP: default (empty -> 127.0.0.1)
 #   - Port: default (empty -> 5000)
 #   - Enable HTTPS: n
 #   - Enable registry signing: n
 #   - Enable signature validation: n
+#   - JWK cert path: default (empty -> etc/ssl/server.cer)
+#   - JWK private key path: default (empty -> etc/ssl/server_key.pem)
 #   - Enable agent approval: n
-#   - Storage mode: file
+#   - Storage mode: default (empty -> file)
 echo "[INIT] Running registry-center initialization..."
-printf '\n\nn\nn\nn\nn\nfile\n' | python -m agent_registry.init
+printf '\n\nn\nn\nn\n\n\nn\n\n' | python -m agent_registry.init
 
 echo "[DONE] registry-center initialized."
 
