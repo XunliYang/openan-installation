@@ -1,6 +1,6 @@
 # OpenAN Platform Quick Start
 
-One-click deployment guide using the automated setup script.
+One-click installation guide using the automated setup script.
 
 ## Prerequisites
 
@@ -12,18 +12,15 @@ Before running the setup script, ensure you have:
 
 The setup script will automatically install missing tools (Docker, kubectl, Helm, Ingress Controller).
 
-## Step 1: Clone Deployment Repository
+## Step 1: Install OpenAN Platform
 
 ```bash
-git clone https://github.com/XunliYang/openan-deployment.git
-cd openan-deployment/containerized
+curl -fsSL https://raw.githubusercontent.com/XunliYang/openan-deployment/main/containerized/install.sh | bash
 ```
 
-## Step 2: Run Install Script
-
-```bash
-./install.sh
-```
+This command downloads and executes the install script, which will:
+- Clone the installation repository
+- Run the interactive setup wizard
 
 The script will guide you through an interactive setup:
 
@@ -62,7 +59,7 @@ The script will guide you through an interactive setup:
 
 **Deploy** - Automatically deploys with Helm and starts agents server (if enabled)
 
-## Step 3: Verify Deployment
+## Step 2: Verify Deployment
 
 After setup completes, verify the deployment:
 
@@ -84,15 +81,30 @@ kubectl -n openan get svc
 kubectl -n openan get ingress
 ```
 
-## Step 4: Access Platform
+## Step 3: Access Platform
 
 ### Configure Hosts
 
-Add the Ingress host to your `/etc/hosts` file:
+First, check the Ingress Controller service type and get its IP:
 
 ```bash
-# Get Ingress Controller IP
+# Check service type
+kubectl get svc -n ingress-nginx ingress-nginx-controller
+
+# If TYPE is LoadBalancer, get external IP:
 INGRESS_IP=$(kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+# If TYPE is NodePort or external IP is empty, use node IP:
+if [ -z "$INGRESS_IP" ]; then
+    INGRESS_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+fi
+
+echo "Ingress IP: $INGRESS_IP"
+```
+
+Then add the Ingress host to your `/etc/hosts` file:
+
+```bash
 echo "$INGRESS_IP  openan.local" | sudo tee -a /etc/hosts
 ```
 

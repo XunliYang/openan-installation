@@ -192,14 +192,29 @@ install_dependency() {
             ;;
         kubectl)
             if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-                curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                # Detect architecture
+                ARCH=$(uname -m)
+                case $ARCH in
+                    x86_64)  ARCH="amd64" ;;
+                    aarch64) ARCH="arm64" ;;
+                    armv7l)  ARCH="arm" ;;
+                    *)       log_error "Unsupported architecture: $ARCH"; return 1 ;;
+                esac
+                curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH}/kubectl"
                 sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
                 rm -f kubectl
             elif [[ "$OSTYPE" == "darwin"* ]]; then
                 if command -v brew &> /dev/null; then
                     brew install kubectl
                 else
-                    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/amd64/kubectl"
+                    # Detect architecture for macOS
+                    ARCH=$(uname -m)
+                    case $ARCH in
+                        x86_64)  ARCH="amd64" ;;
+                        arm64)   ARCH="arm64" ;;
+                        *)       log_error "Unsupported architecture: $ARCH"; return 1 ;;
+                    esac
+                    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/${ARCH}/kubectl"
                     sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
                     rm -f kubectl
                 fi
