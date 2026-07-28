@@ -248,30 +248,137 @@ echo " Step 3.5: Configuring LLM & registry URL"
 echo "=========================================="
 
 # --- LLM Configuration ---
-# Ask user for API key (required for GLM chat model)
-echo "[INPUT] An API key is required for the GLM chat model."
-echo "        Get one at: https://open.bigmodel.cn/"
+# Default values (user can override by typing a different value)
+DEFAULT_LLM_MODEL="qwen3.6-flash"
+DEFAULT_LLM_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+echo "[INPUT] LLM configuration is required for the chat model."
+echo "        Common providers:"
+echo "          Zhipu GLM:   model=glm-5.1      url=https://open.bigmodel.cn/api/paas/v4/chat/completions"
+echo "          Aliyun Qwen: model=qwen3.6-flash url=https://dashscope.aliyuncs.com/compatible-mode/v1"
+echo ""
+
+# ---------------------------------------------------------------------------
+# Function: validate LLM API key and URL by sending a minimal test request.
+# Returns 0 if valid, 1 otherwise.
+# ---------------------------------------------------------------------------
+validate_llm() {
+    local model="$1"
+    local url="$2"
+    local api_key="$3"
+
+    # Construct the chat completions endpoint.
+    # If the URL doesn't already end with /chat/completions, append it.
+    local test_url="${url}"
+    if [[ "${test_url}" != */chat/completions ]]; then
+        test_url="${test_url%/}/chat/completions"
+    fi
+
+    echo "  [TEST] Validating LLM connection..."
+    echo "         URL:   ${test_url}"
+    echo "         Model: ${model}"
+
+    local tmp_resp http_code body
+    tmp_resp=$(mktemp /tmp/llm-validate-XXXXXX)
+    http_code=$(curl -s -o "${tmp_resp}" -w "%{http_code}" \
+        -X POST "${test_url}" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${api_key}" \
+        -d "{\"model\": \"${model}\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}], \"max_tokens\": 1}" \
+        --connect-timeout 10 \
+        --max-time 30 2>/dev/null) || http_code="000"
+    body=$(cat "${tmp_resp}" 2>/dev/null)
+    rm -f "${tmp_resp}"
+
+    case "${http_code}" in
+        200|201)
+            echo "  [OK] LLM API validation successful (HTTP ${http_code})."
+            return 0
+            ;;
+        401|403)
+            echo "  [ERROR] Authentication failed (HTTP ${http_code}) — invalid API key."
+            [ -n "${body}" ] && echo "          Response: $(printf '%.300s' "${body}")"
+            return 1
+            ;;
+        404)
+            echo "  [ERROR] Endpoint not found (HTTP 404) — invalid API URL."
+            echo "          Tried: ${test_url}"
+            [ -n "${body}" ] && echo "          Response: $(printf '%.300s' "${body}")"
+            return 1
+            ;;
+        000)
+            echo "  [ERROR] Cannot connect to ${test_url}."
+            echo "          Please check the URL and your network connection."
+            return 1
+            ;;
+        *)
+            echo "  [ERROR] Validation failed (HTTP ${http_code})."
+            [ -n "${body}" ] && echo "          Response: $(printf '%.300s' "${body}")"
+            return 1
+            ;;
+    esac
+}
+
 # Read from /dev/tty to ensure we get user input even if stdin is redirected
+read -r -p "        Enter LLM model name [${DEFAULT_LLM_MODEL}]: " LLM_MODEL < /dev/tty || LLM_MODEL=""
+LLM_MODEL="${LLM_MODEL:-${DEFAULT_LLM_MODEL}}"
+
+read -r -p "        Enter LLM API URL [${DEFAULT_LLM_URL}]: " LLM_URL < /dev/tty || LLM_URL=""
+LLM_URL="${LLM_URL:-${DEFAULT_LLM_URL}}"
+
 read -r -p "        Enter your API key: " LLM_API_KEY < /dev/tty || LLM_API_KEY=""
 
-if [ -z "${LLM_API_KEY}" ]; then
-    echo "  [WARN] No API key provided. Edit llm_config.json manually to set chat.api_key."
-else
-    # Mask the key for display (show first 4 and last 4 chars)
+# Validate LLM configuration; retry until valid or user skips
+while true; do
+    if [ -z "${LLM_API_KEY}" ]; then
+        echo "  [WARN] No API key provided. Skipping validation."
+        echo "         You can manually edit llm_config.json later to set chat.api_key."
+        break
+    fi
+
+    if validate_llm "${LLM_MODEL}" "${LLM_URL}" "${LLM_API_KEY}"; then
+        break
+    fi
+
+    # Validation failed — prompt user for corrected values
+    echo ""
+    echo "  [RETRY] Please re-enter LLM configuration."
+    echo "          (Type 'skip' at any prompt to bypass validation)"
+    read -r -p "        Model [${LLM_MODEL}]: " NEW_MODEL < /dev/tty || NEW_MODEL=""
+    if [ "${NEW_MODEL}" = "skip" ]; then
+        echo "  [WARN] Validation skipped. The configuration may not work correctly."
+        break
+    fi
+    LLM_MODEL="${NEW_MODEL:-${LLM_MODEL}}"
+
+    read -r -p "        API URL [${LLM_URL}]: " NEW_URL < /dev/tty || NEW_URL=""
+    if [ "${NEW_URL}" = "skip" ]; then
+        echo "  [WARN] Validation skipped. The configuration may not work correctly."
+        break
+    fi
+    LLM_URL="${NEW_URL:-${LLM_URL}}"
+
+    read -r -p "        API key [***]: " NEW_KEY < /dev/tty || NEW_KEY=""
+    if [ "${NEW_KEY}" = "skip" ]; then
+        echo "  [WARN] Validation skipped. The configuration may not work correctly."
+        break
+    fi
+    LLM_API_KEY="${NEW_KEY:-${LLM_API_KEY}}"
+done
+
+# Mask the key for display (show first 4 and last 4 chars)
+if [ -n "${LLM_API_KEY}" ]; then
     KEY_LEN=${#LLM_API_KEY}
     if [ "${KEY_LEN}" -gt 8 ]; then
         KEY_MASK="${LLM_API_KEY:0:4}...${LLM_API_KEY: -4}"
     else
         KEY_MASK="***"
     fi
-    echo "  [OK] API key received (${KEY_MASK}, length=${KEY_LEN})"
+    echo "  [OK] API key set (${KEY_MASK}, length=${KEY_LEN})"
+    echo "  [OK] LLM config -> model=${LLM_MODEL}, url=${LLM_URL}"
+else
+    echo "  [WARN] No API key set. Edit llm_config.json manually to set chat.api_key."
 fi
-
-# Update chat model in both registry-center and orchestration-center.
-# Only modifies the "chat" section (model, url, api_key);
-# embed/rerank sections and template variables ($MODEL, $PROMPT) are preserved.
-LLM_MODEL="glm-5.1"
-LLM_URL="https://open.bigmodel.cn/api/paas/v4/chat/completions"
 
 # Export API key as env var so Python can read it safely (avoids shell
 # escaping issues with special characters in command-line arguments)
