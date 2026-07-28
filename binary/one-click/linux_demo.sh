@@ -179,6 +179,9 @@ free_port 5001
 echo "[START] orchestration-center backend (http://127.0.0.1:5001)..."
 cd "${ORCHESTRATION_DIR}"
 source venv/bin/activate
+# registry-center runs in HTTP mode (HTTPS disabled during init),
+# so the registry URL must use http:// to avoid SSL errors.
+export AGENT_REGISTRY_URL="http://127.0.0.1:5000"
 nohup python -m orchestrate.start > "${ORCHESTRATION_DIR}/backend.log" 2>&1 &
 OC_BACKEND_PID=$!
 echo "  PID: ${OC_BACKEND_PID}"
