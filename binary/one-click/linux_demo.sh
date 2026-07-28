@@ -194,18 +194,24 @@ OC_FRONTEND_PID=$!
 echo "  PID: ${OC_FRONTEND_PID}"
 
 # Wait and verify the frontend is actually listening
+# NOTE: ss -lntp requires root to see PIDs, so we detect the port with ss -lnt
+# (no -p) first, then try to grab the PID as best-effort extra info.
 FRONTEND_OK=false
-FRONTEND_REAL_PID=""
-echo "  [WAIT] Verifying frontend startup..."
-for _ in $(seq 1 20); do
+FRONTEND_REAL_PID="${OC_FRONTEND_PID}"
+echo "  [WAIT] Verifying frontend startup (up to 30s)..."
+for _ in $(seq 1 30); do
     if ! kill -0 "${OC_FRONTEND_PID}" 2>/dev/null; then
         echo "  [ERROR] Frontend process exited unexpectedly."
-        echo "          Check log: ${ORCHESTRATION_DIR}/frontend.log"
+        echo "          --- Last 20 lines of frontend.log ---"
+        tail -n 20 "${ORCHESTRATION_DIR}/frontend.log" 2>/dev/null | sed 's/^/          /'
         break
     fi
-    # Capture the PID that actually owns the port (npm spawns a node child)
-    FRONTEND_REAL_PID=$(ss -lntp 2>/dev/null | grep ":${FRONTEND_PORT}\b" | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2)
-    if [ -n "${FRONTEND_REAL_PID}" ]; then
+    # Check if the port is listening (does NOT require root)
+    if ss -lnt 2>/dev/null | grep -q ":${FRONTEND_PORT}\b"; then
+        # Best-effort: try to grab the actual PID owning the port
+        # NOTE: || true prevents set -e from exiting when grep finds no match
+        _pid=$(ss -lntp 2>/dev/null | grep ":${FRONTEND_PORT}\b" | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2 || true)
+        [ -n "${_pid}" ] && FRONTEND_REAL_PID="${_pid}"
         echo "  [OK] Frontend is listening on port ${FRONTEND_PORT} (PID: ${FRONTEND_REAL_PID})"
         FRONTEND_OK=true
         break
@@ -213,8 +219,9 @@ for _ in $(seq 1 20); do
     sleep 1
 done
 if [ "${FRONTEND_OK}" = "false" ]; then
-    echo "  [WARN] Frontend may not have started. Check ${ORCHESTRATION_DIR}/frontend.log"
-    FRONTEND_REAL_PID="${OC_FRONTEND_PID}"
+    echo "  [WARN] Frontend may not have started on port ${FRONTEND_PORT}."
+    echo "         --- Last 20 lines of frontend.log ---"
+    tail -n 20 "${ORCHESTRATION_DIR}/frontend.log" 2>/dev/null | sed 's/^/         /'
 fi
 
 # Start agents examples server (provides sample agents for testing)
