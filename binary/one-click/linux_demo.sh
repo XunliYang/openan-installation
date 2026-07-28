@@ -1,15 +1,16 @@
 #!/bin/bash
 # =============================================================================
 # Development environment setup script
-# Clones registry-center (git) & downloads orchestration-center release, creates venvs, and starts all services.
-# Prerequisites: python3.12, node/npm, git, curl, tar
+# Downloads registry-center & orchestration-center releases, creates venvs, and starts all services.
+# Prerequisites: python3.12 (>=3.12), node (>=20.19), npm, git, curl, tar
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="${SCRIPT_DIR}"
 
-REGISTRY_REPO="https://github.com/project-openan/registry-center.git"
+REGISTRY_RELEASE_URL="https://github.com/project-openan/registry-center/archive/refs/tags/v1.0.0.tar.gz"
+REGISTRY_VERSION="v1.0.0"
 ORCHESTRATION_RELEASE_URL="https://github.com/project-openan/orchestration-center/archive/refs/tags/v1.0.0.tar.gz"
 ORCHESTRATION_VERSION="v1.0.0"
 
@@ -17,6 +18,56 @@ REGISTRY_DIR="${WORK_DIR}/registry-center"
 ORCHESTRATION_DIR="${WORK_DIR}/orchestration-center"
 
 CERT_PASSWORD="Dev@12345"
+
+# =============================================================================
+# Step 0: Verify prerequisites
+# =============================================================================
+echo "=========================================="
+echo " Step 0: Verifying prerequisites"
+echo "=========================================="
+
+# Check Python 3.12+
+if ! command -v python3.12 >/dev/null 2>&1; then
+    echo "[ERROR] python3.12 is not installed or not on PATH."
+    echo "        Please install Python 3.12+ from https://www.python.org/downloads/"
+    exit 1
+fi
+PY_VERSION=$(python3.12 --version 2>&1 | awk '{print $2}')
+PY_MAJOR=$(echo "${PY_VERSION}" | cut -d. -f1)
+PY_MINOR=$(echo "${PY_VERSION}" | cut -d. -f2)
+if [ "${PY_MAJOR}" -lt 3 ] || { [ "${PY_MAJOR}" -eq 3 ] && [ "${PY_MINOR}" -lt 12 ]; }; then
+    echo "[ERROR] Python 3.12+ required, found ${PY_VERSION}."
+    exit 1
+fi
+echo "  [OK] Python ${PY_VERSION}"
+
+# Check Node.js 20.19+
+if ! command -v node >/dev/null 2>&1; then
+    echo "[ERROR] Node.js is not installed or not on PATH."
+    echo "        Please install Node.js 20.19+ from https://nodejs.org/"
+    exit 1
+fi
+NODE_VERSION=$(node --version 2>/dev/null | sed 's/v//')
+NODE_MAJOR=$(echo "${NODE_VERSION}" | cut -d. -f1)
+NODE_MINOR=$(echo "${NODE_VERSION}" | cut -d. -f2)
+if [ "${NODE_MAJOR}" -lt 20 ] || { [ "${NODE_MAJOR}" -eq 20 ] && [ "${NODE_MINOR}" -lt 19 ]; }; then
+    echo "[ERROR] Node.js 20.19+ required, found v${NODE_VERSION}."
+    exit 1
+fi
+echo "  [OK] Node.js v${NODE_VERSION}"
+
+# Check npm
+if ! command -v npm >/dev/null 2>&1; then
+    echo "[ERROR] npm is not installed. Please install Node.js 18+ which includes npm."
+    exit 1
+fi
+echo "  [OK] npm $(npm --version 2>/dev/null)"
+
+# Check curl and tar
+command -v curl >/dev/null 2>&1 || { echo "[ERROR] curl is not installed."; exit 1; }
+command -v tar >/dev/null 2>&1 || { echo "[ERROR] tar is not installed."; exit 1; }
+echo "  [OK] curl and tar available"
+echo ""
 
 # -----------------------------------------------------------------------------
 # Helper: kill any process listening on a given TCP port.
@@ -48,12 +99,22 @@ echo "=========================================="
 echo " Step 1: Fetching repositories"
 echo "=========================================="
 
-if [ -d "${REGISTRY_DIR}/.git" ]; then
-    echo "[SKIP] registry-center already exists, pulling latest..."
-    git -C "${REGISTRY_DIR}" pull --ff-only || true
+if [ -d "${REGISTRY_DIR}" ] && [ -n "$(ls -A "${REGISTRY_DIR}" 2>/dev/null)" ]; then
+    echo "[SKIP] registry-center already exists, skipping download..."
 else
-    echo "[CLONE] registry-center..."
-    git clone "${REGISTRY_REPO}" "${REGISTRY_DIR}"
+    rm -rf "${REGISTRY_DIR}"
+    echo "[DOWNLOAD] registry-center release ${REGISTRY_VERSION}..."
+    TMP_TAR=$(mktemp /tmp/registry-center-XXXXXX.tar.gz)
+    if curl -fsSL "${REGISTRY_RELEASE_URL}" -o "${TMP_TAR}"; then
+        mkdir -p "${REGISTRY_DIR}"
+        tar -xzf "${TMP_TAR}" -C "${REGISTRY_DIR}" --strip-components=1
+        echo "  [OK] registry-center ${REGISTRY_VERSION} downloaded and extracted."
+    else
+        echo "  [ERROR] Failed to download registry-center release."
+        rm -f "${TMP_TAR}"
+        exit 1
+    fi
+    rm -f "${TMP_TAR}"
 fi
 
 if [ -d "${ORCHESTRATION_DIR}" ] && [ -n "$(ls -A "${ORCHESTRATION_DIR}" 2>/dev/null)" ]; then
@@ -158,6 +219,69 @@ npm install --force
 cd "${ORCHESTRATION_DIR}"
 
 # =============================================================================
+# Step 3.5: Configure LLM API key & fix registry URL
+# =============================================================================
+echo ""
+echo "=========================================="
+echo " Step 3.5: Configuring LLM & registry URL"
+echo "=========================================="
+
+# --- LLM Configuration ---
+# Ask user for API key (required for GLM chat model)
+echo "[INPUT] An API key is required for the GLM chat model."
+echo "        Get one at: https://open.bigmodel.cn/"
+read -r -p "        Enter your API key: " LLM_API_KEY || LLM_API_KEY=""
+
+# Update chat model in both registry-center and orchestration-center.
+# Only modifies the "chat" section (model, url, api_key);
+# embed/rerank sections and template variables ($MODEL, $PROMPT) are preserved.
+LLM_MODEL="GLM5.1"
+LLM_URL="https://open.bigmodel.cn/api/paas/v4/chat/completions"
+
+for LLM_CONFIG in "${REGISTRY_DIR}/common/config/llm_config.json" "${ORCHESTRATION_DIR}/common/config/llm_config.json"; do
+    if [ ! -f "${LLM_CONFIG}" ]; then
+        echo "  [WARN] ${LLM_CONFIG} not found, skipping."
+        continue
+    fi
+    echo "[CONFIG] Updating chat model in ${LLM_CONFIG}..."
+    python3 -c "
+import json, sys
+
+config_path, api_key, model, url = sys.argv[1:5]
+
+with open(config_path, 'r', encoding='utf-8') as f:
+    config = json.load(f)
+
+if 'chat' in config:
+    config['chat']['model'] = model
+    config['chat']['url'] = url
+    if api_key:
+        config['chat']['api_key'] = api_key
+
+with open(config_path, 'w', encoding='utf-8') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+    f.write('\n')
+" "${LLM_CONFIG}" "${LLM_API_KEY}" "${LLM_MODEL}" "${LLM_URL}"
+    echo "  [OK] Chat model updated -> model=${LLM_MODEL}, url=${LLM_URL}"
+done
+
+if [ -z "${LLM_API_KEY}" ]; then
+    echo "  [WARN] No API key provided. Edit llm_config.json manually to set chat.api_key."
+fi
+
+# --- Fix agent_registry_url in server.conf (https -> http) ---
+# registry-center runs in HTTP mode; default server.conf has https which causes
+# SSL: WRONG_VERSION_NUMBER errors in orchestration-center.
+SERVER_CONF="${ORCHESTRATION_DIR}/etc/conf/server.conf"
+if [ -f "${SERVER_CONF}" ]; then
+    echo "[CONFIG] Fixing agent_registry_url in server.conf (https -> http)..."
+    sed -i 's|agent_registry_url=https://|agent_registry_url=http://|' "${SERVER_CONF}"
+    echo "  [OK] server.conf agent_registry_url set to http."
+else
+    echo "  [WARN] server.conf not found at ${SERVER_CONF}, skipping registry URL fix."
+fi
+
+# =============================================================================
 # Step 4: Start all services
 # =============================================================================
 echo ""
@@ -179,8 +303,6 @@ free_port 5001
 echo "[START] orchestration-center backend (http://127.0.0.1:5001)..."
 cd "${ORCHESTRATION_DIR}"
 source venv/bin/activate
-# registry-center runs in HTTP mode (HTTPS disabled during init),
-# so the registry URL must use http:// to avoid SSL errors.
 export AGENT_REGISTRY_URL="http://127.0.0.1:5000"
 nohup python -m orchestrate.start > "${ORCHESTRATION_DIR}/backend.log" 2>&1 &
 OC_BACKEND_PID=$!

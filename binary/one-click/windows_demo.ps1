@@ -277,9 +277,6 @@ Write-Host "  PID: $REGISTRY_PID"
 # Start orchestration-center backend (port 5001)
 Free-Port -Port 5001
 Write-Host "[START] orchestration-center backend (http://127.0.0.1:5001)..."
-# registry-center runs in HTTP mode (HTTPS disabled during init),
-# so the registry URL must use http:// to avoid SSL errors.
-$env:AGENT_REGISTRY_URL = "http://127.0.0.1:5000"
 $backendLog = Join-Path $ORCHESTRATION_DIR "backend.log"
 $backendErr = Join-Path $ORCHESTRATION_DIR "backend-error.log"
 $ocProc = Start-Process -FilePath $OC_VENV_PYTHON `
