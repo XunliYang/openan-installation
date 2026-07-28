@@ -1,27 +1,51 @@
 #!/bin/bash
 # =============================================================================
 # Development environment setup script
-# Clones registry-center & orchestration-center, creates venvs, and starts all services.
-# Prerequisites: python3.12, node/npm, git
+# Clones registry-center (git) & downloads orchestration-center release, creates venvs, and starts all services.
+# Prerequisites: python3.12, node/npm, git, curl, tar
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="${SCRIPT_DIR}"
 
-REGISTRY_REPO="https://github.com/huang2001junjie-rgb/registry-center"
-ORCHESTRATION_REPO="https://github.com/huang2001junjie-rgb/orchestration-center"
+REGISTRY_REPO="https://github.com/project-openan/registry-center.git"
+ORCHESTRATION_RELEASE_URL="https://github.com/project-openan/orchestration-center/archive/refs/tags/v1.0.0.tar.gz"
+ORCHESTRATION_VERSION="v1.0.0"
 
 REGISTRY_DIR="${WORK_DIR}/registry-center"
 ORCHESTRATION_DIR="${WORK_DIR}/orchestration-center"
 
 CERT_PASSWORD="Dev@12345"
 
+# -----------------------------------------------------------------------------
+# Helper: kill any process listening on a given TCP port.
+# Prevents leftover processes from a previous run causing PID mismatches.
+# -----------------------------------------------------------------------------
+free_port() {
+    local port="$1"
+    local pids=""
+    if command -v fuser >/dev/null 2>&1; then
+        pids="$(fuser "${port}/tcp" 2>/dev/null)" || true
+    elif command -v lsof >/dev/null 2>&1; then
+        pids="$(lsof -t -i:"${port}" 2>/dev/null)" || true
+    elif command -v ss >/dev/null 2>&1; then
+        pids="$(ss -tlnp 2>/dev/null | grep ":${port}\b" | grep -oE 'pid=[0-9]+' | cut -d= -f2)" || true
+    fi
+    if [ -n "${pids}" ]; then
+        echo "  [WARN] Port ${port} is in use, killing PID(s): ${pids}..."
+        echo "${pids}" | tr ' ' '\n' | xargs -r kill 2>/dev/null || true
+        sleep 1
+        # Force kill if still alive
+        echo "${pids}" | tr ' ' '\n' | xargs -r kill -9 2>/dev/null || true
+    fi
+}
+
 # =============================================================================
-# Step 1: Clone repositories
+# Step 1: Prepare repositories
 # =============================================================================
 echo "=========================================="
-echo " Step 1: Cloning repositories"
+echo " Step 1: Fetching repositories"
 echo "=========================================="
 
 if [ -d "${REGISTRY_DIR}/.git" ]; then
@@ -32,12 +56,22 @@ else
     git clone "${REGISTRY_REPO}" "${REGISTRY_DIR}"
 fi
 
-if [ -d "${ORCHESTRATION_DIR}/.git" ]; then
-    echo "[SKIP] orchestration-center already exists, pulling latest..."
-    git -C "${ORCHESTRATION_DIR}" pull --ff-only || true
+if [ -d "${ORCHESTRATION_DIR}" ] && [ -n "$(ls -A "${ORCHESTRATION_DIR}" 2>/dev/null)" ]; then
+    echo "[SKIP] orchestration-center already exists, skipping download..."
 else
-    echo "[CLONE] orchestration-center..."
-    git clone "${ORCHESTRATION_REPO}" "${ORCHESTRATION_DIR}"
+    rm -rf "${ORCHESTRATION_DIR}"
+    echo "[DOWNLOAD] orchestration-center release ${ORCHESTRATION_VERSION}..."
+    TMP_TAR=$(mktemp /tmp/orchestration-center-XXXXXX.tar.gz)
+    if curl -fsSL "${ORCHESTRATION_RELEASE_URL}" -o "${TMP_TAR}"; then
+        mkdir -p "${ORCHESTRATION_DIR}"
+        tar -xzf "${TMP_TAR}" -C "${ORCHESTRATION_DIR}" --strip-components=1
+        echo "  [OK] orchestration-center ${ORCHESTRATION_VERSION} downloaded and extracted."
+    else
+        echo "  [ERROR] Failed to download orchestration-center release."
+        rm -f "${TMP_TAR}"
+        exit 1
+    fi
+    rm -f "${TMP_TAR}"
 fi
 
 # =============================================================================
@@ -131,7 +165,8 @@ echo "=========================================="
 echo " Step 4: Starting all services"
 echo "=========================================="
 
-# Start registry-center
+# Start registry-center (port 5000)
+free_port 5000
 echo "[START] registry-center (http://127.0.0.1:5000)..."
 cd "${REGISTRY_DIR}"
 source venv/bin/activate
@@ -140,6 +175,7 @@ REGISTRY_PID=$!
 echo "  PID: ${REGISTRY_PID}"
 
 # Start orchestration-center backend (port 5001)
+free_port 5001
 echo "[START] orchestration-center backend (http://127.0.0.1:5001)..."
 cd "${ORCHESTRATION_DIR}"
 source venv/bin/activate
@@ -149,15 +185,8 @@ echo "  PID: ${OC_BACKEND_PID}"
 
 # Start orchestration-center frontend (port 3003)
 FRONTEND_PORT=3003
+free_port "${FRONTEND_PORT}"
 echo "[START] orchestration-center frontend (http://localhost:${FRONTEND_PORT})..."
-
-# Free the port if already in use (e.g. leftover process from a previous run)
-if command -v fuser >/dev/null 2>&1; then
-    fuser -k "${FRONTEND_PORT}/tcp" 2>/dev/null || true
-elif command -v lsof >/dev/null 2>&1; then
-    lsof -t -i:"${FRONTEND_PORT}" 2>/dev/null | xargs -r kill 2>/dev/null || true
-fi
-sleep 1
 
 cd "${ORCHESTRATION_DIR}/workflow-designer"
 nohup npm run dev > "${ORCHESTRATION_DIR}/frontend.log" 2>&1 &
@@ -188,6 +217,16 @@ if [ "${FRONTEND_OK}" = "false" ]; then
     FRONTEND_REAL_PID="${OC_FRONTEND_PID}"
 fi
 
+# Start agents examples server (provides sample agents for testing)
+AGENTS_PORT=8080
+free_port "${AGENTS_PORT}"
+echo "[START] agents examples server (http://127.0.0.1:${AGENTS_PORT})..."
+cd "${ORCHESTRATION_DIR}"
+source venv/bin/activate
+nohup python -m samples.start_agents_server > "${ORCHESTRATION_DIR}/agents-server.log" 2>&1 &
+AGENTS_PID=$!
+echo "  PID: ${AGENTS_PID}"
+
 # =============================================================================
 # Summary
 # =============================================================================
@@ -198,11 +237,13 @@ echo "=========================================="
 echo " registry-center:        http://127.0.0.1:5000  (PID: ${REGISTRY_PID})"
 echo " orchestration backend:  http://127.0.0.1:5001  (PID: ${OC_BACKEND_PID})"
 echo " orchestration frontend: http://localhost:3003   (PID: ${FRONTEND_REAL_PID})"
+echo " agents examples server: http://127.0.0.1:${AGENTS_PORT}  (PID: ${AGENTS_PID})"
 echo ""
 echo " Logs:"
 echo "   ${REGISTRY_DIR}/registry-center.log"
 echo "   ${ORCHESTRATION_DIR}/backend.log"
 echo "   ${ORCHESTRATION_DIR}/frontend.log"
+echo "   ${ORCHESTRATION_DIR}/agents-server.log"
 echo ""
-echo " To stop all: kill ${REGISTRY_PID} ${OC_BACKEND_PID} ${FRONTEND_REAL_PID}"
+echo " To stop all: kill ${REGISTRY_PID} ${OC_BACKEND_PID} ${FRONTEND_REAL_PID} ${AGENTS_PID}"
 echo "=========================================="
