@@ -230,13 +230,33 @@ echo "=========================================="
 # Ask user for API key (required for GLM chat model)
 echo "[INPUT] An API key is required for the GLM chat model."
 echo "        Get one at: https://open.bigmodel.cn/"
-read -r -p "        Enter your API key: " LLM_API_KEY || LLM_API_KEY=""
+# Read from /dev/tty to ensure we get user input even if stdin is redirected
+read -r -p "        Enter your API key: " LLM_API_KEY < /dev/tty || LLM_API_KEY=""
+
+if [ -z "${LLM_API_KEY}" ]; then
+    echo "  [WARN] No API key provided. Edit llm_config.json manually to set chat.api_key."
+else
+    # Mask the key for display (show first 4 and last 4 chars)
+    KEY_LEN=${#LLM_API_KEY}
+    if [ "${KEY_LEN}" -gt 8 ]; then
+        KEY_MASK="${LLM_API_KEY:0:4}...${LLM_API_KEY: -4}"
+    else
+        KEY_MASK="***"
+    fi
+    echo "  [OK] API key received (${KEY_MASK}, length=${KEY_LEN})"
+fi
 
 # Update chat model in both registry-center and orchestration-center.
 # Only modifies the "chat" section (model, url, api_key);
 # embed/rerank sections and template variables ($MODEL, $PROMPT) are preserved.
 LLM_MODEL="GLM5.1"
 LLM_URL="https://open.bigmodel.cn/api/paas/v4/chat/completions"
+
+# Export API key as env var so Python can read it safely (avoids shell
+# escaping issues with special characters in command-line arguments)
+export LLM_API_KEY
+export LLM_MODEL
+export LLM_URL
 
 for LLM_CONFIG in "${REGISTRY_DIR}/common/config/llm_config.json" "${ORCHESTRATION_DIR}/common/config/llm_config.json"; do
     if [ ! -f "${LLM_CONFIG}" ]; then
@@ -245,9 +265,12 @@ for LLM_CONFIG in "${REGISTRY_DIR}/common/config/llm_config.json" "${ORCHESTRATI
     fi
     echo "[CONFIG] Updating chat model in ${LLM_CONFIG}..."
     python3 -c "
-import json, sys
+import json, os, sys
 
-config_path, api_key, model, url = sys.argv[1:5]
+config_path = sys.argv[1]
+api_key = os.environ.get('LLM_API_KEY', '')
+model = os.environ.get('LLM_MODEL', '')
+url = os.environ.get('LLM_URL', '')
 
 with open(config_path, 'r', encoding='utf-8') as f:
     config = json.load(f)
@@ -261,13 +284,17 @@ if 'chat' in config:
 with open(config_path, 'w', encoding='utf-8') as f:
     json.dump(config, f, indent=2, ensure_ascii=False)
     f.write('\n')
-" "${LLM_CONFIG}" "${LLM_API_KEY}" "${LLM_MODEL}" "${LLM_URL}"
+
+# Report what was written for verification
+written_key = config.get('chat', {}).get('api_key', '(missing)')
+if written_key and len(written_key) > 8:
+    display = written_key[:4] + '...' + written_key[-4:]
+else:
+    display = '***'
+print(f'  chat.api_key = {display}')
+" "${LLM_CONFIG}"
     echo "  [OK] Chat model updated -> model=${LLM_MODEL}, url=${LLM_URL}"
 done
-
-if [ -z "${LLM_API_KEY}" ]; then
-    echo "  [WARN] No API key provided. Edit llm_config.json manually to set chat.api_key."
-fi
 
 # --- Fix agent_registry_url in server.conf (https -> http) ---
 # registry-center runs in HTTP mode; default server.conf has https which causes
