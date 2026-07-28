@@ -15,7 +15,7 @@ The setup script will automatically install missing tools (Docker, kubectl, Helm
 ## Step 1: Install OpenAN Platform
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/XunliYang/openan-deployment/main/containerized/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/XunliYang/openan-installation/main/containerized/install.sh | bash
 ```
 
 This command downloads and executes the install script, which will:
@@ -230,4 +230,3 @@ kubectl -n ingress-nginx logs -l app.kubernetes.io/component=controller
 
 - [Helm Chart Configuration](./openan-chart/README.md) - Detailed Helm values
 - [Image Build Guide](./build/README.md) - Manual image building
-- [K8S Deployment Guide](../k8s-deployment-guide.md) - Pure YAML deployment
