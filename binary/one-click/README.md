@@ -1,4 +1,4 @@
-# OpenAN 一键部署脚本使用说明（linux_install.sh）
+# OpenAN 一键部署脚本使用说明（openan_install.sh）
 
 本脚本用于在 Linux 服务器上一键部署 OpenAN 全套服务，包括 registry-center、orchestration-center 后端与前端、agents 示例服务，以及 Nginx HTTPS 反向代理。
 
@@ -38,25 +38,19 @@
 
 ```bash
 git clone https://github.com/XunliYang/openan-installation.git
-cd openan-installation
+cd openan-installation/binary/one-click
 ```
 
-### 2. 进入脚本目录
+### 2. 赋予执行权限（如果需要）
 
 ```bash
-cd binary/one-click
+chmod +x openan_install.sh
 ```
 
-### 3. 赋予执行权限（如果需要）
+### 3. 运行脚本
 
 ```bash
-chmod +x linux_install.sh
-```
-
-### 4. 运行脚本
-
-```bash
-./linux_install.sh
+./openan_install.sh
 ```
 
 脚本会自动完成所有下载、配置和启动工作。运行过程中会有少量交互提示（见下文），其余全自动完成。
