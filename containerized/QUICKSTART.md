@@ -7,7 +7,8 @@ One-click installation guide using the automated setup script.
 Before running the setup script, ensure you have:
 
 - **Linux or macOS** system (Windows not yet supported for automated setup)
-- **Kubernetes cluster** (v1.24+) with `kubectl` configured
+- **Kubernetes cluster** (v1.25+) with `kubectl` configured
+- **Helm 3.10.0+** (will be auto-installed if missing)
 - **Internet connection** for downloading dependencies and images
 
 The setup script will automatically install missing tools (Docker, kubectl, Helm, Ingress Controller).

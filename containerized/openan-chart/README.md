@@ -28,8 +28,8 @@ This Chart deploys the following components:
 
 ## Prerequisites
 
-- Kubernetes 1.24+
-- Helm 3.x
+- Kubernetes 1.25+
+- Helm 3.10.0+
 - kubectl configured
 - Ingress Controller (Nginx) installed (for external access)
 - Container images pushed to an accessible registry (see [Image Build Guide](../build/README.md))

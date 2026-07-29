@@ -34,6 +34,15 @@ cd openan-installation/containerized
 - Fully configurable parameters (LLM API keys, image registry, storage)
 - Auto-detects cluster environment (StorageClass, Ingress Controller)
 
+**Manual / System Admin Installation:**
+If you prefer to manually install the Helm chart, follow these steps:
+- Prerequisites: Ensure you have a Kubernetes cluster (v1.24+) and Helm installed.
+- Build your local images by running `containerized/build/build.sh` or pull from Docker Hub.
+- Customize the Helm chart values in `containerized/openan-chart/values.yaml`, and then install the chart using Helm:
+```bash
+helm install openan ./openan-chart -n openan --create-namespace -f values.yaml
+```
+
 **Documentation:**
 - [Quick Start](./containerized/QUICKSTART.md) - One-click installation guide
 - [Helm Chart](./containerized/openan-chart/README.md) - Helm configuration reference

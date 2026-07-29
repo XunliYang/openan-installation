@@ -144,7 +144,7 @@ orchestration:
       apiKey: "sk-your-actual-api-key"
       existingSecret: ""
       existingSecretKey: "orchestration-llm-chat-api-key"
-  # A2AT SDK configuration
+  # A2AT SDK configuration -- currently is same as llm.chat
   a2at:
     provider: "openai"
     model: "qwen3.7-plus"

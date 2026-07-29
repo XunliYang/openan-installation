@@ -123,6 +123,14 @@ check_docker() {
 check_kubectl() {
     if command -v kubectl &> /dev/null; then
         local version=$(kubectl version --client --short 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1)
+        local major=$(echo "$version" | cut -d. -f1)
+        local minor=$(echo "$version" | cut -d. -f2)
+        
+        if [ "$major" -lt 1 ] || ([ "$major" -eq 1 ] && [ "$minor" -lt 25 ]); then
+            log_error "kubectl version $version is too old (requires 1.25+)"
+            return 1
+        fi
+        
         log_info "kubectl installed: $version"
         return 0
     else
@@ -134,6 +142,14 @@ check_kubectl() {
 check_helm() {
     if command -v helm &> /dev/null; then
         local version=$(helm version --short 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1)
+        local major=$(echo "$version" | cut -d. -f1)
+        local minor=$(echo "$version" | cut -d. -f2)
+        
+        if [ "$major" -lt 3 ] || ([ "$major" -eq 3 ] && [ "$minor" -lt 10 ]); then
+            log_error "Helm version $version is too old (requires 3.10.0+)"
+            return 1
+        fi
+        
         log_info "Helm installed: $version"
         return 0
     else
