@@ -20,26 +20,298 @@ ORCHESTRATION_DIR="${WORK_DIR}/orchestration-center"
 CERT_PASSWORD="Dev@12345"
 
 # =============================================================================
+# Python 3.12+ resolution functions
+# Tries: existing python3.12/python3 → apt/dnf install → standalone download
+# Supports: x86_64 & aarch64, Debian/Ubuntu & CentOS/RHEL/Rocky/Alma
+# =============================================================================
+
+PYTHON_CMD=""
+
+# Check if a given Python command provides version >= 3.12.
+# Echoes the version string on success; returns 1 on failure.
+check_python_version() {
+    local cmd="$1"
+    local ver
+    ver=$("$cmd" --version 2>&1 | awk '{print $2}') || return 1
+    [ -n "$ver" ] || return 1
+    local major minor
+    major=$(echo "$ver" | cut -d. -f1)
+    minor=$(echo "$ver" | cut -d. -f2)
+    if [ "${major}" -eq 3 ] && [ "${minor}" -ge 12 ]; then
+        echo "$ver"
+        return 0
+    fi
+    return 1
+}
+
+# Run a command with sudo if not root, or directly if root.
+run_sudo() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    else
+        sudo "$@"
+    fi
+}
+
+# Try to install Python 3.12 via apt (Debian/Ubuntu).
+install_python_apt() {
+    echo "  [TRY] Attempting apt install python3.12..."
+    if [ "$(id -u)" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
+        echo "  [WARN] sudo not available, skipping apt install."
+        return 1
+    fi
+
+    run_sudo apt-get update -qq 2>/dev/null || true
+    run_sudo apt-get install -y -qq python3.12 python3.12-venv 2>/dev/null || true
+
+    if command -v python3.12 >/dev/null 2>&1; then
+        local ver
+        ver=$(check_python_version python3.12 2>/dev/null) || true
+        if [ -n "$ver" ]; then
+            PYTHON_CMD="python3.12"
+            echo "  [OK] Python $ver installed via apt"
+            return 0
+        fi
+    fi
+
+    # Try deadsnakes PPA (Ubuntu)
+    if command -v add-apt-repository >/dev/null 2>&1; then
+        echo "  [TRY] Adding deadsnakes PPA (Ubuntu)..."
+        run_sudo add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
+        run_sudo apt-get update -qq 2>/dev/null || true
+        run_sudo apt-get install -y -qq python3.12 python3.12-venv 2>/dev/null || true
+        if command -v python3.12 >/dev/null 2>&1; then
+            local ver2
+            ver2=$(check_python_version python3.12 2>/dev/null) || true
+            if [ -n "$ver2" ]; then
+                PYTHON_CMD="python3.12"
+                echo "  [OK] Python $ver2 installed via deadsnakes PPA"
+                return 0
+            fi
+        fi
+    fi
+
+    echo "  [WARN] apt install did not provide Python 3.12."
+    return 1
+}
+
+# Try to install Python 3.12 via dnf/yum (CentOS/RHEL/Rocky/Alma).
+install_python_yum() {
+    local pkg_mgr=""
+    if command -v dnf >/dev/null 2>&1; then
+        pkg_mgr="dnf"
+    elif command -v yum >/dev/null 2>&1; then
+        pkg_mgr="yum"
+    else
+        echo "  [WARN] Neither dnf nor yum found."
+        return 1
+    fi
+
+    echo "  [TRY] Attempting $pkg_mgr install python3.12..."
+    if [ "$(id -u)" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
+        echo "  [WARN] sudo not available, skipping $pkg_mgr install."
+        return 1
+    fi
+
+    run_sudo "$pkg_mgr" install -y python3.12 2>/dev/null || true
+
+    if command -v python3.12 >/dev/null 2>&1; then
+        local ver
+        ver=$(check_python_version python3.12 2>/dev/null) || true
+        if [ -n "$ver" ]; then
+            PYTHON_CMD="python3.12"
+            echo "  [OK] Python $ver installed via $pkg_mgr"
+            return 0
+        fi
+    fi
+
+    # Try dnf module (RHEL 8/9)
+    run_sudo "$pkg_mgr" module enable python3.12 2>/dev/null || true
+    run_sudo "$pkg_mgr" install -y python3.12 2>/dev/null || true
+
+    if command -v python3.12 >/dev/null 2>&1; then
+        local ver2
+        ver2=$(check_python_version python3.12 2>/dev/null) || true
+        if [ -n "$ver2" ]; then
+            PYTHON_CMD="python3.12"
+            echo "  [OK] Python $ver2 installed via $pkg_mgr module"
+            return 0
+        fi
+    fi
+
+    echo "  [WARN] $pkg_mgr install did not provide Python 3.12."
+    return 1
+}
+
+# Download a prebuilt standalone Python 3.12 (python-build-standalone project).
+# Works on any Linux with glibc, regardless of distribution.
+install_python_standalone() {
+    local py_arch="$1"
+    local INSTALL_DIR="${WORK_DIR}/.python3.12"
+
+    command -v curl >/dev/null 2>&1 || { echo "  [ERROR] curl is required to download Python."; return 1; }
+    command -v tar  >/dev/null 2>&1 || { echo "  [ERROR] tar is required to extract Python.";  return 1; }
+
+    local API_URL="https://api.github.com/repos/indygreg/python-build-standalone/releases/latest"
+    echo "  [DOWNLOAD] Fetching latest Python 3.12 standalone build for ${py_arch}..."
+
+    local release_info
+    release_info=$(curl -fsSL "$API_URL" 2>/dev/null) || {
+        echo "  [ERROR] Failed to fetch release info from GitHub API."
+        return 1
+    }
+
+    # Find the matching asset: cpython-3.12.*-<arch>-unknown-linux-gnu-install_only_stripped.tar.gz
+    local asset_url
+    asset_url=$(echo "$release_info" | grep '"browser_download_url"' | \
+        grep 'cpython-3\.12\.' | \
+        grep "${py_arch}-unknown-linux-gnu" | \
+        grep 'install_only_stripped\.tar\.gz' | \
+        head -1 | sed 's/.*"browser_download_url": *"//;s/".*//') || asset_url=""
+
+    if [ -z "$asset_url" ]; then
+        echo "  [ERROR] Could not find a Python 3.12 standalone build for ${py_arch}."
+        return 1
+    fi
+
+    echo "  [DOWNLOAD] URL: $asset_url"
+    local tmp_tar
+    tmp_tar=$(mktemp /tmp/python-3.12-XXXXXX.tar.gz)
+    if ! curl -fsSL "$asset_url" -o "$tmp_tar"; then
+        echo "  [ERROR] Failed to download Python 3.12."
+        rm -f "$tmp_tar"
+        return 1
+    fi
+
+    rm -rf "$INSTALL_DIR"
+    mkdir -p "$INSTALL_DIR"
+    tar -xzf "$tmp_tar" -C "$INSTALL_DIR"
+    rm -f "$tmp_tar"
+
+    # The standalone build extracts to python/bin/python3.12
+    local py_bin="${INSTALL_DIR}/python/bin/python3.12"
+    if [ ! -f "$py_bin" ]; then
+        py_bin="${INSTALL_DIR}/python/bin/python3"
+    fi
+    if [ ! -f "$py_bin" ]; then
+        echo "  [ERROR] Python binary not found after extraction."
+        return 1
+    fi
+
+    chmod +x "$py_bin"
+    # Ensure python3 and python symlinks exist
+    ln -sf "$py_bin" "${INSTALL_DIR}/python/bin/python3"
+    ln -sf "$py_bin" "${INSTALL_DIR}/python/bin/python"
+
+    # Add to PATH for this session
+    export PATH="${INSTALL_DIR}/python/bin:${PATH}"
+    PYTHON_CMD="$py_bin"
+
+    local ver
+    ver=$("$PYTHON_CMD" --version 2>&1 | awk '{print $2}')
+    echo "  [OK] Python $ver installed (standalone)"
+    echo "  [INFO] Location: ${INSTALL_DIR}/python"
+
+    # Verify venv module works (required for later steps)
+    if ! "$PYTHON_CMD" -m venv --help >/dev/null 2>&1; then
+        echo "  [ERROR] venv module not available in standalone Python."
+        return 1
+    fi
+}
+
+# Main Python resolution: try existing → package manager → standalone download.
+resolve_python() {
+    # 1. Try python3.12
+    if command -v python3.12 >/dev/null 2>&1; then
+        local ver
+        ver=$(check_python_version python3.12 2>/dev/null) || true
+        if [ -n "$ver" ]; then
+            PYTHON_CMD="python3.12"
+            echo "  [OK] Python $ver (python3.12)"
+            return 0
+        fi
+    fi
+
+    # 2. Try python3
+    if command -v python3 >/dev/null 2>&1; then
+        local ver
+        ver=$(check_python_version python3 2>/dev/null) || true
+        if [ -n "$ver" ]; then
+            PYTHON_CMD="python3"
+            echo "  [OK] Python $ver (python3)"
+            return 0
+        fi
+    fi
+
+    # 3. Not found — attempt automatic installation
+    echo "  [INFO] Python 3.12+ not found on this system."
+    echo "         Will attempt automatic installation..."
+
+    # Detect architecture
+    local arch py_arch
+    arch=$(uname -m)
+    case "$arch" in
+        x86_64|amd64)  py_arch="x86_64" ;;
+        aarch64|arm64) py_arch="aarch64" ;;
+        *)
+            echo "[ERROR] Unsupported architecture: $arch"
+            echo "        Please install Python 3.12+ manually."
+            exit 1
+            ;;
+    esac
+
+    # Detect distribution
+    local distro="unknown"
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        case "${ID:-}" in
+            debian|ubuntu) distro="debian" ;;
+            centos|rhel|rocky|almalinux|fedora|amzn) distro="centos" ;;
+            *)
+                case "${ID_LIKE:-}" in
+                    *debian*) distro="debian" ;;
+                    *rhel*|*fedora*|*centos*) distro="centos" ;;
+                esac
+                ;;
+        esac
+    elif [ -f /etc/debian_version ]; then
+        distro="debian"
+    elif [ -f /etc/centos-release ] || [ -f /etc/redhat-release ]; then
+        distro="centos"
+    fi
+
+    echo "  [INFO] Architecture: $py_arch, Distribution: $distro"
+
+    # Try package manager first
+    if [ "$distro" = "debian" ]; then
+        install_python_apt || true
+    elif [ "$distro" = "centos" ]; then
+        install_python_yum || true
+    fi
+
+    if [ -n "$PYTHON_CMD" ]; then
+        return 0
+    fi
+
+    # Fallback: download standalone Python (works on any distro with glibc)
+    echo "  [INFO] Package manager install unavailable or failed."
+    echo "         Downloading standalone Python 3.12 (python-build-standalone)..."
+    install_python_standalone "$py_arch" || {
+        echo "[ERROR] All Python installation methods failed."
+        echo "        Please install Python 3.12+ manually from https://www.python.org/downloads/"
+        exit 1
+    }
+}
+
+# =============================================================================
 # Step 0: Verify prerequisites
 # =============================================================================
 echo "=========================================="
 echo " Step 0: Verifying prerequisites"
 echo "=========================================="
 
-# Check Python 3.12+
-if ! command -v python3.12 >/dev/null 2>&1; then
-    echo "[ERROR] python3.12 is not installed or not on PATH."
-    echo "        Please install Python 3.12+ from https://www.python.org/downloads/"
-    exit 1
-fi
-PY_VERSION=$(python3.12 --version 2>&1 | awk '{print $2}')
-PY_MAJOR=$(echo "${PY_VERSION}" | cut -d. -f1)
-PY_MINOR=$(echo "${PY_VERSION}" | cut -d. -f2)
-if [ "${PY_MAJOR}" -lt 3 ] || { [ "${PY_MAJOR}" -eq 3 ] && [ "${PY_MINOR}" -lt 12 ]; }; then
-    echo "[ERROR] Python 3.12+ required, found ${PY_VERSION}."
-    exit 1
-fi
-echo "  [OK] Python ${PY_VERSION}"
+# Check Python 3.12+ (auto-install if not found)
+resolve_python
 
 # Check Node.js 20.19+
 if ! command -v node >/dev/null 2>&1; then
@@ -148,7 +420,7 @@ cd "${REGISTRY_DIR}"
 # Create venv
 if [ ! -d "venv" ]; then
     echo "[VENV] Creating virtual environment..."
-    python3.12 -m venv venv
+    ${PYTHON_CMD} -m venv venv
 fi
 source venv/bin/activate
 
@@ -221,7 +493,7 @@ cd "${ORCHESTRATION_DIR}"
 # Create venv
 if [ ! -d "venv" ]; then
     echo "[VENV] Creating virtual environment..."
-    python3.12 -m venv venv
+    ${PYTHON_CMD} -m venv venv
 fi
 source venv/bin/activate
 

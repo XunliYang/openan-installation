@@ -59,10 +59,96 @@ function Free-Port {
 }
 
 # -----------------------------------------------------------------------------
-# Helper: find a working Python command.
-# On Windows, typing 'python' may trigger the Microsoft Store App Execution Alias
-# which hangs silently. We try 'py -3' (official launcher) first, then 'python',
-# then 'python3', verifying each actually returns a version string.
+# Helper: download and silently install Python 3.12 if not present.
+# Supports x86_64 (AMD64) and ARM64 architectures.
+# -----------------------------------------------------------------------------
+function Install-Python312 {
+    # Detect architecture
+    $arch = $env:PROCESSOR_ARCHITECTURE
+    $installerSuffix = ""
+    if ($arch -eq "AMD64" -or $arch -eq "x64") {
+        $installerSuffix = "amd64"
+    } elseif ($arch -eq "ARM64") {
+        $installerSuffix = "arm64"
+    } else {
+        throw "Unsupported architecture: $arch. Please install Python 3.12+ manually."
+    }
+
+    # Find the latest Python 3.12.x version from python.org
+    Write-Host "  [INFO] Detecting latest Python 3.12.x version..."
+    $pyVersion = $null
+    try {
+        $listing = Invoke-WebRequest -Uri "https://www.python.org/ftp/python/" -UseBasicParsing -ErrorAction Stop
+        $versionMatches = [regex]::Matches($listing.Content, '3\.12\.(\d+)')
+        $latestPatch = 0
+        foreach ($m in $versionMatches) {
+            $patch = [int]$m.Groups[1].Value
+            if ($patch -gt $latestPatch) { $latestPatch = $patch }
+        }
+        if ($latestPatch -gt 0) {
+            $pyVersion = "3.12.$latestPatch"
+        }
+    } catch {
+        Write-Host "  [WARN] Could not fetch version listing: $_"
+    }
+
+    if (-not $pyVersion) {
+        $pyVersion = "3.12.8"
+        Write-Host "  [INFO] Using fallback version: $pyVersion"
+    }
+
+    Write-Host "  [INFO] Target version: Python $pyVersion ($installerSuffix)"
+
+    # Download the installer
+    $installerUrl = "https://www.python.org/ftp/python/$pyVersion/python-$pyVersion-$installerSuffix.exe"
+    $installerPath = Join-Path $env:TEMP "python-$pyVersion-$installerSuffix.exe"
+
+    Write-Host "  [DOWNLOAD] $installerUrl"
+    try {
+        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing -ErrorAction Stop
+    } catch {
+        throw "Failed to download Python installer from $installerUrl : $_"
+    }
+
+    # Run silent install (per-user, prepend PATH, include pip/venv/tcltk)
+    Write-Host "  [INSTALL] Running Python $pyVersion installer (silent mode)..."
+    $installArgs = @(
+        "/quiet",
+        "InstallAllUsers=0",
+        "PrependPath=1",
+        "Include_pip=1",
+        "Include_venv=1",
+        "Include_tcltk=1"
+    )
+    $proc = Start-Process -FilePath $installerPath -ArgumentList $installArgs -Wait -PassThru -NoNewWindow
+
+    # Clean up installer
+    Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+
+    # Exit code 3010 means "success, reboot required" — acceptable
+    if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+        throw "Python installer failed with exit code $($proc.ExitCode). Please install manually."
+    }
+
+    # Refresh PATH for this session (the installer updated the User PATH)
+    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    if ($userPath) {
+        $env:PATH = "$userPath;$env:PATH"
+    }
+
+    # Also explicitly add the default per-user install location
+    $defaultPythonDir = "$env:LOCALAPPDATA\Programs\Python\Python312"
+    if (Test-Path "$defaultPythonDir\python.exe") {
+        $env:PATH = "$defaultPythonDir;$defaultPythonDir\Scripts;$env:PATH"
+    }
+
+    Write-Host "  [OK] Python $pyVersion installed successfully."
+}
+
+# -----------------------------------------------------------------------------
+# Helper: find a working Python 3.12+ command.
+# Tries: py -3 → python → python3 (skips Microsoft Store aliases).
+# If none meets the 3.12+ requirement, downloads and installs Python 3.12.
 # -----------------------------------------------------------------------------
 function Find-PythonCommand {
     $candidates = @(
@@ -70,32 +156,68 @@ function Find-PythonCommand {
         @{ Exe = "python";  Args = @() },
         @{ Exe = "python3"; Args = @() }
     )
-    foreach ($c in $candidates) {
-        $testPath = Get-Command $c.Exe -ErrorAction SilentlyContinue
-        if (-not $testPath) { continue }
 
-        # Skip the Microsoft Store alias stub
-        if ($testPath.Source -match "WindowsApps") {
-            Write-Host "  [WARN] Found '$($c.Exe)' in WindowsApps (Store alias), skipping..."
-            continue
+    # Two passes: first with existing Python, then after auto-install
+    for ($pass = 1; $pass -le 2; $pass++) {
+        foreach ($c in $candidates) {
+            $testPath = Get-Command $c.Exe -ErrorAction SilentlyContinue
+            if (-not $testPath) { continue }
+
+            # Skip the Microsoft Store alias stub
+            if ($testPath.Source -match "WindowsApps") {
+                if ($pass -eq 1) {
+                    Write-Host "  [WARN] Found '$($c.Exe)' in WindowsApps (Store alias), skipping..."
+                }
+                continue
+            }
+
+            # Verify it runs and check version >= 3.12
+            try {
+                $versionOutput = & $c.Exe @($c.Args + @("--version")) 2>&1
+                if ($LASTEXITCODE -eq 0 -and $versionOutput -match "Python (\d+)\.(\d+)") {
+                    $major = [int]$Matches[1]
+                    $minor = [int]$Matches[2]
+                    if ($major -eq 3 -and $minor -ge 12) {
+                        Write-Host "  [OK] Using Python: $versionOutput"
+                        if ($c.Args.Count -gt 0) {
+                            return @{ Exe = $c.Exe; Args = $c.Args }
+                        }
+                        return @{ Exe = $c.Exe; Args = @() }
+                    } elseif ($pass -eq 1) {
+                        Write-Host "  [WARN] Found Python $major.$minor but 3.12+ is required."
+                    }
+                }
+            } catch {
+                # Command exists but failed to run, try next
+            }
         }
 
-        # Verify it actually runs
-        try {
-            $versionOutput = & $c.Exe @($c.Args + @("--version")) 2>&1
-            if ($LASTEXITCODE -eq 0 -and $versionOutput -match "Python") {
-                Write-Host "  [OK] Using Python: $versionOutput"
-                if ($c.Args.Count -gt 0) {
-                    return @{ Exe = $c.Exe; Args = $c.Args }
+        # Also check default per-user install location (useful after auto-install)
+        $defaultPythonExe = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"
+        if (Test-Path $defaultPythonExe) {
+            try {
+                $versionOutput = & $defaultPythonExe --version 2>&1
+                if ($LASTEXITCODE -eq 0 -and $versionOutput -match "Python (\d+)\.(\d+)") {
+                    $major = [int]$Matches[1]
+                    $minor = [int]$Matches[2]
+                    if ($major -eq 3 -and $minor -ge 12) {
+                        Write-Host "  [OK] Using Python: $versionOutput"
+                        return @{ Exe = $defaultPythonExe; Args = @() }
+                    }
                 }
-                return @{ Exe = $c.Exe; Args = @() }
-            }
-        } catch {
-            # Command exists but failed to run, try next
+            } catch { }
+        }
+
+        # If first pass failed, try to install Python 3.12
+        if ($pass -eq 1) {
+            Write-Host "  [INFO] Python 3.12+ not found. Attempting automatic installation..."
+            Install-Python312
         }
     }
+
     throw @"
-Python 3 was not found. Please install Python 3.12+ from https://www.python.org/downloads/
+Python 3.12+ could not be found or installed automatically.
+Please install Python 3.12+ manually from https://www.python.org/downloads/
 Make sure to check 'Add Python to PATH' during installation.
 If you already installed it, disable the Microsoft Store 'App Execution Alias' for Python
 in Settings > Apps > Advanced app settings > App execution aliases.
