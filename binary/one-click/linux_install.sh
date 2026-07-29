@@ -339,10 +339,6 @@ echo "  [OK] npm $(npm --version 2>/dev/null)"
 command -v curl >/dev/null 2>&1 || { echo "[ERROR] curl is not installed."; exit 1; }
 command -v tar >/dev/null 2>&1 || { echo "[ERROR] tar is not installed."; exit 1; }
 echo "  [OK] curl and tar available"
-
-# Check nginx (auto-install if not found)
-setup_nginx
-
 echo ""
 
 # -----------------------------------------------------------------------------
@@ -465,6 +461,15 @@ setup_nginx() {
         echo "  [OK] openssl $(openssl version 2>/dev/null | awk '{print $2}')"
     fi
 }
+
+# =============================================================================
+# Step 0.5: Check nginx (auto-install if not found)
+# =============================================================================
+echo "=========================================="
+echo " Step 0.5: Checking nginx"
+echo "=========================================="
+setup_nginx
+echo ""
 
 # =============================================================================
 # Step 1: Prepare repositories
