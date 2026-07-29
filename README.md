@@ -55,7 +55,7 @@ Binary-based installation for virtual machines or bare-metal servers. Downloads 
 **Linux/macOS:**
 ```bash
 cd binary/one-click
-./linux_demo.sh
+./openan_install.sh
 ```
 
 **Features:**
