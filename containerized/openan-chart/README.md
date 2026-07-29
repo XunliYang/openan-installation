@@ -62,6 +62,7 @@ openan-chart/
     │   ├── service.yaml                 # port 5001
     │   └── hpa.yaml
     └── workflow-designer/
+        ├── configmap.yaml             # nginx configuration
         ├── deployment.yaml
         ├── service.yaml                 # port 80
         └── hpa.yaml
@@ -374,11 +375,42 @@ postgresql:
 | `frontend.image.pullPolicy` | Image pull policy | `Always` |
 | `frontend.port` | Service port | `80` |
 | `frontend.nodePort` | NodePort port | `30080` |
+| `frontend.nginxConfig` | Nginx configuration (ConfigMap) | See values.yaml |
 | `frontend.hpa.enabled` | Enable HPA | `true` |
 | `frontend.hpa.minReplicas` | Minimum replicas | `2` |
 | `frontend.hpa.maxReplicas` | Maximum replicas | `10` |
 | `frontend.resources.requests` | Resource requests | `cpu: 100m, memory: 128Mi` |
 | `frontend.resources.limits` | Resource limits | `cpu: 500m, memory: 256Mi` |
+
+**Nginx Configuration:**
+
+Workflow Designer uses ConfigMap for nginx configuration, allowing runtime customization without rebuilding the image. The nginx config is mounted to `/etc/nginx/conf.d/default.conf`.
+
+To customize nginx configuration, modify `frontend.nginxConfig` in values.yaml:
+
+```yaml
+frontend:
+  nginxConfig: |
+    server {
+        listen 80;
+        server_name localhost;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        location /rest/v1/orchestrate/ {
+            proxy_pass http://orchestration-center:5001;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_buffering off;
+            proxy_read_timeout 300s;
+        }
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+    }
+```
 
 ### Ingress Configuration
 
