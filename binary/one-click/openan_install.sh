@@ -817,9 +817,17 @@ print(f'  chat.api_key = {display}')
 done
 else
     echo "  [INFO] LLM configuration skipped. Default values will be used."
-    echo "         Run the command below (replace the values first) to configure LLM later:"
-    echo ""
-    cat << 'MANUAL_LLM_CMD'
+fi
+
+# ---------------------------------------------------------------------------
+# Always print a ready-to-run command so the user can reconfigure LLM later,
+# regardless of whether they completed interactive config or skipped it.
+# ---------------------------------------------------------------------------
+echo ""
+echo "[INFO] To reconfigure LLM at any time, copy & run the command below"
+echo "       (replace the values first, run from the script directory):"
+echo ""
+cat << 'MANUAL_LLM_CMD'
   -----------------------------------------------------------------------
   # 1. Set your LLM configuration values
   MODEL="glm-5.1"
@@ -847,11 +855,7 @@ print(f'  [OK] Updated {sys.argv[1]}')
   done
   -----------------------------------------------------------------------
 MANUAL_LLM_CMD
-    echo ""
-    echo "  [INFO] Config files location:"
-    echo "    - ${REGISTRY_DIR}/common/config/llm_config.json"
-    echo "    - ${ORCHESTRATION_DIR}/common/config/llm_config.json"
-fi
+echo ""
 
 # --- Fix agent_registry_url in server.conf (https -> http) ---
 # registry-center runs in HTTP mode; default server.conf has https which causes
