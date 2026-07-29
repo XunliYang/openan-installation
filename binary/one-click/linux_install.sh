@@ -266,7 +266,7 @@ resolve_python() {
         . /etc/os-release
         case "${ID:-}" in
             debian|ubuntu) distro="debian" ;;
-            centos|rhel|rocky|almalinux|fedora|amzn) distro="centos" ;;
+            centos|rhel|rocky|almalinux|fedora|amzn|openEuler|openeuler) distro="centos" ;;
             *)
                 case "${ID_LIKE:-}" in
                     *debian*) distro="debian" ;;
@@ -374,7 +374,7 @@ detect_distro() {
         . /etc/os-release
         case "${ID:-}" in
             debian|ubuntu) distro="debian" ;;
-            centos|rhel|rocky|almalinux|fedora|amzn) distro="centos" ;;
+            centos|rhel|rocky|almalinux|fedora|amzn|openEuler|openeuler) distro="centos" ;;
             *)
                 case "${ID_LIKE:-}" in
                     *debian*) distro="debian" ;;
