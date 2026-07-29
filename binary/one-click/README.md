@@ -104,6 +104,7 @@ chmod +x openan_install.sh
 
 **此步骤有用户交互，详见[用户交互提示一览](#用户交互提示一览)。**
 
+- 可选择跳过 LLM 配置，脚本会输出一段 bash 命令供稍后配置
 - 交互式输入 LLM 模型名、API URL、API Key
 -- 建议使用：
 ```
@@ -152,7 +153,51 @@ model url: https://open.bigmodel.cn/api/paas/v4/chat/completions
 
 ---
 
-### 2. LLM 模型名称
+### 2. 是否跳过 LLM 配置
+
+```
+Skip LLM configuration and configure manually? [y/N]:
+```
+
+**这是什么**：选择是否跳过 LLM 配置步骤。如果跳过，脚本不会询问模型名、API URL 和 API Key，也不会修改 `llm_config.json`。
+
+**默认值**：`N`（不跳过，进入交互式配置）
+
+**你需要做什么**：
+- 直接回车（或输入 `n`）进入交互式 LLM 配置流程
+- 输入 `y` 跳过 LLM 配置。脚本会在 Step 3.5 结束时输出一段 bash 命令，你复制后修改其中的 `MODEL`、`URL`、`API_KEY` 三个变量值，然后在终端运行即可配置 LLM：
+
+```bash
+# 跳过后，脚本会输出类似以下的命令（请替换实际值后运行）：
+MODEL="glm-5.1"
+URL="https://open.bigmodel.cn/api/paas/v4/chat/completions"
+API_KEY="your-api-key-here"
+
+for f in \
+  registry-center/common/config/llm_config.json \
+  orchestration-center/common/config/llm_config.json
+do
+  [ -f "$f" ] || { echo "  [WARN] $f not found"; continue; }
+  python3 -c "
+import json, sys
+with open(sys.argv[1]) as fh:
+    c = json.load(fh)
+c['chat']['model'] = sys.argv[2]
+c['chat']['url'] = sys.argv[3]
+c['chat']['api_key'] = sys.argv[4]
+with open(sys.argv[1], 'w') as fh:
+    json.dump(c, fh, indent=2, ensure_ascii=False)
+    fh.write('\n')
+print(f'  [OK] Updated {sys.argv[1]}')
+" "$f" "$MODEL" "$URL" "$API_KEY"
+done
+```
+
+> 跳过后，LLM 相关功能将使用默认配置值，可能无法正常工作。请确保在启动服务前运行上述命令完成配置。
+
+---
+
+### 3. LLM 模型名称
 
 ```
 Enter LLM model name [qwen3.6-flash]:
@@ -173,7 +218,7 @@ Enter LLM model name [qwen3.6-flash]:
 
 ---
 
-### 3. LLM API URL
+### 4. LLM API URL
 
 ```
 Enter LLM API URL [https://dashscope.aliyuncs.com/compatible-mode/v1]:
@@ -194,7 +239,7 @@ Enter LLM API URL [https://dashscope.aliyuncs.com/compatible-mode/v1]:
 
 ---
 
-### 4. LLM API Key
+### 5. LLM API Key
 
 ```
 Enter your API key:
@@ -210,7 +255,7 @@ Enter your API key:
 
 ---
 
-### 5. LLM 验证失败后的重试提示
+### 6. LLM 验证失败后的重试提示
 
 当 API Key / URL / 模型验证失败时，脚本会依次重新询问以上三项：
 

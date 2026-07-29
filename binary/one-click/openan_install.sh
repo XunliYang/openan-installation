@@ -636,6 +636,18 @@ echo "        Common providers:"
 echo "          Zhipu GLM:   model=glm-5.1      url=https://open.bigmodel.cn/api/paas/v4/chat/completions"
 echo "          Aliyun Qwen: model=qwen3.6-flash url=https://dashscope.aliyuncs.com/compatible-mode/v1"
 echo ""
+echo "  You can skip this step — a ready-to-run bash command will be"
+echo "  provided for you to configure the LLM later."
+echo ""
+read -r -p "        Skip LLM configuration and configure manually? [y/N]: " SKIP_LLM_INPUT < /dev/tty || SKIP_LLM_INPUT=""
+LLM_SKIPPED=false
+case "${SKIP_LLM_INPUT}" in
+    [yY]|[yY][eE][sS])
+        LLM_SKIPPED=true
+        echo "  [SKIP] LLM configuration skipped."
+        echo "         A bash command will be printed at the end of this step."
+        ;;
+esac
 
 # ---------------------------------------------------------------------------
 # Function: validate LLM API key and URL by sending a minimal test request.
@@ -698,6 +710,7 @@ validate_llm() {
     esac
 }
 
+if [ "${LLM_SKIPPED}" = "false" ]; then
 # Read from /dev/tty to ensure we get user input even if stdin is redirected
 read -r -p "        Enter LLM model name [${DEFAULT_LLM_MODEL}]: " LLM_MODEL < /dev/tty || LLM_MODEL=""
 LLM_MODEL="${LLM_MODEL:-${DEFAULT_LLM_MODEL}}"
@@ -802,6 +815,43 @@ print(f'  chat.api_key = {display}')
 " "${LLM_CONFIG}"
     echo "  [OK] Chat model updated -> model=${LLM_MODEL}, url=${LLM_URL}"
 done
+else
+    echo "  [INFO] LLM configuration skipped. Default values will be used."
+    echo "         Run the command below (replace the values first) to configure LLM later:"
+    echo ""
+    cat << 'MANUAL_LLM_CMD'
+  -----------------------------------------------------------------------
+  # 1. Set your LLM configuration values
+  MODEL="glm-5.1"
+  URL="https://open.bigmodel.cn/api/paas/v4/chat/completions"
+  API_KEY="your-api-key-here"
+
+  # 2. Apply to both projects (run from the script directory)
+  for f in \
+    registry-center/common/config/llm_config.json \
+    orchestration-center/common/config/llm_config.json
+  do
+    [ -f "$f" ] || { echo "  [WARN] $f not found"; continue; }
+    python3 -c "
+import json, sys
+with open(sys.argv[1]) as fh:
+    c = json.load(fh)
+c['chat']['model'] = sys.argv[2]
+c['chat']['url'] = sys.argv[3]
+c['chat']['api_key'] = sys.argv[4]
+with open(sys.argv[1], 'w') as fh:
+    json.dump(c, fh, indent=2, ensure_ascii=False)
+    fh.write('\n')
+print(f'  [OK] Updated {sys.argv[1]}')
+" "$f" "$MODEL" "$URL" "$API_KEY"
+  done
+  -----------------------------------------------------------------------
+MANUAL_LLM_CMD
+    echo ""
+    echo "  [INFO] Config files location:"
+    echo "    - ${REGISTRY_DIR}/common/config/llm_config.json"
+    echo "    - ${ORCHESTRATION_DIR}/common/config/llm_config.json"
+fi
 
 # --- Fix agent_registry_url in server.conf (https -> http) ---
 # registry-center runs in HTTP mode; default server.conf has https which causes
