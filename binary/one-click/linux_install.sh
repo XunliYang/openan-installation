@@ -339,6 +339,10 @@ echo "  [OK] npm $(npm --version 2>/dev/null)"
 command -v curl >/dev/null 2>&1 || { echo "[ERROR] curl is not installed."; exit 1; }
 command -v tar >/dev/null 2>&1 || { echo "[ERROR] tar is not installed."; exit 1; }
 echo "  [OK] curl and tar available"
+
+# Check nginx (auto-install if not found)
+setup_nginx
+
 echo ""
 
 # -----------------------------------------------------------------------------
@@ -361,6 +365,104 @@ free_port() {
         sleep 1
         # Force kill if still alive
         echo "${pids}" | tr ' ' '\n' | xargs -r kill -9 2>/dev/null || true
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# Detect Linux distribution for package manager selection.
+# Echoes "debian", "centos", or "unknown".
+# -----------------------------------------------------------------------------
+detect_distro() {
+    local distro="unknown"
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        case "${ID:-}" in
+            debian|ubuntu) distro="debian" ;;
+            centos|rhel|rocky|almalinux|fedora|amzn) distro="centos" ;;
+            *)
+                case "${ID_LIKE:-}" in
+                    *debian*) distro="debian" ;;
+                    *rhel*|*fedora*|*centos*) distro="centos" ;;
+                esac
+                ;;
+        esac
+    elif [ -f /etc/debian_version ]; then
+        distro="debian"
+    elif [ -f /etc/centos-release ] || [ -f /etc/redhat-release ]; then
+        distro="centos"
+    fi
+    echo "$distro"
+}
+
+# -----------------------------------------------------------------------------
+# Install nginx and openssl if not already present.
+# Uses apt (Debian/Ubuntu) or dnf/yum (CentOS/RHEL/Rocky/Alma).
+# -----------------------------------------------------------------------------
+setup_nginx() {
+    local need_nginx=false
+    local need_openssl=false
+
+    if ! command -v nginx >/dev/null 2>&1; then
+        need_nginx=true
+    fi
+    if ! command -v openssl >/dev/null 2>&1; then
+        need_openssl=true
+    fi
+
+    if [ "$need_nginx" = "false" ] && [ "$need_openssl" = "false" ]; then
+        echo "  [OK] nginx $(nginx -v 2>&1 | awk '{print $3}')"
+        echo "  [OK] openssl $(openssl version 2>/dev/null | awk '{print $2}')"
+        return 0
+    fi
+
+    local distro
+    distro=$(detect_distro)
+
+    if [ "$distro" = "unknown" ]; then
+        echo "  [ERROR] Cannot detect Linux distribution to install nginx."
+        echo "          Please install nginx and openssl manually."
+        exit 1
+    fi
+
+    if [ "$(id -u)" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
+        echo "  [ERROR] sudo is required but not available."
+        echo "          Please install nginx and openssl manually."
+        exit 1
+    fi
+
+    if [ "$distro" = "debian" ]; then
+        echo "  [INFO] Installing nginx and openssl via apt..."
+        run_sudo apt-get update -qq 2>/dev/null || true
+        run_sudo apt-get install -y -qq nginx openssl 2>/dev/null || true
+    elif [ "$distro" = "centos" ]; then
+        local pkg_mgr=""
+        if command -v dnf >/dev/null 2>&1; then
+            pkg_mgr="dnf"
+        elif command -v yum >/dev/null 2>&1; then
+            pkg_mgr="yum"
+        else
+            echo "  [ERROR] Neither dnf nor yum found."
+            echo "          Please install nginx and openssl manually."
+            exit 1
+        fi
+        echo "  [INFO] Installing nginx and openssl via $pkg_mgr..."
+        # Install EPEL for nginx on CentOS/RHEL
+        run_sudo "$pkg_mgr" install -y epel-release 2>/dev/null || true
+        run_sudo "$pkg_mgr" install -y nginx openssl 2>/dev/null || true
+    fi
+
+    # Verify installation
+    if ! command -v nginx >/dev/null 2>&1; then
+        echo "  [ERROR] nginx installation failed."
+        echo "          Please install nginx manually."
+        exit 1
+    fi
+    echo "  [OK] nginx $(nginx -v 2>&1 | awk '{print $3}')"
+
+    if ! command -v openssl >/dev/null 2>&1; then
+        echo "  [WARN] openssl not found; SSL certificate generation may fail."
+    else
+        echo "  [OK] openssl $(openssl version 2>/dev/null | awk '{print $2}')"
     fi
 }
 
@@ -709,6 +811,93 @@ else
 fi
 
 # =============================================================================
+# Step 3.7: Configure Nginx (HTTPS reverse proxy on port 443)
+# =============================================================================
+echo ""
+echo "=========================================="
+echo " Step 3.7: Configuring Nginx"
+echo "=========================================="
+
+# Generate self-signed SSL certificate for HTTPS
+NGINX_SSL_DIR="/etc/nginx/ssl"
+if [ ! -f "${NGINX_SSL_DIR}/cert.pem" ] || [ ! -f "${NGINX_SSL_DIR}/key.pem" ]; then
+    echo "[SSL] Generating self-signed SSL certificate..."
+    run_sudo mkdir -p "${NGINX_SSL_DIR}"
+    run_sudo openssl req -x509 -nodes -days 365 \
+        -newkey rsa:2048 \
+        -keyout "${NGINX_SSL_DIR}/key.pem" \
+        -out "${NGINX_SSL_DIR}/cert.pem" \
+        -subj "/CN=localhost" 2>/dev/null
+    if [ -f "${NGINX_SSL_DIR}/cert.pem" ] && [ -f "${NGINX_SSL_DIR}/key.pem" ]; then
+        echo "  [OK] SSL certificate generated at ${NGINX_SSL_DIR}"
+    else
+        echo "  [ERROR] Failed to generate SSL certificate."
+        exit 1
+    fi
+else
+    echo "[SKIP] SSL certificate already exists at ${NGINX_SSL_DIR}"
+fi
+
+# Generate nginx configuration file
+echo "[CONFIG] Generating nginx configuration..."
+NGINX_CONF_LOCAL="${WORK_DIR}/openan-nginx.conf"
+cat > "${NGINX_CONF_LOCAL}" << 'NGINX_EOF'
+server {
+    listen 443 ssl;
+    server_name _;
+
+    ssl_certificate /etc/nginx/ssl/cert.pem;
+    ssl_certificate_key /etc/nginx/ssl/key.pem;
+
+    # Frontend (Vite dev server with WebSocket upgrade for HMR)
+    location / {
+        proxy_pass http://127.0.0.1:3003;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # Orchestration backend API (trailing slash strips /api/orchestrate prefix)
+    location /api/orchestrate/ {
+        proxy_pass http://127.0.0.1:5001/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Registry Center (trailing slash strips /registry prefix)
+    location /registry/ {
+        proxy_pass http://127.0.0.1:5000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+NGINX_EOF
+
+# Deploy configuration to nginx conf.d
+NGINX_CONF_DEST="/etc/nginx/conf.d/openan.conf"
+run_sudo cp "${NGINX_CONF_LOCAL}" "${NGINX_CONF_DEST}"
+echo "  [OK] Configuration deployed to ${NGINX_CONF_DEST}"
+
+# Remove default site if it conflicts (Debian/Ubuntu ships a default server on port 80)
+if [ -f /etc/nginx/sites-enabled/default ]; then
+    echo "[CLEAN] Removing default nginx site to avoid conflicts..."
+    run_sudo rm -f /etc/nginx/sites-enabled/default
+fi
+
+# Test nginx configuration
+echo "[TEST] Validating nginx configuration..."
+if run_sudo nginx -t 2>&1; then
+    echo "  [OK] nginx configuration is valid."
+else
+    echo "  [ERROR] nginx configuration test failed."
+    exit 1
+fi
+
+# =============================================================================
 # Step 4: Start all services
 # =============================================================================
 echo ""
@@ -786,6 +975,25 @@ nohup python -m samples.start_agents_server > "${ORCHESTRATION_DIR}/agents-serve
 AGENTS_PID=$!
 echo "  PID: ${AGENTS_PID}"
 
+# Start nginx (HTTPS reverse proxy on port 443)
+free_port 443
+echo "[START] nginx (https://localhost)..."
+if command -v systemctl >/dev/null 2>&1 && systemctl is-active nginx >/dev/null 2>&1; then
+    echo "  [INFO] nginx is already running, reloading configuration..."
+    run_sudo nginx -s reload 2>/dev/null || true
+elif command -v systemctl >/dev/null 2>&1; then
+    run_sudo systemctl start nginx 2>/dev/null || run_sudo nginx
+else
+    run_sudo nginx 2>/dev/null || true
+fi
+sleep 1
+NGINX_PID="$(pgrep -f 'nginx: master' 2>/dev/null | head -1)" || NGINX_PID=""
+if [ -n "${NGINX_PID}" ]; then
+    echo "  [OK] nginx started (PID: ${NGINX_PID})"
+else
+    echo "  [WARN] Could not determine nginx master PID."
+fi
+
 # =============================================================================
 # Summary
 # =============================================================================
@@ -797,6 +1005,7 @@ echo " registry-center:        http://127.0.0.1:5000  (PID: ${REGISTRY_PID})"
 echo " orchestration backend:  http://127.0.0.1:5001  (PID: ${OC_BACKEND_PID})"
 echo " orchestration frontend: http://localhost:3003   (PID: ${FRONTEND_REAL_PID})"
 echo " agents examples server: http://127.0.0.1:${AGENTS_PORT}  (PID: ${AGENTS_PID})"
+echo " nginx (HTTPS):          https://localhost        (PID: ${NGINX_PID})"
 echo ""
 echo " Logs:"
 echo "   ${REGISTRY_DIR}/registry-center.log"
@@ -805,4 +1014,5 @@ echo "   ${ORCHESTRATION_DIR}/frontend.log"
 echo "   ${ORCHESTRATION_DIR}/agents-server.log"
 echo ""
 echo " To stop all: kill ${REGISTRY_PID} ${OC_BACKEND_PID} ${FRONTEND_REAL_PID} ${AGENTS_PID}"
+echo "           nginx: run_sudo systemctl stop nginx  (or: sudo nginx -s stop)"
 echo "=========================================="
