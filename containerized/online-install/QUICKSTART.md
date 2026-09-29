@@ -18,7 +18,7 @@ The setup script will automatically install missing tools (Docker, kubectl, Helm
 ```bash
 # Clone the repository
 git clone https://github.com/project-openan/openan-installation.git
-cd openan-installation/containerized
+cd openan-installation/containerized/online-install
 
 # Run the interactive installation script
 ./install.sh
@@ -154,7 +154,7 @@ curl http://<INGRESS_IP>/api/orchestrate/rest/v1/orchestrate/agent-cards
 Use the automated uninstall script:
 
 ```bash
-cd containerized
+cd containerized/online-install
 ./uninstall.sh
 ```
 
@@ -236,4 +236,4 @@ kubectl -n ingress-nginx logs -l app.kubernetes.io/component=controller
 ## Related Documentation
 
 - [Helm Chart Configuration](./openan-chart/README.md) - Detailed Helm values
-- [Image Build Guide](./build/README.md) - Manual image building
+- [Image Build Guide](../build/README.md) - Manual image building

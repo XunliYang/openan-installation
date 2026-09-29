@@ -212,7 +212,7 @@ After building, deploy using the Helm Chart:
 
 ```bash
 # Using command-line overrides
-helm install openan ./openan-chart \
+helm install openan ./online-install/openan-chart \
   -n openan --create-namespace \
   --set registry.image.repository=ghcr.io/project-openan/registry-center \
   --set registry.image.tag=v1.0.0 \
@@ -235,7 +235,7 @@ helm install openan ./openan-chart \
 #     repository: ghcr.io/project-openan/workflow-designer
 #     tag: v1.0.0
 
-helm install openan ./openan-chart -n openan --create-namespace -f values-custom.yaml
+helm install openan ./online-install/openan-chart -n openan --create-namespace -f values-custom.yaml
 ```
 
 ## FAQ
@@ -322,7 +322,7 @@ docker buildx imagetools inspect ghcr.io/project-openan/registry-center:v1.0.0
 
 ## Related Documentation
 
-- [Quick Start](../QUICKSTART.md) (Build + Deploy one-stop guide)
-- [Helm Chart Deployment](../openan-chart/README.md)
+- [Quick Start](../online-install/QUICKSTART.md) (Build + Deploy one-stop guide)
+- [Helm Chart Deployment](../online-install/openan-chart/README.md)
 - [K8S Deployment Guide](../../k8s-deployment-guide.md)
 - [Docker Official Documentation](https://docs.docker.com/)

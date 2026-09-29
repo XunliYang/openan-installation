@@ -11,11 +11,14 @@ openan-installation/
 │   ├── uninstall.sh                 # one-click uninstall script
 │   ├── README.md                    # Binary installation guide
 └── containerized/                   # Containerized installation
-    ├── build/                       # Image build scripts
-    ├── install.sh                   # Interactive installation tool
-    ├── uninstall.sh                 # One-click uninstall script
-    ├── openan-chart/                # Helm chart
-    └── QUICKSTART.md                # Containerized installation guide
+    ├── online-install/              # Internet-connected installation
+    │   ├── install.sh               # Interactive installation tool
+    │   ├── uninstall.sh             # One-click uninstall script
+    │   ├── openan-chart/            # Helm chart
+    │   └── QUICKSTART.md            # Installation guide
+    ├── build/                       # Image build scripts (shared)
+    ├── offline-install/             # Offline (air-gapped) Kubernetes installation
+    └── offline-install-compose/     # Offline (air-gapped) Docker Compose installation
 ```
 
 ## Installation Methods
@@ -26,7 +29,7 @@ Production-grade installation using Helm charts. Supports multi-node clusters, H
 
 ```bash
 git clone https://github.com/project-openan/openan-installation.git
-cd openan-installation/containerized
+cd openan-installation/containerized/online-install
 ./install.sh
 ```
 
@@ -41,9 +44,9 @@ cd openan-installation/containerized
 If you prefer to manually install the Helm chart, follow these steps:
 - Prerequisites: Ensure you have a Kubernetes cluster (v1.25+) and Helm 3.10.0+ installed.
 - Build your local images by running `containerized/build/build.sh` or pull from ghcr.io.
-- Customize the Helm chart values in `containerized/openan-chart/values.yaml`, and then install the chart using Helm:
+- Customize the Helm chart values in `containerized/online-install/openan-chart/values.yaml`, and then install the chart using Helm:
 ```bash
-cd containerized
+cd containerized/online-install
 helm install openan ./openan-chart -n openan --create-namespace
 ```
 
@@ -68,7 +71,7 @@ cd binary/one-click
 ### Containerized
 
 ```bash
-cd containerized
+cd containerized/online-install
 ./uninstall.sh
 ```
 
@@ -92,8 +95,10 @@ cd binary/one-click
 
 ## Documentation
 
-- [Quick Start](./containerized/QUICKSTART.md) - One-click installation guide
-- [Helm Chart](./containerized/openan-chart/README.md) - Helm configuration reference
+- [Quick Start](./containerized/online-install/QUICKSTART.md) - One-click installation guide
+- [Helm Chart](./containerized/online-install/openan-chart/README.md) - Helm configuration reference
 - [Image Build](./containerized/build/README.md) - Custom image building
+- [Offline Installation (Kubernetes)](./containerized/offline-install/README.md) - Air-gapped Kubernetes deployment
+- [Offline Installation (Docker Compose)](./containerized/offline-install-compose/README.md) - Air-gapped single-host deployment
 - [Binary Installation](./binary/one-click/README.md) - Binary installation details
 

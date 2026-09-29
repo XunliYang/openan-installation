@@ -1,0 +1,6 @@
+# Build output and generated/secret files for the offline installer.
+dist/
+config.env
+config.values.yaml
+deps/
+images/

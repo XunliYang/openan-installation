@@ -317,7 +317,7 @@ if [ -n "$WD_SRC" ]; then
 fi
 echo ""
 echo "  Deploy:"
-echo "    helm install openan ./openan-chart -n openan --create-namespace \\"
+echo "    helm install openan ./online-install/openan-chart -n openan --create-namespace \\"
 if [ "$BUILD_REGISTRY" = true ] && [ -n "$RC_SRC" ]; then
     echo "      --set registry.image.repository=$IMAGE_REGISTRY/$NAMESPACE/registry-center --set registry.image.tag=$TAG \\"
 fi
