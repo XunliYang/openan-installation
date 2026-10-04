@@ -38,6 +38,19 @@ log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 log_step()  { echo -e "${CYAN}[STEP]${NC} $1"; }
 
+# Resolve a caller-supplied path to an absolute, symlink-resolved path. Docker
+# (buildx) resolves build contexts relative to the daemon's working directory,
+# so a relative path that bash can resolve (e.g. ../../../src/registry-center)
+# still fails inside docker with "unable to prepare context: path ... not found".
+# Normalize here so the same path works everywhere; a missing or unresolvable
+# path fails here with a clear error instead of failing deep inside docker.
+resolve_abs() {
+    local p
+    p="$(readlink -e "$1" 2>/dev/null)" && [ -n "$p" ] && { printf '%s\n' "$p"; return 0; }
+    p="$(realpath -e "$1" 2>/dev/null)" && [ -n "$p" ] && { printf '%s\n' "$p"; return 0; }
+    return 1
+}
+
 # --- Pinned dependency versions ----------------------------------------------
 HELM_VERSION="v3.14.4"
 KUBECTL_VERSION="v1.29.4"
@@ -183,6 +196,10 @@ case "$APP_SOURCE" in
     build)
         [ -n "$REGISTRY_SRC" ] || { log_error "--registry-src is required for --app-source build"; exit 1; }
         [ -n "$ORCHESTRATION_SRC" ] || { log_error "--orchestration-src is required for --app-source build"; exit 1; }
+        _path="$(resolve_abs "$REGISTRY_SRC")" || { log_error "--registry-src path not found: $REGISTRY_SRC"; exit 1; }
+        REGISTRY_SRC="$_path"
+        _path="$(resolve_abs "$ORCHESTRATION_SRC")" || { log_error "--orchestration-src path not found: $ORCHESTRATION_SRC"; exit 1; }
+        ORCHESTRATION_SRC="$_path"
         for a in "${ARCHS[@]}"; do
             log_info "  build registry-center ($a)"
             docker buildx build --platform "linux/${a}" --load -t "$APP_REGISTRY_CENTER_REF" "$REGISTRY_SRC" || exit 1
@@ -201,6 +218,7 @@ case "$APP_SOURCE" in
         ;;
     tars)
         [ -d "$APP_TARS_DIR" ] || { log_error "--app-tars-dir is required for --app-source tars"; exit 1; }
+        APP_TARS_DIR="$(resolve_abs "$APP_TARS_DIR")"
         for base in registry-center orchestration-center workflow-designer; do
             for a in "${ARCHS[@]}"; do
                 [ -r "$APP_TARS_DIR/${base}-${a}.tar" ] || { log_error "missing $APP_TARS_DIR/${base}-${a}.tar"; exit 1; }
