@@ -1,6 +1,6 @@
 # OpenAN Offline Package Builder
 
-`pack.sh` builds **self-contained offline deployment packages** for OpenAN. Run it on an **online machine**; the resulting tarballs can be transferred to an air-gapped machine and installed with the [offline installer](../offline-install/QUICKSTART.md) without any internet access.
+`pack.sh` builds **self-contained offline deployment packages** for OpenAN. Run it on an **online machine**; the resulting tarballs can be transferred to an offline machine and installed with the [offline installer](../offline-install/QUICKSTART.md) without any internet access.
 
 ---
 
@@ -127,4 +127,4 @@ Each tarball is fully self-contained — no additional downloads are needed at i
 
 ## Next Steps
 
-Transfer the tarballs together with the [offline-install](../offline-install/QUICKSTART.md) scripts (`install.sh`, `uninstall.sh`, `configure_llm.sh`) to the air-gapped machine, then run `./install.sh`. See [Phase 2 of the offline deployment guide](../offline-install/QUICKSTART.md#phase-2-install-on-air-gapped-machine-offline) for details.
+Transfer the tarballs together with the [offline-install](../offline-install/QUICKSTART.md) scripts (`install.sh`, `uninstall.sh`, `configure_llm.sh`) to the offline machine, then run `./install.sh`. See [Phase 2 of the offline deployment guide](../offline-install/QUICKSTART.md#phase-2-install-on-offline-machine) for details.

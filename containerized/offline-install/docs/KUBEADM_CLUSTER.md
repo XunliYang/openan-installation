@@ -2,7 +2,7 @@
 
 This document is **reference only**. The OpenAN offline installer expects a
 working cluster; it does not create one. Use this guide to build that cluster on
-an air-gapped network with `kubeadm`.
+an offline network with `kubeadm`.
 
 Examples cover **openEuler** and **Ubuntu** as the two main lines. Other RPM/DEB
 distributions follow the same shape.

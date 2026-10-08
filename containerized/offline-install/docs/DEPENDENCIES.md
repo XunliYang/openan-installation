@@ -142,7 +142,7 @@ or set `SELINUX=permissive` in `/etc/selinux/config` (per your security policy).
 
 ### 2.9 An internal LLM endpoint
 
-OpenAN needs a chat model at run time. In an air-gapped network this is normally
+OpenAN needs a chat model at run time. In an offline network this is normally
 an **internal** LLM service (vLLM / MindIE / Ollama / an internal gateway):
 
 ```bash

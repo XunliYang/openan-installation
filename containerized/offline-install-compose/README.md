@@ -1,6 +1,6 @@
 # OpenAN Offline Installation (Docker Compose)
 
-Fully offline (air-gapped) single-host deployment of the OpenAN platform using
+Fully offline single-host deployment of the OpenAN platform using
 Docker Compose. This bundle is **independent of the Kubernetes installer** — it
 contains no Helm chart and no cluster prerequisites.
 
@@ -40,7 +40,7 @@ images/registry-center-amd64.tar   images/registry-center-arm64.tar
 images/... postgres-15-alpine-* nginx-1-25-alpine-* ...
 ```
 
-## Install on the air-gapped host
+## Install on the offline host
 
 ```bash
 tar -xzf openan-offline-compose-v1.0.0.tar.gz

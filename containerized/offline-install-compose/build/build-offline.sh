@@ -6,7 +6,7 @@
 #
 # Build the OpenAN offline bundle for the Docker Compose deployment. Run this
 # on an INTERNET-CONNECTED Linux machine with Docker. The output is a
-# self-contained directory + tarball for a single air-gapped host.
+# self-contained directory + tarball for a single offline host.
 #
 #   ./build-offline.sh                                  # pull app images from ghcr.io
 #   ./build-offline.sh --tag v1.0.0

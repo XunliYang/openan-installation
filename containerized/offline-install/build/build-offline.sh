@@ -6,7 +6,7 @@
 #
 # Build the OpenAN offline bundle. Run this on an INTERNET-CONNECTED Linux
 # machine with Docker (buildx enabled). The output is a self-contained
-# directory + tarball that installs OpenAN on an air-gapped cluster.
+# directory + tarball that installs OpenAN on an offline cluster.
 #
 #   ./build-offline.sh                                  # pull app images from ghcr.io
 #   ./build-offline.sh --tag v1.0.0 --app-source pull
@@ -252,7 +252,7 @@ if [ "$KEEP_IMAGES" != "true" ]; then
 fi
 
 echo ""
-log_info "Done. Copy $BUNDLE.tar.gz to the air-gapped machine, then:"
+log_info "Done. Copy $BUNDLE.tar.gz to the offline machine, then:"
 log_info "  tar -xzf $(basename "$BUNDLE.tar.gz")"
 log_info "  cd $(basename "$BUNDLE")"
 log_info "  cp config.env.example config.env && vi config.env"

@@ -1,6 +1,6 @@
 # OpenAN Offline Installation (Kubernetes)
 
-Containerized, fully offline (air-gapped) installation of the OpenAN platform on
+Containerized, fully offline installation of the OpenAN platform on
 an existing Kubernetes cluster. Nothing here touches the internet at install
 time, and nothing modifies the OS or the container runtime — anything that must
 be changed on a node is reported as a manual step (see
@@ -48,7 +48,7 @@ Everything else (PostgreSQL, registry:2, ingress-nginx, MetalLB, helm, kubectl,
 crane) is pinned and downloaded automatically. The result is
 `build/dist/openan-offline-<tag>/` plus a `openan-offline-<tag>.tar.gz`.
 
-## Install on an air-gapped machine
+## Install on an offline machine
 
 ```bash
 tar -xzf openan-offline-v1.0.0.tar.gz
@@ -111,11 +111,13 @@ offline-install/
 │                     lib/common.sh
 ├── docs/             DEPENDENCIES.md, KUBEADM_CLUSTER.md
 ├── config.env.example
+├── QUICKSTART.md
 └── README.md
 ```
 
 ## Documentation
 
+- [QUICKSTART.md](QUICKSTART.md) — end-to-end flow: build → transfer → install
 - [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) — what you must provide manually
 - [docs/KUBEADM_CLUSTER.md](docs/KUBEADM_CLUSTER.md) — building the Kubernetes
   cluster itself (offline)
