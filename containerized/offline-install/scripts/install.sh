@@ -6,7 +6,7 @@
 #
 # OpenAN offline installer (Kubernetes).
 #
-# Assumes a Kubernetes cluster (kubeadm, v1.25+) is already running and that
+# Assumes a Kubernetes cluster (kubeadm, v1.34+) is already running and that
 # this script is executed on a node with kubectl access and a working containerd
 # (root). It never uses the internet and never edits the OS or container runtime
 # configuration.

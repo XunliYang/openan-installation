@@ -51,12 +51,12 @@ resolve_abs() {
     return 1
 }
 
-# --- Pinned dependency versions ----------------------------------------------
-HELM_VERSION="v3.14.4"
-KUBECTL_VERSION="v1.29.4"
+# --- Pinned dependency versions (Kubernetes 1.34) ----------------------------
+HELM_VERSION="v3.19.5"
+KUBECTL_VERSION="v1.34.12"
 CRANE_VERSION="v0.19.2"
-INGRESS_NGINX_VERSION="controller-v1.8.2"
-METALLB_VERSION="v0.14.9"
+INGRESS_NGINX_VERSION="controller-v1.15.1"
+METALLB_VERSION="v0.16.1"
 
 # --- Defaults -----------------------------------------------------------------
 TAG="v1.0.0"

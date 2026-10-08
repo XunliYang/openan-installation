@@ -22,7 +22,7 @@ For architecture, configuration reference and troubleshooting see
 The cluster and its OS-level dependencies are **already installed** — the
 installer deploys *onto* a cluster, it does not create one:
 
-- A running **Kubernetes cluster (v1.25+)**, e.g. built with `kubeadm`
+- A running **Kubernetes cluster (v1.34+)**, e.g. built with `kubeadm`
   (`kubeadm`, `kubelet`, `kubectl`, containerd and the control-plane images all
   in place). Building the cluster offline is covered by
   [docs/KUBEADM_CLUSTER.md](docs/KUBEADM_CLUSTER.md).

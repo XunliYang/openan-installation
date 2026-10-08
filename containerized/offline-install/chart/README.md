@@ -13,8 +13,8 @@ Helm Chart for deploying the OpenAN platform on Kubernetes.
 
 ## Prerequisites
 
-- Kubernetes 1.25+
-- Helm 3.10.0+
+- Kubernetes 1.34+
+- Helm 3.19+
 - Ingress Controller (Nginx) for external access
 
 ## File Structure

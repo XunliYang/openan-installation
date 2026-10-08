@@ -4,8 +4,8 @@ This document is **reference only**. The OpenAN offline installer expects a
 working cluster; it does not create one. Use this guide to build that cluster on
 an offline network with `kubeadm`.
 
-Examples cover **openEuler** and **Ubuntu** as the two main lines. Other RPM/DEB
-distributions follow the same shape.
+Examples cover the **RPM family** (openEuler/CentOS/RHEL) and the **Debian
+family** (Ubuntu/Debian). Other RPM/DEB distributions follow the same shape.
 
 ---
 
@@ -13,7 +13,7 @@ distributions follow the same shape.
 
 | Item | Example |
 |---|---|
-| Kubernetes version | v1.29.x |
+| Kubernetes version | v1.34.x |
 | Container runtime | containerd 1.7.x or 2.x |
 | Control plane | `k8s-master-1` — 192.168.1.10 |
 | Workers | `k8s-node-1..3` — 192.168.1.11-13 |
@@ -27,34 +27,134 @@ All node hostnames must be lowercase, resolvable, and match `kubectl get nodes`.
 
 ## 1. Offline materials to prepare on an internet machine
 
-| Material | Notes |
-|---|---|
-| `containerd`, `runc`, `containerd.io` packages | match your distro + arch (amd64/arm64) |
-| CNI plugins (`containernetworking-plugins`) | provides `bridge`, `host-local`, `loopback`, `portmap` |
-| `kubelet`, `kubeadm`, `kubectl` packages | same version on all nodes (`v1.29.x`) |
-| Kubernetes control-plane images | pause, coredns, etcd, apiserver, controller-manager, scheduler, kube-proxy |
-| CNI images | Flannel or Calico images + manifest |
-| An internal HTTP file server or USB transfer | to move all of the above |
-
-Pre-pull the control-plane images with the **exact references kubeadm expects**
-so no node ever pulls from the internet:
+Do this on an internet-connected machine with the **same distro release and
+architecture** as your nodes. Everything is collected into
+`~/offline-materials/` and transferred to every node.
 
 ```bash
-# on the internet machine (same k8s version)
-kubeadm config images list --kubernetes-version v1.29.4
-kubeadm config images pull  --kubernetes-version v1.29.4
-ctr -n k8s.io images export k8s-images.tar \
-  $(kubeadm config images list --kubernetes-version v1.29.4)
+mkdir -p ~/offline-materials
+KUBE_VERSION=v1.34.12        # latest v1.34 patch release
+FLANNEL_VERSION=v0.28.9
 ```
 
-On each node:
+### 1.1 containerd packages
 
 ```bash
-ctr -n k8s.io images import k8s-images.tar
+# RPM family (openEuler/CentOS/RHEL)
+sudo dnf install -y dnf-plugins-core
+sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+mkdir -p ~/offline-materials/rpms
+# --resolve pulls dependencies too (runc, container-selinux, ...)
+dnf download --resolve --destdir ~/offline-materials/rpms containerd.io
+
+# Debian family (Ubuntu/Debian)
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list
+sudo apt-get update
+sudo apt-get install --download-only --reinstall -y containerd.io
+mkdir -p ~/offline-materials/debs
+cp /var/cache/apt/archives/*.deb ~/offline-materials/debs/
 ```
 
-> If you have an internal registry instead, use
-> `kubeadm init --image-repository <internal-registry>/k8s`.
+### 1.2 kubelet / kubeadm / kubectl packages
+
+```bash
+# RPM family (openEuler/CentOS/RHEL)
+sudo tee /etc/yum.repos.d/kubernetes.repo >/dev/null <<'EOF'
+[kubernetes]
+name=Kubernetes
+baseurl=https://pkgs.k8s.io/core:/stable:/v1.34/rpm/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://pkgs.k8s.io/core:/stable:/v1.34/rpm/repodata/repomd.xml.key
+EOF
+mkdir -p ~/offline-materials/rpms
+# --resolve pulls dependencies too (kubernetes-cni, conntrack, ...)
+dnf download --resolve --destdir ~/offline-materials/rpms \
+    kubelet-${KUBE_VERSION#v} kubeadm-${KUBE_VERSION#v} kubectl-${KUBE_VERSION#v}
+
+# Debian family (Ubuntu/Debian)
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.34/deb/Release.key \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.34/deb/ /' \
+  | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt-get update
+# download-only pulls dependencies too (kubernetes-cni, conntrack, ...)
+sudo apt-get install --download-only --reinstall -y \
+    kubelet=${KUBE_VERSION#v}-* kubeadm=${KUBE_VERSION#v}-* kubectl=${KUBE_VERSION#v}-*
+mkdir -p ~/offline-materials/debs
+cp /var/cache/apt/archives/*.deb ~/offline-materials/debs/
+```
+
+> The same package versions must be installed on every node. `kubernetes-cni`
+> (the CNI plugins: `bridge`, `host-local`, `loopback`, `portmap`) is pulled in
+> automatically as a kubelet dependency.
+
+### 1.3 Control-plane images
+
+kubeadm tells you exactly which images it needs — pull and export them so no
+node ever touches the internet. Requires containerd + kubeadm on the online
+machine (install them from the packages above).
+
+```bash
+sudo systemctl enable --now containerd
+
+# list the exact references kubeadm expects
+sudo kubeadm config images list --kubernetes-version $KUBE_VERSION
+
+# pull them (pause, coredns, etcd, apiserver, controller-manager, scheduler, kube-proxy)
+sudo kubeadm config images pull --kubernetes-version $KUBE_VERSION \
+    --cri-socket unix:///run/containerd/containerd.sock
+
+# export for transfer
+sudo ctr -n k8s.io images export ~/offline-materials/k8s-images-$KUBE_VERSION.tar \
+    $(sudo kubeadm config images list --kubernetes-version $KUBE_VERSION)
+```
+
+On each node, later:
+
+```bash
+sudo ctr -n k8s.io images import k8s-images-$KUBE_VERSION.tar
+```
+
+> Mixed-architecture cluster? Repeat the pull/export on a machine of the other
+> architecture. If you have an internal registry, use
+> `kubeadm init --image-repository <internal-registry>/k8s` instead.
+
+### 1.4 CNI (Flannel) images + manifest
+
+```bash
+curl -fsSL -o ~/offline-materials/kube-flannel.yml \
+  https://github.com/flannel-io/flannel/releases/download/${FLANNEL_VERSION}/kube-flannel.yml
+
+# pull every image the manifest references, then export
+grep 'image:' ~/offline-materials/kube-flannel.yml
+for img in $(grep 'image:' ~/offline-materials/kube-flannel.yml | awk '{print $2}'); do
+    sudo ctr -n k8s.io images pull "$img"
+done
+sudo ctr -n k8s.io images export ~/offline-materials/flannel-images.tar \
+    $(grep 'image:' ~/offline-materials/kube-flannel.yml | awk '{print $2}')
+```
+
+> Calico works the same way: download its manifest, pull the referenced images,
+> export them to a tar.
+
+### 1.5 Transfer to the offline nodes
+
+```bash
+tar -czf ~/offline-materials.tar.gz -C ~ offline-materials
+# copy to every node (USB / SCP / internal HTTP server)：
+scp ~/offline-materials.tar.gz user@<node-ip>:~
+# then on each node:
+tar -xzf ~/offline-materials.tar.gz -C ~
+```
 
 ---
 
@@ -97,7 +197,7 @@ sudo sysctl --system
 ### 2.2 SELinux / firewall
 
 ```bash
-# SELinux: permissive (or per your policy) — openEuler/CentOS
+# SELinux: permissive (or per your policy) — RPM family
 sudo setenforce 0
 sudo sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config
 ```
@@ -117,9 +217,9 @@ Ports to open on every node (firewalld / ufw):
 ### 2.3 Time
 
 ```bash
-# openEuler/CentOS
+# RPM family
 sudo systemctl enable --now chronyd
-# Ubuntu
+# Debian family
 sudo systemctl enable --now systemd-timesyncd
 ```
 
@@ -128,11 +228,13 @@ sudo systemctl enable --now systemd-timesyncd
 ## 3. Install containerd
 
 ```bash
-# openEuler/CentOS
-sudo rpm -ivh containerd.io-*.rpm           # or dnf --disablerepo=* install ./containerd.io-*.rpm
+cd ~/offline-materials/rpms    # or debs on the Debian family
 
-# Ubuntu
-sudo dpkg -i containerd.io_*.deb
+# RPM family
+sudo dnf --disablerepo=* install -y ./containerd.io-*.rpm
+
+# Debian family
+sudo dpkg -i ./containerd.io_*.deb
 ```
 
 Generate a config with the **systemd cgroup driver** (kubelet must match):
@@ -158,11 +260,13 @@ sudo systemctl status containerd
 ## 4. Install kubelet / kubeadm / kubectl
 
 ```bash
-# openEuler/CentOS
-sudo dnf --disablerepo=* install -y ./kubelet-1.29.*.rpm ./kubeadm-1.29.*.rpm ./kubectl-1.29.*.rpm
+cd ~/offline-materials/rpms    # or debs on the Debian family
 
-# Ubuntu
-sudo apt-get install -y --allow-downgrades ./kubelet_1.29.*.deb ./kubeadm_1.29.*.deb ./kubectl_1.29.*.deb
+# RPM family
+sudo dnf --disablerepo=* install -y ./kubelet-1.34.*.rpm ./kubeadm-1.34.*.rpm ./kubectl-1.34.*.rpm
+
+# Debian family
+sudo apt-get install -y --allow-downgrades ./kubelet_1.34.*.deb ./kubeadm_1.34.*.deb ./kubectl_1.34.*.deb
 sudo apt-mark hold kubelet kubeadm kubectl
 ```
 
@@ -176,7 +280,7 @@ sudo systemctl enable --now kubelet    # expected to crash-loop until init
 
 ```bash
 sudo kubeadm init \
-  --kubernetes-version v1.29.4 \
+  --kubernetes-version v1.34.12 \
   --pod-network-cidr 10.244.0.0/16 \
   --cri-socket unix:///run/containerd/containerd.sock
 ```
@@ -195,11 +299,11 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
 ## 6. Install a CNI plugin (offline)
 
-Flannel (simplest, offline-friendly):
+Flannel (simplest, offline-friendly) — images and manifest come from §1.4:
 
 ```bash
-ctr -n k8s.io images import flannel-images.tar      # on every node
-kubectl apply -f flannel.yaml
+sudo ctr -n k8s.io images import ~/offline-materials/flannel-images.tar   # on every node
+kubectl apply -f ~/offline-materials/kube-flannel.yml                      # control plane only
 ```
 
 Or Calico: import its images on every node, then `kubectl apply -f calico.yaml`.

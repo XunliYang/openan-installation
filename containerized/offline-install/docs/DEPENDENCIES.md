@@ -28,7 +28,7 @@ Nothing above reaches the internet.
 
 ## 2. You must provide manually — Kubernetes
 
-### 2.1 A running Kubernetes cluster (v1.25+)
+### 2.1 A running Kubernetes cluster (v1.34+)
 
 See [KUBEADM_CLUSTER.md](KUBEADM_CLUSTER.md). This is a hard prerequisite: the
 installer deploys *onto* a cluster, it does not create one.

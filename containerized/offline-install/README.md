@@ -24,7 +24,7 @@ tag serves both amd64 and arm64 nodes. See [Image packaging](#image-packaging).
 
 ## Prerequisites
 
-A running Kubernetes cluster (kubeadm, v1.25+). Building the cluster itself is
+A running Kubernetes cluster (kubeadm, v1.34+). Building the cluster itself is
 out of scope — see [docs/KUBEADM_CLUSTER.md](docs/KUBEADM_CLUSTER.md).
 
 ## Build the bundle (internet-connected machine)
