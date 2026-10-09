@@ -17,8 +17,8 @@ openan-installation/
     │   ├── openan-chart/            # Helm chart
     │   └── QUICKSTART.md            # Installation guide
     ├── build/                       # Image build scripts (shared)
-    ├── offline-install/             # Offline (air-gapped) Kubernetes installation
-    └── offline-install-compose/     # Offline (air-gapped) Docker Compose installation
+    ├── offline-install/             # Offline Kubernetes installation
+    └── offline-install-compose/     # Offline Docker Compose installation
 ```
 
 ## Installation Methods
@@ -98,7 +98,7 @@ cd binary/one-click
 - [Quick Start](./containerized/online-install/QUICKSTART.md) - One-click installation guide
 - [Helm Chart](./containerized/online-install/openan-chart/README.md) - Helm configuration reference
 - [Image Build](./containerized/build/README.md) - Custom image building
-- [Offline Installation (Kubernetes)](./containerized/offline-install/README.md) - Air-gapped Kubernetes deployment
-- [Offline Installation (Docker Compose)](./containerized/offline-install-compose/README.md) - Air-gapped single-host deployment
+- [Offline Installation (Kubernetes)](./containerized/offline-install/README.md) - Offline Kubernetes deployment
+- [Offline Installation (Docker Compose)](./containerized/offline-install-compose/README.md) - Offline single-host deployment
 - [Binary Installation](./binary/one-click/README.md) - Binary installation details
 

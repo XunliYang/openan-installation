@@ -88,6 +88,23 @@ app: openan-postgres
 {{- end }}
 
 {{/*
+MySQL labels
+*/}}
+{{- define "openan.mysql.labels" -}}
+{{ include "openan.labels" . }}
+app: openan-mysql
+app.kubernetes.io/name: openan-mysql
+app.kubernetes.io/component: database
+{{- end }}
+
+{{/*
+MySQL selector labels
+*/}}
+{{- define "openan.mysql.selectorLabels" -}}
+app: openan-mysql
+{{- end }}
+
+{{/*
 Workflow Designer labels
 */}}
 {{- define "openan.frontend.labels" -}}
@@ -125,5 +142,49 @@ PostgreSQL host
 {{- "openan-postgres" }}
 {{- else }}
 {{- .Values.postgresql.externalHost }}
+{{- end }}
+{{- end }}
+
+{{/*
+Selected database type: postgresql (default) or mysql
+*/}}
+{{- define "openan.dbType" -}}
+{{- .Values.database.type | default "postgresql" }}
+{{- end }}
+
+{{/*
+Database host, honouring database.type
+*/}}
+{{- define "openan.dbHost" -}}
+{{- if eq (include "openan.dbType" .) "mysql" }}
+{{- if .Values.mysql.enabled }}
+{{- "openan-mysql" }}
+{{- else }}
+{{- .Values.mysql.externalHost }}
+{{- end }}
+{{- else }}
+{{- include "openan.postgresHost" . }}
+{{- end }}
+{{- end }}
+
+{{/*
+Database port, honouring database.type
+*/}}
+{{- define "openan.dbPort" -}}
+{{- if eq (include "openan.dbType" .) "mysql" }}
+{{- .Values.mysql.port }}
+{{- else }}
+{{- .Values.postgresql.port }}
+{{- end }}
+{{- end }}
+
+{{/*
+Database root/admin password, honouring database.type
+*/}}
+{{- define "openan.dbPassword" -}}
+{{- if eq (include "openan.dbType" .) "mysql" }}
+{{- .Values.mysql.password }}
+{{- else }}
+{{- .Values.postgresql.password }}
 {{- end }}
 {{- end }}

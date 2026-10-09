@@ -6,7 +6,7 @@
 #
 # Build the OpenAN offline bundle. Run this on an INTERNET-CONNECTED Linux
 # machine with Docker (buildx enabled). The output is a self-contained
-# directory + tarball that installs OpenAN on an air-gapped cluster.
+# directory + tarball that installs OpenAN on an offline cluster.
 #
 #   ./build-offline.sh                                  # pull app images from ghcr.io
 #   ./build-offline.sh --tag v1.0.0 --app-source pull
@@ -51,12 +51,12 @@ resolve_abs() {
     return 1
 }
 
-# --- Pinned dependency versions ----------------------------------------------
-HELM_VERSION="v3.14.4"
-KUBECTL_VERSION="v1.29.4"
+# --- Pinned dependency versions (Kubernetes 1.34) ----------------------------
+HELM_VERSION="v3.19.5"
+KUBECTL_VERSION="v1.34.12"
 CRANE_VERSION="v0.19.2"
-INGRESS_NGINX_VERSION="controller-v1.8.2"
-METALLB_VERSION="v0.14.9"
+INGRESS_NGINX_VERSION="controller-v1.15.1"
+METALLB_VERSION="v0.16.1"
 
 # --- Defaults -----------------------------------------------------------------
 TAG="v1.0.0"
@@ -157,6 +157,7 @@ log_info "metallb speaker          : $MB_SPK"
 INFRA=(
     "registry-2|docker.io/library/registry:2|library/registry:2"
     "postgres-15-alpine|docker.io/library/postgres:15-alpine|library/postgres:15-alpine"
+    "mysql-8-4-3|docker.io/library/mysql:8.4.3|library/mysql:8.4.3"
     "ingress-nginx-controller|$ING_CTRL|${ING_CTRL#registry.k8s.io/}"
     "ingress-nginx-kube-webhook-certgen|$ING_CGEN|${ING_CGEN#registry.k8s.io/}"
     "metallb-controller|$MB_CTRL|${MB_CTRL#quay.io/}"
@@ -252,7 +253,7 @@ if [ "$KEEP_IMAGES" != "true" ]; then
 fi
 
 echo ""
-log_info "Done. Copy $BUNDLE.tar.gz to the air-gapped machine, then:"
+log_info "Done. Copy $BUNDLE.tar.gz to the offline machine, then:"
 log_info "  tar -xzf $(basename "$BUNDLE.tar.gz")"
 log_info "  cd $(basename "$BUNDLE")"
 log_info "  cp config.env.example config.env && vi config.env"

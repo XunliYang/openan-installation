@@ -1,6 +1,6 @@
 # OpenAN Offline Installation (Kubernetes)
 
-Containerized, fully offline (air-gapped) installation of the OpenAN platform on
+Containerized, fully offline installation of the OpenAN platform on
 an existing Kubernetes cluster. Nothing here touches the internet at install
 time, and nothing modifies the OS or the container runtime — anything that must
 be changed on a node is reported as a manual step (see
@@ -12,7 +12,7 @@ be changed on a node is reported as a manual step (see
 ## Topology
 
 - 2 × `registry-center`, 2 × `orchestration-center`, 2 × `workflow-designer`,
-  1 × PostgreSQL.
+  1 × database (PostgreSQL by default, or MySQL 8.4.3 when `DB_TYPE=mysql`).
 - One `ingress-nginx` entry point behind a MetalLB LoadBalancer IP.
 - Images come from an **in-cluster private registry** (NodePort `30500`, plain
   HTTP) populated from the bundle.
@@ -24,7 +24,7 @@ tag serves both amd64 and arm64 nodes. See [Image packaging](#image-packaging).
 
 ## Prerequisites
 
-A running Kubernetes cluster (kubeadm, v1.25+). Building the cluster itself is
+A running Kubernetes cluster (kubeadm, v1.34+). Building the cluster itself is
 out of scope — see [docs/KUBEADM_CLUSTER.md](docs/KUBEADM_CLUSTER.md).
 
 ## Build the bundle (internet-connected machine)
@@ -44,11 +44,11 @@ Application image sources (`--app-source`):
 | `build` | build them from local source (`--registry-src`, `--orchestration-src`) |
 | `tars` | reuse pre-built tars (`--app-tars-dir`) |
 
-Everything else (PostgreSQL, registry:2, ingress-nginx, MetalLB, helm, kubectl,
-crane) is pinned and downloaded automatically. The result is
+Everything else (PostgreSQL / MySQL, registry:2, ingress-nginx, MetalLB, helm,
+kubectl, crane) is pinned and downloaded automatically. The result is
 `build/dist/openan-offline-<tag>/` plus a `openan-offline-<tag>.tar.gz`.
 
-## Install on an air-gapped machine
+## Install on an offline machine
 
 ```bash
 tar -xzf openan-offline-v1.0.0.tar.gz
@@ -63,6 +63,22 @@ sudo scripts/install.sh --config config.env
 `config.env` is documented inline. Interactive use is also supported: run
 `install.sh` with no arguments and it will prompt, then write `config.env` for
 you.
+
+## Database selection
+
+`DB_TYPE` in `config.env` selects the database backend:
+
+| `DB_TYPE` | Bundled image | Used by |
+|---|---|---|
+| `postgresql` (default) | `postgres:15-alpine` | registry-center + orchestration-center |
+| `mysql` | `mysql:8.4.3` | registry-center + orchestration-center |
+
+When `mysql` is selected the installer deploys a single `openan-mysql`
+StatefulSet (hostPath fallback `/data/openan-mysql`), creates the same two
+databases, and points both applications at it (`PERSISTENCE_MODE=mysql`).
+> **Note:** MySQL mode in orchestration-center requires an application version
+> that implements the MySQL persistence handler; verify your image supports it
+> before selecting `DB_TYPE=mysql`.
 
 ## What the installer does
 
@@ -105,17 +121,19 @@ registry-relative reference of each infrastructure image.
 
 ```
 offline-install/
-├── chart/            Helm chart (offline copy; postgres image + node-pinned PV)
+├── chart/            Helm chart (offline copy; postgres/mysql image + node-pinned PV)
 ├── build/            build-offline.sh (runs on the internet build machine)
 ├── scripts/          check-env.sh, install.sh, push-images.sh, uninstall.sh,
 │                     lib/common.sh
 ├── docs/             DEPENDENCIES.md, KUBEADM_CLUSTER.md
 ├── config.env.example
+├── QUICKSTART.md
 └── README.md
 ```
 
 ## Documentation
 
+- [QUICKSTART.md](QUICKSTART.md) — end-to-end flow: build → transfer → install
 - [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) — what you must provide manually
 - [docs/KUBEADM_CLUSTER.md](docs/KUBEADM_CLUSTER.md) — building the Kubernetes
   cluster itself (offline)

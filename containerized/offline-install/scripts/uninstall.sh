@@ -75,11 +75,11 @@ uninstall_k8s() {
     fi
 
     # Persistent data
-    if ask_yes_no "Delete persistent data (PVC/PV and /data/openan-postgres, /data/openan-registry)?" "no"; then
+    if ask_yes_no "Delete persistent data (PVC/PV and /data/openan-postgres, /data/openan-mysql, /data/openan-registry)?" "no"; then
         "$KUBECTL" -n "$K8S_NAMESPACE" delete pvc --all --ignore-not-found 2>/dev/null || true
-        "$KUBECTL" delete pv openan-postgres-pv --ignore-not-found 2>/dev/null || true
+        "$KUBECTL" delete pv openan-postgres-pv openan-mysql-pv --ignore-not-found 2>/dev/null || true
         log_warn "hostPath data on the storage node was NOT touched (manual):"
-        log_warn "  rm -rf /data/openan-postgres /data/openan-registry"
+        log_warn "  rm -rf /data/openan-postgres /data/openan-mysql /data/openan-registry"
     else
         log_info "Persistent volumes preserved"
     fi

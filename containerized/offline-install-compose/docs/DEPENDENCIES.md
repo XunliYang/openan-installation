@@ -56,7 +56,7 @@ Roughly 5 GiB for loaded images plus the PostgreSQL volume under `compose/data`.
 
 ### 2.5 An internal LLM endpoint
 
-OpenAN needs a chat model at run time. In an air-gapped network this is normally
+OpenAN needs a chat model at run time. In an offline network this is normally
 an **internal** LLM service (vLLM / MindIE / Ollama / an internal gateway):
 
 ```bash

@@ -18,11 +18,11 @@ data:
   ORCH_FORWARDED_ALLOW_IPS: "*"
 
   # Persistence
-  PERSISTENCE_MODE: "postgresql"
+  PERSISTENCE_MODE: {{ include "openan.dbType" . | quote }}
 
   # Database
-  DB_HOST: {{ include "openan.postgresHost" . | quote }}
-  DB_PORT: {{ .Values.postgresql.port | quote }}
+  DB_HOST: {{ include "openan.dbHost" . | quote }}
+  DB_PORT: {{ include "openan.dbPort" . | quote }}
   DB_NAME: "orchestration_center"
   DB_USERNAME: "opena2a_t"
 

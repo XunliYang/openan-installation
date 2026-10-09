@@ -9,12 +9,13 @@ Helm Chart for deploying the OpenAN platform on Kubernetes.
 | **Registry Center** | Agent Card registration, discovery, and semantic search | 5000 |
 | **Orchestration Center** | PSOP generation and workflow execution | 5001 |
 | **Workflow Designer** | Visual workflow editing frontend (Nginx) | 80 |
-| **PostgreSQL** | Shared database | 5432 |
+| **PostgreSQL** | Shared database (default, `database.type=postgresql`) | 5432 |
+| **MySQL** | Shared database (optional, `database.type=mysql`) | 3306 |
 
 ## Prerequisites
 
-- Kubernetes 1.25+
-- Helm 3.10.0+
+- Kubernetes 1.34+
+- Helm 3.19+
 - Ingress Controller (Nginx) for external access
 
 ## File Structure
@@ -28,6 +29,9 @@ openan-chart/
     ├── ingress.yaml
     ├── NOTES.txt
     ├── postgres/
+    │   ├── storage.yaml
+    │   └── statefulset.yaml
+    ├── mysql/
     │   ├── storage.yaml
     │   └── statefulset.yaml
     ├── registry-center/
@@ -121,6 +125,7 @@ kubectl -n openan port-forward svc/workflow-designer 8080:80
 |-----------|-------------|---------|
 | `namespace` | Kubernetes namespace | `openan` |
 | `createNamespace` | Helm creates the namespace | `true` |
+| `database.type` | Database backend: `postgresql` or `mysql` | `postgresql` |
 
 ### PostgreSQL
 
@@ -141,6 +146,24 @@ kubectl -n openan port-forward svc/workflow-designer 8080:80
 | `postgresql.storage.setDefault` | Set as default StorageClass | `false` |
 | `postgresql.resources.requests` | Resource requests | `cpu: 250m, memory: 256Mi` |
 | `postgresql.resources.limits` | Resource limits | `cpu: 500m, memory: 512Mi` |
+
+### MySQL (used when `database.type=mysql`)
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `mysql.enabled` | Enable built-in MySQL | `false` |
+| `mysql.externalHost` | External database address | `""` |
+| `mysql.port` | Database port | `3306` |
+| `mysql.password` | Root password | `openan-db-password` |
+| `mysql.existingSecret` | Reference existing Secret for password | `""` |
+| `mysql.image` | MySQL image | `mysql:8.4.3` |
+| `mysql.storage.size` | Storage size | `20Gi` |
+| `mysql.storage.storageClassName` | StorageClass name (auto-detect if empty) | `""` |
+| `mysql.storage.createPV` | Auto-create PV | `false` |
+| `mysql.storage.useHostPath` | Use hostPath (single-node) | `false` |
+| `mysql.storage.hostPath` | hostPath directory | `/data/openan-mysql` |
+| `mysql.resources.requests` | Resource requests | `cpu: 250m, memory: 512Mi` |
+| `mysql.resources.limits` | Resource limits | `cpu: 1000m, memory: 1Gi` |
 
 ### Registry Center
 
@@ -245,6 +268,16 @@ helm install openan ./openan-chart -n openan --create-namespace \
   --set postgresql.password=your-password
 ```
 
+### MySQL Backend
+
+```bash
+helm install openan ./openan-chart -n openan --create-namespace \
+  --set database.type=mysql \
+  --set mysql.enabled=true \
+  --set postgresql.enabled=false \
+  --set mysql.password=your-password
+```
+
 ## Common Operations
 
 ```bash
@@ -300,7 +333,7 @@ kubectl logs -n openan -l app=orchestration-center -f
 │                                  │                             │
 │                                  ▼                             │
 │                        ┌───────────────────────────────────┐  │
-│                        │  PostgreSQL (Shared)               │  │
+│                        │  Database (PostgreSQL or MySQL)    │  │
 │                        │  - StatefulSet                     │  │
 │                        │  - registry_center DB              │  │
 │                        │  - orchestration_center DB         │  │
@@ -363,7 +396,7 @@ registry:
 |-------|---------|
 | Namespace conflict | `kubectl delete namespace openan` then reinstall, or `--set createNamespace=false` |
 | Pod cannot start | `kubectl -n openan describe pod <pod-name>` |
-| Database connection | `kubectl -n openan logs -l app=openan-postgres` |
+| Database connection | `kubectl -n openan logs -l app=openan-postgres` (or `app=openan-mysql`) |
 | Ingress not accessible | `kubectl -n openan describe ingress` |
 | Certificate issues | `kubectl -n openan get secret registry-center-tls registry-center-signing` |
 

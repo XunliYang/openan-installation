@@ -24,12 +24,20 @@ Workflow Designer (Frontend):
   {{- end }}
 {{- end }}
 
-{{- if .Values.postgresql.enabled }}
+{{- if and (ne (include "openan.dbType" .) "mysql") .Values.postgresql.enabled }}
 
 PostgreSQL:
   Host: openan-postgres
   Port: {{ .Values.postgresql.port }}
   Databases: {{ range .Values.postgresql.databases }}{{ .name }} {{ end }}
+{{- end }}
+
+{{- if and (eq (include "openan.dbType" .) "mysql") .Values.mysql.enabled }}
+
+MySQL:
+  Host: openan-mysql
+  Port: {{ .Values.mysql.port }}
+  Databases: {{ range .Values.mysql.databases }}{{ .name }} {{ end }}
 {{- end }}
 
 Check status:

@@ -19,9 +19,9 @@ data:
   REGISTRY_OWNER__VALIDATION__MODE: "relaxed"
 
   # Persistence
-  PERSISTENCE_MODE: "postgresql"
-  DB_HOST: {{ include "openan.postgresHost" . | quote }}
-  DB_PORT: {{ .Values.postgresql.port | quote }}
+  PERSISTENCE_MODE: {{ include "openan.dbType" . | quote }}
+  DB_HOST: {{ include "openan.dbHost" . | quote }}
+  DB_PORT: {{ include "openan.dbPort" . | quote }}
   DB_NAME: "registry_center"
   DB_USERNAME: "registry"
   DB_POOL_MIN: "2"
