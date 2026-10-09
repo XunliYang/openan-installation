@@ -12,6 +12,15 @@ metadata:
     {{- include "openan.orchestration.labels" . | nindent 4 }}
 spec:
   type: ClusterIP
+  # Session affinity: orchestration-center keeps login sessions in each
+  # replica's process memory (single-process token store), so a session
+  # minted by one replica is invisible to another and requests distributed
+  # across replicas intermittently return 401. Pin each client to a single
+  # replica for as long as a session token lives (12h default TTL).
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 43200
   selector:
     {{- include "openan.orchestration.selectorLabels" . | nindent 4 }}
   ports:
