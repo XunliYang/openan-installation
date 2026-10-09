@@ -2,7 +2,9 @@
 
 This document is **reference only**. The OpenAN offline installer expects a
 working cluster; it does not create one. Use this guide to build that cluster on
-an offline network with `kubeadm`.
+an offline network with `kubeadm` — or use the
+[openFuyao offline installer](#10-alternative-build-the-cluster-with-openfuyao-optional)
+(§10) as an automated alternative.
 
 Examples cover the **RPM family** (openEuler/CentOS/RHEL) and the **Debian
 family** (Ubuntu/Debian). Other RPM/DEB distributions follow the same shape.
@@ -27,14 +29,19 @@ All node hostnames must be lowercase, resolvable, and match `kubectl get nodes`.
 
 ## 1. Offline materials to prepare on an internet machine
 
-Do this on an internet-connected machine with the **same distro release and
-architecture** as your nodes. Everything is collected into
-`~/offline-materials/` and transferred to every node.
+Do this on an internet-connected machine with the **same distro release** as
+your nodes, and with **Docker** installed (the same machine that builds the
+OpenAN offline bundle). Everything is collected into `~/offline-materials/`
+and transferred to every node. Images are pulled **per architecture**
+(`$ARCHES`); OS packages are architecture-specific too — for a
+multi-architecture cluster, repeat the package downloads on a machine of each
+architecture (the repos resolve the right arch automatically).
 
 ```bash
 mkdir -p ~/offline-materials
 KUBE_VERSION=v1.34.12        # latest v1.34 patch release
 FLANNEL_VERSION=v0.28.9
+ARCHES="amd64 arm64"         # target architectures — trim to what your nodes use
 ```
 
 ### 1.1 containerd packages
@@ -99,33 +106,46 @@ cp /var/cache/apt/archives/*.deb ~/offline-materials/debs/
 
 ### 1.3 Control-plane images
 
-kubeadm tells you exactly which images it needs — pull and export them so no
-node ever touches the internet. Requires containerd + kubeadm on the online
-machine (install them from the packages above).
+kubeadm tells you exactly which images it needs; pull and save them with
+**Docker** (the build machine already requires it for the OpenAN offline
+bundle — see [QUICKSTART.md](../QUICKSTART.md) Phase 1). Upstream
+`registry.k8s.io` images are multi-arch manifest lists, so pulling with
+`--platform` is enough — one tar per architecture:
 
 ```bash
-sudo systemctl enable --now containerd
+# static kubeadm binary — used only to list the exact image refs
+ARCH=$(uname -m)
+case "$ARCH" in
+  x86_64)  KARCH=amd64 ;;
+  aarch64) KARCH=arm64 ;;
+esac
+curl -fsSLo kubeadm "https://dl.k8s.io/release/${KUBE_VERSION}/bin/linux/${KARCH}/kubeadm"
+chmod +x kubeadm
 
-# list the exact references kubeadm expects
-sudo kubeadm config images list --kubernetes-version $KUBE_VERSION
+# the exact references kubeadm expects
+# (pause, coredns, etcd, apiserver, controller-manager, scheduler, kube-proxy)
+IMAGES=$(./kubeadm config images list --kubernetes-version $KUBE_VERSION)
+echo "$IMAGES"
 
-# pull them (pause, coredns, etcd, apiserver, controller-manager, scheduler, kube-proxy)
-sudo kubeadm config images pull --kubernetes-version $KUBE_VERSION \
-    --cri-socket unix:///run/containerd/containerd.sock
-
-# export for transfer
-sudo ctr -n k8s.io images export ~/offline-materials/k8s-images-$KUBE_VERSION.tar \
-    $(sudo kubeadm config images list --kubernetes-version $KUBE_VERSION)
+# pull + save per architecture
+for a in $ARCHES; do
+    for img in $IMAGES; do
+        docker pull --platform "linux/$a" "$img"
+    done
+    docker save -o ~/offline-materials/k8s-images-$KUBE_VERSION-linux-$a.tar $IMAGES
+done
 ```
 
-On each node, later:
+On each node, later — import the tar matching the node's architecture:
 
 ```bash
-sudo ctr -n k8s.io images import k8s-images-$KUBE_VERSION.tar
+ARCH=$(uname -m); case "$ARCH" in x86_64) A=amd64;; aarch64) A=arm64;; esac
+sudo ctr -n k8s.io images import ~/offline-materials/k8s-images-$KUBE_VERSION-linux-$A.tar
 ```
 
-> Mixed-architecture cluster? Repeat the pull/export on a machine of the other
-> architecture. If you have an internal registry, use
+> With Docker's containerd image store enabled, `docker save` may export all
+> pulled platforms — importing a superset is harmless; containerd picks the
+> node's architecture. If you have an internal registry, use
 > `kubeadm init --image-repository <internal-registry>/k8s` instead.
 
 ### 1.4 CNI (Flannel) images + manifest
@@ -134,13 +154,15 @@ sudo ctr -n k8s.io images import k8s-images-$KUBE_VERSION.tar
 curl -fsSL -o ~/offline-materials/kube-flannel.yml \
   https://github.com/flannel-io/flannel/releases/download/${FLANNEL_VERSION}/kube-flannel.yml
 
-# pull every image the manifest references, then export
+# pull every image the manifest references, per architecture
 grep 'image:' ~/offline-materials/kube-flannel.yml
-for img in $(grep 'image:' ~/offline-materials/kube-flannel.yml | awk '{print $2}'); do
-    sudo ctr -n k8s.io images pull "$img"
+FLANNEL_IMAGES=$(grep 'image:' ~/offline-materials/kube-flannel.yml | awk '{print $2}')
+for a in $ARCHES; do
+    for img in $FLANNEL_IMAGES; do
+        docker pull --platform "linux/$a" "$img"
+    done
+    docker save -o ~/offline-materials/flannel-images-linux-$a.tar $FLANNEL_IMAGES
 done
-sudo ctr -n k8s.io images export ~/offline-materials/flannel-images.tar \
-    $(grep 'image:' ~/offline-materials/kube-flannel.yml | awk '{print $2}')
 ```
 
 > Calico works the same way: download its manifest, pull the referenced images,
@@ -299,11 +321,13 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
 ## 6. Install a CNI plugin (offline)
 
-Flannel (simplest, offline-friendly) — images and manifest come from §1.4:
+Flannel (simplest, offline-friendly) — images and manifest come from §1.4.
+Import the tar matching the node's architecture:
 
 ```bash
-sudo ctr -n k8s.io images import ~/offline-materials/flannel-images.tar   # on every node
-kubectl apply -f ~/offline-materials/kube-flannel.yml                      # control plane only
+ARCH=$(uname -m); case "$ARCH" in x86_64) A=amd64;; aarch64) A=arm64;; esac
+sudo ctr -n k8s.io images import ~/offline-materials/flannel-images-linux-$A.tar   # on every node
+kubectl apply -f ~/offline-materials/kube-flannel.yml                              # control plane only
 ```
 
 Or Calico: import its images on every node, then `kubectl apply -f calico.yaml`.
@@ -345,3 +369,73 @@ Once the cluster is healthy:
    back to a node-pinned hostPath PV.
 4. Then run `scripts/check-env.sh` and `scripts/install.sh` from the offline
    bundle.
+
+---
+
+## 10. Alternative: build the cluster with openFuyao (optional)
+
+Instead of the manual kubeadm flow above, the
+[openFuyao offline installer](https://docs.openfuyao.cn/zh/docs/v26.09/cluster_installation_guide/bootstrap_cluster_installation/offline_bootstrap_cluster_installation.html)
+(`bke`) can build the cluster for you: it assembles an offline deployment
+package on an internet-connected **build node** (requires tar, pigz and
+**Docker**), installs a bootstrap cluster on the bootstrap node, and you then
+create the business cluster from the openFuyao management plane. OpenAN is
+installed onto that cluster exactly as in the sections above.
+
+Condensed flow — follow the linked guide for the authoritative version:
+
+1. On the build node, install the tools and configure Docker:
+
+   ```bash
+   # RPM family (openEuler/CentOS/RHEL)
+   yum install -y tar pigz docker && systemctl enable --now docker
+
+   # Debian family (Ubuntu/Debian)
+   apt-get update && apt-get install -y tar pigz docker.io && systemctl enable --now docker
+   ```
+
+   ```json
+   // /etc/docker/daemon.json — then: systemctl restart docker
+   { "insecure-registries": ["0.0.0.0/0"] }
+   ```
+
+2. Download and verify the BKE install tool (as root):
+
+   ```bash
+   curl -LO https://openfuyao.obs.cn-north-4.myhuaweicloud.com/openFuyao/bkeadm/releases/download/26.9.0/download.sh
+   curl -LO https://openfuyao.obs.cn-north-4.myhuaweicloud.com/openFuyao/bkeadm/releases/download/26.9.0/download.sh.sha256
+   sha256sum -c <(cat download.sh.sha256) < download.sh
+   chmod +x download.sh && ./download.sh
+   ```
+
+3. Download `Core-VersionConfig-v26.09.yaml` (linked in the openFuyao guide),
+   set `needDownload: true` for any optional components you want, and build
+   the offline package (~1 hour; retryable errors during the build can be
+   ignored):
+
+   ```bash
+   rm -rf /bke && bke build -f Core-VersionConfig-v26.09.yaml -t bke.tar.gz
+   ```
+
+4. Copy `bke.tar.gz` to the **clean** bootstrap node (no leftover
+   docker/containerd state; ≥ 50 GB free on `/`), extract and initialise:
+
+   ```bash
+   rm -rf /bke && tar zxvf bke.tar.gz -C /
+   ARCH=$(uname -m)
+   case $ARCH in
+   x86_64)  ARCH="amd64";;
+   aarch64) ARCH="arm64";;
+   esac
+   mv /usr/local/bin/bkeadm_linux_$ARCH /usr/local/bin/bke
+   bke init --confirm
+   ```
+
+5. Verify: `kubectl get pod -A` — done when all pods are `Running`/`Completed`
+   and the log ends with `BKE initialization is complete`. The management
+   plane is at `https://<bootstrap-node-ip>:30010` (default `admin` /
+   `test@1234` — change on first login).
+
+6. Create the business cluster from the management plane (see the openFuyao
+   service-cluster guide), then continue with §9 of this document and the
+   OpenAN install.
