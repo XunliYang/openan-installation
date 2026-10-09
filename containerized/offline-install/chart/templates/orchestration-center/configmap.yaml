@@ -11,6 +11,16 @@ metadata:
   labels:
     {{- include "openan.orchestration.labels" . | nindent 4 }}
 data:
+  # db_config.json — the image only ships db_config.json.template and the
+  # entrypoint expects the rendered file to exist; provide it via ConfigMap.
+  db_config.json: |
+    {
+      "host": "{{ include "openan.postgresHost" . }}",
+      "port": "{{ .Values.postgresql.port }}",
+      "database": "orchestration_center",
+      "user": "opena2a_t",
+      "password": ""
+    }
   # Server
   ORCH_IP: "0.0.0.0"
   ORCH_PORT: {{ .Values.orchestration.port | quote }}

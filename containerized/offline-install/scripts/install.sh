@@ -190,13 +190,6 @@ log_step "[4/7] Private registry"
 if [ "$INSTALL_REGISTRY" != "true" ]; then
     log_warn "INSTALL_REGISTRY=false — assuming an external registry at $REG_HOST"
 else
-    local_host="$(hostname | tr '[:upper:]' '[:lower:]')"
-    if [ "$local_host" != "$REGISTRY_NODE" ]; then
-        log_error "The registry must run on the node where install.sh is executed."
-        log_error "You are on '$local_host' but REGISTRY_NODE='$REGISTRY_NODE'."
-        log_error "Either run install.sh on $REGISTRY_NODE or set REGISTRY_NODE=$local_host."
-        exit 1
-    fi
 
     # Bootstrap: the registry image must exist locally before the registry exists.
     registry_tar="$BUNDLE_DIR/images/registry-2-${ARCH}.tar"
@@ -301,6 +294,7 @@ log_step "[5/7] Pushing images and installing add-ons"
 
 if [ -z "$CRANE" ] && ! have crane; then
     log_error "crane not found — cannot push images (expected deps/bin/crane-linux-$ARCH)"
+    log_error "Install: https://github.com/google/go-containerregistry/releases (go-containerregistry_Linux_*.tar.gz)"
     exit 1
 fi
 "$SCRIPT_DIR/push-images.sh" --config "$BUNDLE_DIR/config.env" || {

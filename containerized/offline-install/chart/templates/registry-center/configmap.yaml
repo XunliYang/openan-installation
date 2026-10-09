@@ -17,6 +17,10 @@ data:
   REGISTRY_ENABLE_HTTPS: "false"
   REGISTRY_FORWARDED_ALLOW_IPS: "*"
   REGISTRY_OWNER__VALIDATION__MODE: "relaxed"
+  REGISTRY_VERIFY_CLIENT: "false"
+  REGISTRY_OWNER_ISOLATION_ENABLED: "false"
+  # HTTP listener cannot verify client certs; do not hard-fail startup on it.
+  REGISTRY_STARTUP_STRICT_IDENTITY: "false"
 
   # Persistence
   PERSISTENCE_MODE: {{ include "openan.dbType" . | quote }}

@@ -177,6 +177,9 @@ check_k8s() {
     fi
 
     # Registry node / containerd insecure
+    # containerd v2 reads /etc/containerd/certs.d/<host:port>/hosts.toml at
+    # startup only; after adding or changing hosts.toml you MUST restart
+    # containerd on every node (systemctl restart containerd).
     section "Private registry"
     if [ "$INSTALL_REGISTRY" = "true" ]; then
         local host="${REGISTRY_NODE_IP:-}"

@@ -16,6 +16,51 @@ spec:
       labels:
         {{- include "openan.frontend.selectorLabels" . | nindent 8 }}
     spec:
+      initContainers:
+        # The stock nginx entrypoint renders /etc/nginx/templates/*.template
+        # into /etc/nginx/conf.d/, which fails when a ConfigMap is mounted
+        # there read-only. Render into an emptyDir instead and hand that to
+        # nginx; fall back to the chart's own config when the image ships no
+        # template directory.
+        - name: render-nginx-config
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          env:
+            - name: BACKEND_SCHEME
+              value: "http"
+            - name: BACKEND_HOST
+              value: "orchestration-center"
+            - name: BACKEND_PORT
+              value: "5001"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              if [ -f /etc/nginx/templates/default.conf.template ]; then
+                SRC=/etc/nginx/templates/default.conf.template
+              elif [ -f /cm/default.conf ]; then
+                cp /cm/default.conf /rendered/default.conf
+                echo "using ConfigMap-provided default.conf"
+                exit 0
+              else
+                echo "no nginx template or configmap found" >&2; exit 1
+              fi
+              if command -v envsubst >/dev/null 2>&1; then
+                envsubst '${BACKEND_SCHEME} ${BACKEND_HOST} ${BACKEND_PORT}' < "$SRC" > /rendered/default.conf
+              else
+                sed -e "s|\${BACKEND_SCHEME}|${BACKEND_SCHEME}|g" \
+                    -e "s|\${BACKEND_HOST}|${BACKEND_HOST}|g" \
+                    -e "s|\${BACKEND_PORT}|${BACKEND_PORT}|g" \
+                    "$SRC" > /rendered/default.conf
+              fi
+              echo "rendered default.conf:"
+              grep -n 'proxy_pass' /rendered/default.conf
+          volumeMounts:
+            - name: nginx-conf-rendered
+              mountPath: /rendered
+            - name: nginx-config-cm
+              mountPath: /cm
       containers:
         - name: workflow-designer
           image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
@@ -30,11 +75,12 @@ spec:
           resources:
             {{- toYaml .Values.frontend.resources | nindent 12 }}
           volumeMounts:
-            - name: nginx-config
+            - name: nginx-conf-rendered
               mountPath: /etc/nginx/conf.d
-              readOnly: true
       volumes:
-        - name: nginx-config
+        - name: nginx-conf-rendered
+          emptyDir: {}
+        - name: nginx-config-cm
           configMap:
             name: workflow-designer-nginx-config
 {{- end }}

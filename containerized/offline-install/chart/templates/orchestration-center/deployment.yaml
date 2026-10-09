@@ -30,6 +30,27 @@ spec:
                 matchLabels:
                   {{- include "openan.orchestration.selectorLabels" . | nindent 18 }}
               topologyKey: kubernetes.io/hostname
+      initContainers:
+        # The image ships only etc/conf/db_config.json.template while the
+        # entrypoint edits etc/conf/db_config.json in place. Copy the whole
+        # etc tree onto a writable emptyDir so the entrypoint can write.
+        - name: seed-etc
+          image: "{{ .Values.orchestration.image.repository }}:{{ .Values.orchestration.image.tag }}"
+          imagePullPolicy: {{ .Values.orchestration.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              cp -r --no-preserve=timestamps,ownership /opt/orchestration-center/etc/. /seeded/ 2>/dev/null || \
+                cp -r /opt/orchestration-center/etc/. /seeded/
+              if [ ! -f /seeded/conf/db_config.json ] && [ -f /seeded/conf/db_config.json.template ]; then
+                cp /seeded/conf/db_config.json.template /seeded/conf/db_config.json
+              fi
+              ls -la /seeded/conf/
+          volumeMounts:
+            - name: etc-dir
+              mountPath: /seeded
       containers:
       - name: orchestration-center
         image: "{{ .Values.orchestration.image.repository }}:{{ .Values.orchestration.image.tag }}"
@@ -78,4 +99,10 @@ spec:
           {{- toYaml .Values.orchestration.readinessProbe | nindent 10 }}
         resources:
           {{- toYaml .Values.orchestration.resources | nindent 10 }}
+        volumeMounts:
+        - name: etc-dir
+          mountPath: /opt/orchestration-center/etc
+      volumes:
+      - name: etc-dir
+        emptyDir: {}
 {{- end }}
