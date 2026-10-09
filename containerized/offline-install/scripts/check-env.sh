@@ -48,6 +48,7 @@ METALLB_POOL="${METALLB_POOL:-}"
 INGRESS_HOST="${INGRESS_HOST:-}"
 STORAGE_MODE="${STORAGE_MODE:-auto}"
 STORAGE_NODE="${STORAGE_NODE:-}"
+DB_TYPE="${DB_TYPE:-postgresql}"
 REGISTRY_CHAT_URL="${REGISTRY_CHAT_URL:-}"
 LLM_VALIDATE="${LLM_VALIDATE:-false}"
 
@@ -201,7 +202,11 @@ check_k8s() {
     need_image_tar "orchestration-center"
     need_image_tar "workflow-designer"
     need_image_tar "registry-2"
-    need_image_tar "postgres-15-alpine"
+    case "$DB_TYPE" in
+        mysql)      need_image_tar "mysql-8-4-3";;
+        postgresql) need_image_tar "postgres-15-alpine";;
+        *)          fail "invalid DB_TYPE: $DB_TYPE (use postgresql|mysql)";;
+    esac
     need_image_tar "ingress-nginx-controller"
     if [ "$INSTALL_METALLB" = "true" ]; then
         need_image_tar "metallb-controller"

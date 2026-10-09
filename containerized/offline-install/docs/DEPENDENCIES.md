@@ -19,7 +19,7 @@ The installer is deliberately split in two:
 | registry:2 (private registry) | in-cluster Deployment, NodePort 30500 |
 | ingress-nginx | `deps/manifests/ingress-nginx.yaml` (image refs rewritten) |
 | MetalLB | `deps/manifests/metallb-native.yaml` (image refs rewritten) |
-| PostgreSQL 15 | chart image, rewritten to `<registry>/library/postgres:15-alpine` |
+| Database (PostgreSQL 15 or MySQL 8.4.3, per `DB_TYPE`) | chart image, rewritten to `<registry>/library/postgres:15-alpine` or `<registry>/library/mysql:8.4.3` |
 | OpenAN app images | registry-center, orchestration-center, workflow-designer |
 
 Nothing above reaches the internet.
@@ -102,7 +102,7 @@ reach the chosen VIP (L2 mode: the VIP lives on one node at a time).
 
 - if the cluster has a **default StorageClass**, it is used as-is;
 - otherwise a **hostPath PV** is created on `STORAGE_NODE` at `HOSTPATH`
-  (`/data/openan-postgres`), pinned to that node via node affinity. The
+  (`/data/openan-postgres`, or `/data/openan-mysql` when `DB_TYPE=mysql`), pinned to that node via node affinity. The
   directory is created automatically (`DirectoryOrCreate`).
 
 Provide a `STORAGE_NODE` explicitly for a multi-node cluster if `install.sh` is
@@ -118,8 +118,8 @@ Ubuntu).
 ### 2.6 Disk space
 
 Roughly 5 GiB free next to the bundle for extraction, plus the registry data
-(`/data/openan-registry`) and PostgreSQL (`/data/openan-postgres`, default
-`20Gi`).
+(`/data/openan-registry`) and the database (`/data/openan-postgres`, or
+`/data/openan-mysql` when `DB_TYPE=mysql`; default `20Gi`).
 
 ### 2.7 Firewall
 
@@ -131,11 +131,11 @@ Open on every node:
 
 ### 2.8 SELinux (openEuler / CentOS / Rocky)
 
-With SELinux in `enforcing` mode, `hostPath` volumes for PostgreSQL and the
+With SELinux in `enforcing` mode, `hostPath` volumes for the database and the
 registry may be denied. Either label the data directories:
 
 ```bash
-sudo chcon -Rt container_file_t /data/openan-postgres /data/openan-registry
+sudo chcon -Rt container_file_t /data/openan-postgres /data/openan-mysql /data/openan-registry
 ```
 
 or set `SELINUX=permissive` in `/etc/selinux/config` (per your security policy).

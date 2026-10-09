@@ -41,11 +41,16 @@ spec:
             name: orchestration-center-config
         env:
         - name: DB_PASSWORD
-          {{- if .Values.postgresql.existingSecret }}
+          {{- if and (ne (include "openan.dbType" .) "mysql") .Values.postgresql.existingSecret }}
           valueFrom:
             secretKeyRef:
               name: {{ .Values.postgresql.existingSecret }}
               key: postgres-password
+          {{- else if and (eq (include "openan.dbType" .) "mysql") .Values.mysql.existingSecret }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.mysql.existingSecret }}
+              key: mysql-root-password
           {{- else }}
           valueFrom:
             secretKeyRef:

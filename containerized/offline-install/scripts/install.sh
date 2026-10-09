@@ -51,11 +51,13 @@ STORAGE_CLASS=""
 STORAGE_SIZE="20Gi"
 HOSTPATH="/data/openan-postgres"
 STORAGE_NODE=""
+DB_TYPE="postgresql"
 DB_PASSWORD="openan-db-password"
 REGISTRY_CENTER_IMAGE="project-openan/registry-center:v1.0.0"
 ORCHESTRATION_CENTER_IMAGE="project-openan/orchestration-center:v1.0.0"
 WORKFLOW_DESIGNER_IMAGE="project-openan/workflow-designer:v1.0.0"
 POSTGRES_IMAGE="library/postgres:15-alpine"
+MYSQL_IMAGE="library/mysql:8.4.3"
 REGISTRY_CHAT_MODEL=""
 REGISTRY_CHAT_URL=""
 REGISTRY_CHAT_APIKEY=""
@@ -66,6 +68,11 @@ LLM_VALIDATE="false"
 START_AGENTS_SERVER="false"
 
 [ -n "$CONFIG_FILE" ] && load_config "$CONFIG_FILE"
+
+case "$DB_TYPE" in
+    postgresql|mysql) ;;
+    *) log_error "Invalid DB_TYPE: $DB_TYPE (use postgresql|mysql)"; exit 2 ;;
+esac
 
 ARCH="$(detect_arch)"
 [ -n "$ARCH" ] || { log_error "unsupported architecture: $(uname -m)"; exit 1; }
@@ -94,7 +101,7 @@ log_info "helm:    $HELM"
 # ---------------------------------------------------------------------------
 if [ "$SKIP_CHECK" != "true" ]; then
     log_step "[1/7] Checking environment"
-    check_args=(--mode k8s)
+    check_args=()
     [ -n "$CONFIG_FILE" ] && check_args+=(--config "$CONFIG_FILE")
     if ! "$SCRIPT_DIR/check-env.sh" "${check_args[@]}"; then
         log_error "Environment check failed. Fix the items above and re-run,"
@@ -117,7 +124,8 @@ if [ "$ASSUME_YES" != "true" ] && [ -z "$CONFIG_FILE" ]; then
         METALLB_POOL="$(ask_input "  MetalLB IP pool (e.g. 192.168.1.200-192.168.1.250)" "$METALLB_POOL")"
     fi
     INGRESS_HOST="$(ask_input "  Ingress host (empty = access by IP)" "$INGRESS_HOST")"
-    DB_PASSWORD="$(ask_input_secret "  Postgres password" "$DB_PASSWORD")"
+    DB_TYPE="$(ask_choice "  Database backend:" "postgresql" "mysql")"
+    DB_PASSWORD="$(ask_input_secret "  Database password" "$DB_PASSWORD")"
     REGISTRY_CHAT_MODEL="$(ask_input "  Registry Center chat model" "$REGISTRY_CHAT_MODEL")"
     REGISTRY_CHAT_URL="$(ask_input "  Registry Center chat URL" "$REGISTRY_CHAT_URL")"
     if [ -n "$REGISTRY_CHAT_URL" ]; then
@@ -158,6 +166,7 @@ echo "  Namespace:        $K8S_NAMESPACE"
 echo "  Registry:         $REG_HOST (node: $REGISTRY_NODE)"
 echo "  MetalLB:          $INSTALL_METALLB ${METALLB_POOL:+($METALLB_POOL)}"
 echo "  Storage mode:     $STORAGE_MODE (node: $STORAGE_NODE, size: $STORAGE_SIZE)"
+echo "  Database:         $DB_TYPE"
 echo "  Ingress host:     ${INGRESS_HOST:-<none, IP access>}"
 echo "  Registry center:  $REGISTRY_CENTER_IMAGE"
 echo "  Orchestration:    $ORCHESTRATION_CENTER_IMAGE"
@@ -381,20 +390,47 @@ log_step "[6/7] Deploying OpenAN"
 VALUES="$BUNDLE_DIR/config.values.yaml"
 {
     echo "namespace: ${K8S_NAMESPACE}"
+    echo "database:"
+    echo "  type: ${DB_TYPE}"
     echo "postgresql:"
-    echo "  enabled: true"
-    echo "  password: \"${DB_PASSWORD}\""
-    echo "  image: \"${REG_HOST}/${POSTGRES_IMAGE}\""
-    echo "  storage:"
-    echo "    size: ${STORAGE_SIZE}"
-    if [ "$STORAGE_MODE" = "sc" ] || { [ "$STORAGE_MODE" = "auto" ] && [ -n "$STORAGE_CLASS" ]; }; then
-        echo "    storageClassName: \"${STORAGE_CLASS}\""
+    if [ "$DB_TYPE" = "mysql" ]; then
+        echo "  enabled: false"
+    else
+        echo "  enabled: true"
+        echo "  password: \"${DB_PASSWORD}\""
+        echo "  image: \"${REG_HOST}/${POSTGRES_IMAGE}\""
+        echo "  storage:"
+        echo "    size: ${STORAGE_SIZE}"
+        if [ "$STORAGE_MODE" = "sc" ] || { [ "$STORAGE_MODE" = "auto" ] && [ -n "$STORAGE_CLASS" ]; }; then
+            echo "    storageClassName: \"${STORAGE_CLASS}\""
+        fi
+        if [ "$STORAGE_MODE" = "hostpath" ] || [ "$STORAGE_MODE" = "auto" ]; then
+            echo "    createPV: true"
+            echo "    useHostPath: true"
+            echo "    hostPath: \"${HOSTPATH}\""
+            echo "    nodeName: ${STORAGE_NODE}"
+        fi
     fi
-    if [ "$STORAGE_MODE" = "hostpath" ] || [ "$STORAGE_MODE" = "auto" ]; then
-        echo "    createPV: true"
-        echo "    useHostPath: true"
-        echo "    hostPath: \"${HOSTPATH}\""
-        echo "    nodeName: ${STORAGE_NODE}"
+    echo "mysql:"
+    if [ "$DB_TYPE" = "mysql" ]; then
+        MYSQL_HOSTPATH="${HOSTPATH}"
+        [ "$MYSQL_HOSTPATH" = "/data/openan-postgres" ] && MYSQL_HOSTPATH="/data/openan-mysql"
+        echo "  enabled: true"
+        echo "  password: \"${DB_PASSWORD}\""
+        echo "  image: \"${REG_HOST}/${MYSQL_IMAGE}\""
+        echo "  storage:"
+        echo "    size: ${STORAGE_SIZE}"
+        if [ "$STORAGE_MODE" = "sc" ] || { [ "$STORAGE_MODE" = "auto" ] && [ -n "$STORAGE_CLASS" ]; }; then
+            echo "    storageClassName: \"${STORAGE_CLASS}\""
+        fi
+        if [ "$STORAGE_MODE" = "hostpath" ] || [ "$STORAGE_MODE" = "auto" ]; then
+            echo "    createPV: true"
+            echo "    useHostPath: true"
+            echo "    hostPath: \"${MYSQL_HOSTPATH}\""
+            echo "    nodeName: ${STORAGE_NODE}"
+        fi
+    else
+        echo "  enabled: false"
     fi
     echo "registry:"
     echo "  enabled: true"

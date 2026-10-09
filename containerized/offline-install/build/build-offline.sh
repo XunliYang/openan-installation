@@ -157,6 +157,7 @@ log_info "metallb speaker          : $MB_SPK"
 INFRA=(
     "registry-2|docker.io/library/registry:2|library/registry:2"
     "postgres-15-alpine|docker.io/library/postgres:15-alpine|library/postgres:15-alpine"
+    "mysql-8-4-3|docker.io/library/mysql:8.4.3|library/mysql:8.4.3"
     "ingress-nginx-controller|$ING_CTRL|${ING_CTRL#registry.k8s.io/}"
     "ingress-nginx-kube-webhook-certgen|$ING_CGEN|${ING_CGEN#registry.k8s.io/}"
     "metallb-controller|$MB_CTRL|${MB_CTRL#quay.io/}"

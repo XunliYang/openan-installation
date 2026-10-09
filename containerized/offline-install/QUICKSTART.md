@@ -60,7 +60,8 @@ currently-unused IPs on your LAN, e.g. `192.168.1.200-192.168.1.250`. Goes into
 
 **3. Storage** ([§2.4](docs/DEPENDENCIES.md#24-storage)) — either a default
 StorageClass exists, or the installer falls back to a node-pinned hostPath PV
-(`HOSTPATH=/data/openan-postgres`, `STORAGE_NODE`).
+(`HOSTPATH=/data/openan-postgres`, or `/data/openan-mysql` when
+`DB_TYPE=mysql`; `STORAGE_NODE`).
 
 **4. Time synchronisation, disk space, firewall, SELinux**
 ([§2.5–2.8](docs/DEPENDENCIES.md#25-time-synchronisation)) — NTP running on all
