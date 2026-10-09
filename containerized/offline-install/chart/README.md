@@ -159,9 +159,12 @@ kubectl -n openan port-forward svc/workflow-designer 8080:80
 | `mysql.image` | MySQL image | `mysql:8.4.3` |
 | `mysql.storage.size` | Storage size | `20Gi` |
 | `mysql.storage.storageClassName` | StorageClass name (auto-detect if empty) | `""` |
+| `mysql.storage.createStorageClass` | Auto-create StorageClass | `false` |
 | `mysql.storage.createPV` | Auto-create PV | `false` |
 | `mysql.storage.useHostPath` | Use hostPath (single-node) | `false` |
 | `mysql.storage.hostPath` | hostPath directory | `/data/openan-mysql` |
+| `mysql.storage.reclaimPolicy` | Reclaim policy | `Retain` |
+| `mysql.storage.setDefault` | Set as default StorageClass | `false` |
 | `mysql.resources.requests` | Resource requests | `cpu: 250m, memory: 512Mi` |
 | `mysql.resources.limits` | Resource limits | `cpu: 1000m, memory: 1Gi` |
 

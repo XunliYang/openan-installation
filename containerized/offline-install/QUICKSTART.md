@@ -102,6 +102,30 @@ Application image sources (`--app-source`):
 Useful options: `--platforms linux/amd64,linux/arm64` (default both),
 `--out <dir>`, `--keep-images`. See `./build-offline.sh --help`.
 
+### Building from source on an arm64 (or amd64) host
+
+When the build machine's architecture differs from one of the target
+platforms, Docker needs QEMU user-mode emulation for the foreign architecture.
+Install it **once** per machine (e.g. on an arm64 host, to build amd64
+images):
+
+```bash
+docker run --rm --privileged tonistiigi/binfmt --install amd64
+```
+
+Then build both platforms from local source:
+
+```bash
+cd containerized/offline-install/build
+./build-offline.sh --tag v1.0.0 --app-source build \
+    --registry-src ~/src/registry-center \
+    --orchestration-src ~/src/orchestration-center \
+    --platforms linux/amd64,linux/arm64 --keep-images
+```
+
+> Same machine arch for all platforms? The QEMU step is unnecessary.
+> On an amd64 host building arm64 images, use `--install arm64` instead.
+
 ## Phase 2: Transfer the bundle to the offline machine
 
 Copy `openan-offline-v1.0.0.tar.gz` to the offline machine (the node where you

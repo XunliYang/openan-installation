@@ -29,7 +29,10 @@ out of scope — see [docs/KUBEADM_CLUSTER.md](docs/KUBEADM_CLUSTER.md).
 
 ## Build the bundle (internet-connected machine)
 
-Requires Linux + Docker with buildx.
+Requires Linux + Docker with buildx. To build for a foreign architecture
+(e.g. amd64 images on an arm64 host), install QEMU user-mode emulation once:
+`docker run --rm --privileged tonistiigi/binfmt --install amd64` (see
+[QUICKSTART.md](QUICKSTART.md#building-from-source-on-an-arm64-or-amd64-host)).
 
 ```bash
 cd build

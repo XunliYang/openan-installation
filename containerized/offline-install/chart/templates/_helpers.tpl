@@ -149,22 +149,31 @@ PostgreSQL host
 Selected database type: postgresql (default) or mysql
 */}}
 {{- define "openan.dbType" -}}
-{{- .Values.database.type | default "postgresql" }}
+{{- $t := .Values.database.type | default "postgresql" -}}
+{{- if not (or (eq $t "postgresql") (eq $t "mysql")) -}}
+{{- fail (printf "database.type must be \"postgresql\" or \"mysql\", got %q" $t) -}}
+{{- end -}}
+{{- $t -}}
 {{- end }}
 
 {{/*
 Database host, honouring database.type
 */}}
 {{- define "openan.dbHost" -}}
-{{- if eq (include "openan.dbType" .) "mysql" }}
-{{- if .Values.mysql.enabled }}
-{{- "openan-mysql" }}
-{{- else }}
-{{- .Values.mysql.externalHost }}
-{{- end }}
-{{- else }}
-{{- include "openan.postgresHost" . }}
-{{- end }}
+{{- $host := "" -}}
+{{- if eq (include "openan.dbType" .) "mysql" -}}
+{{- if .Values.mysql.enabled -}}
+{{- $host = "openan-mysql" -}}
+{{- else -}}
+{{- $host = .Values.mysql.externalHost -}}
+{{- end -}}
+{{- else -}}
+{{- $host = include "openan.postgresHost" . -}}
+{{- end -}}
+{{- if not $host -}}
+{{- fail "database host is empty: enable the bundled database or set externalHost" -}}
+{{- end -}}
+{{- $host -}}
 {{- end }}
 
 {{/*
@@ -175,16 +184,5 @@ Database port, honouring database.type
 {{- .Values.mysql.port }}
 {{- else }}
 {{- .Values.postgresql.port }}
-{{- end }}
-{{- end }}
-
-{{/*
-Database root/admin password, honouring database.type
-*/}}
-{{- define "openan.dbPassword" -}}
-{{- if eq (include "openan.dbType" .) "mysql" }}
-{{- .Values.mysql.password }}
-{{- else }}
-{{- .Values.postgresql.password }}
 {{- end }}
 {{- end }}

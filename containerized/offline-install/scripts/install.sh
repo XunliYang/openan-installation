@@ -97,26 +97,10 @@ log_info "kubectl: $KUBECTL"
 log_info "helm:    $HELM"
 
 # ---------------------------------------------------------------------------
-# 1. Environment check
-# ---------------------------------------------------------------------------
-if [ "$SKIP_CHECK" != "true" ]; then
-    log_step "[1/7] Checking environment"
-    check_args=()
-    [ -n "$CONFIG_FILE" ] && check_args+=(--config "$CONFIG_FILE")
-    if ! "$SCRIPT_DIR/check-env.sh" "${check_args[@]}"; then
-        log_error "Environment check failed. Fix the items above and re-run,"
-        log_error "or pass --skip-check to proceed at your own risk."
-        exit 1
-    fi
-else
-    log_warn "Skipping environment check (--skip-check)"
-fi
-
-# ---------------------------------------------------------------------------
-# 2. Configuration
+# 1. Configuration
 # ---------------------------------------------------------------------------
 if [ "$ASSUME_YES" != "true" ] && [ -z "$CONFIG_FILE" ]; then
-    log_step "[2/7] Configuration"
+    log_step "[1/7] Configuration"
     K8S_NAMESPACE="$(ask_input "  Kubernetes namespace" "$K8S_NAMESPACE")"
     INSTALL_METALLB_ANS="$(ask_input "  Install MetalLB for LoadBalancer? (true/false)" "$INSTALL_METALLB")"
     INSTALL_METALLB="$INSTALL_METALLB_ANS"
@@ -150,6 +134,28 @@ if [ -z "$STORAGE_NODE" ]; then
     STORAGE_NODE="$REGISTRY_NODE"
 fi
 REG_HOST="${REGISTRY_NODE_IP}:${REGISTRY_NODEPORT}"
+
+# ---------------------------------------------------------------------------
+# 2. Environment check
+# ---------------------------------------------------------------------------
+if [ "$SKIP_CHECK" != "true" ]; then
+    log_step "[2/7] Checking environment"
+    # Export the effective configuration so check-env.sh sees it even in
+    # interactive mode (no --config file).
+    export K8S_NAMESPACE INSTALL_REGISTRY REGISTRY_NODE REGISTRY_NODE_IP \
+        REGISTRY_NODEPORT INSTALL_METALLB METALLB_POOL INGRESS_HOST \
+        STORAGE_MODE STORAGE_CLASS STORAGE_SIZE HOSTPATH STORAGE_NODE \
+        DB_TYPE REGISTRY_CHAT_URL LLM_VALIDATE
+    check_args=()
+    [ -n "$CONFIG_FILE" ] && check_args+=(--config "$CONFIG_FILE")
+    if ! "$SCRIPT_DIR/check-env.sh" "${check_args[@]}"; then
+        log_error "Environment check failed. Fix the items above and re-run,"
+        log_error "or pass --skip-check to proceed at your own risk."
+        exit 1
+    fi
+else
+    log_warn "Skipping environment check (--skip-check)"
+fi
 
 # ---------------------------------------------------------------------------
 # 3. Summary + confirm
@@ -382,6 +388,23 @@ fi
 log_step "[6/7] Deploying OpenAN"
 
 VALUES="$BUNDLE_DIR/config.values.yaml"
+
+# emit_db_storage <hostpath> — shared storage block for the database values
+emit_db_storage() {
+    local hostpath="$1"
+    echo "  storage:"
+    echo "    size: ${STORAGE_SIZE}"
+    if [ "$STORAGE_MODE" = "sc" ] || { [ "$STORAGE_MODE" = "auto" ] && [ -n "$STORAGE_CLASS" ]; }; then
+        echo "    storageClassName: \"${STORAGE_CLASS}\""
+    fi
+    if [ "$STORAGE_MODE" = "hostpath" ] || [ "$STORAGE_MODE" = "auto" ]; then
+        echo "    createPV: true"
+        echo "    useHostPath: true"
+        echo "    hostPath: \"${hostpath}\""
+        echo "    nodeName: ${STORAGE_NODE}"
+    fi
+}
+
 {
     echo "namespace: ${K8S_NAMESPACE}"
     echo "database:"
@@ -393,36 +416,17 @@ VALUES="$BUNDLE_DIR/config.values.yaml"
         echo "  enabled: true"
         echo "  password: \"${DB_PASSWORD}\""
         echo "  image: \"${REG_HOST}/${POSTGRES_IMAGE}\""
-        echo "  storage:"
-        echo "    size: ${STORAGE_SIZE}"
-        if [ "$STORAGE_MODE" = "sc" ] || { [ "$STORAGE_MODE" = "auto" ] && [ -n "$STORAGE_CLASS" ]; }; then
-            echo "    storageClassName: \"${STORAGE_CLASS}\""
-        fi
-        if [ "$STORAGE_MODE" = "hostpath" ] || [ "$STORAGE_MODE" = "auto" ]; then
-            echo "    createPV: true"
-            echo "    useHostPath: true"
-            echo "    hostPath: \"${HOSTPATH}\""
-            echo "    nodeName: ${STORAGE_NODE}"
-        fi
+        emit_db_storage "$HOSTPATH"
     fi
     echo "mysql:"
     if [ "$DB_TYPE" = "mysql" ]; then
+        # HOSTPATH keeps its postgres default when unset — swap to the mysql default
         MYSQL_HOSTPATH="${HOSTPATH}"
         [ "$MYSQL_HOSTPATH" = "/data/openan-postgres" ] && MYSQL_HOSTPATH="/data/openan-mysql"
         echo "  enabled: true"
         echo "  password: \"${DB_PASSWORD}\""
         echo "  image: \"${REG_HOST}/${MYSQL_IMAGE}\""
-        echo "  storage:"
-        echo "    size: ${STORAGE_SIZE}"
-        if [ "$STORAGE_MODE" = "sc" ] || { [ "$STORAGE_MODE" = "auto" ] && [ -n "$STORAGE_CLASS" ]; }; then
-            echo "    storageClassName: \"${STORAGE_CLASS}\""
-        fi
-        if [ "$STORAGE_MODE" = "hostpath" ] || [ "$STORAGE_MODE" = "auto" ]; then
-            echo "    createPV: true"
-            echo "    useHostPath: true"
-            echo "    hostPath: \"${MYSQL_HOSTPATH}\""
-            echo "    nodeName: ${STORAGE_NODE}"
-        fi
+        emit_db_storage "$MYSQL_HOSTPATH"
     else
         echo "  enabled: false"
     fi

@@ -129,7 +129,7 @@ for a in "${ARCHS[@]}"; do
     # crane
     local_asset="x86_64"; [ "$a" = "arm64" ] && local_asset="arm64"
     log_info "crane $CRANE_VERSION ($a)"
-    curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/crane_Linux_${local_asset}.tar.gz" -o /tmp/crane-$a.tgz
+    curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_${local_asset}.tar.gz" -o /tmp/crane-$a.tgz
     tar -xzf /tmp/crane-$a.tgz -C /tmp crane
     cp /tmp/crane "$BUNDLE/deps/bin/crane-linux-$a"
     chmod +x "$BUNDLE/deps/bin/crane-linux-$a"

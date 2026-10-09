@@ -71,6 +71,7 @@ mysql:
   externalHost: ""
   port: 3306
   # Root password of the bundled MySQL instance
+  # Use existingSecret to reference an existing K8S secret instead of defining password here
   existingSecret: ""
   password: "openan-db-password"
   # Image (offline: rewritten to <registry>/library/mysql:8.4.3)
