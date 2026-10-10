@@ -60,7 +60,9 @@ for template in registry.env.example orchestration.env.example models.yaml.examp
 done
 cp "$SOURCE/README.md" "$BUNDLE/"
 mkdir -p "$BUNDLE/docs"; cp "$SOURCE/docs/DEPENDENCIES.md" "$BUNDLE/docs/"
-chmod +x "$BUNDLE/scripts/"*.sh "$BUNDLE/compose/init/"*.sh
+# With umask077, cp produces0600. +x would produce0711, unreadable to the
+# unprivileged MySQL/PostgreSQL entrypoint user that runs these public scripts.
+chmod 0755 "$BUNDLE/scripts/"*.sh "$BUNDLE/compose/init/"*.sh
 RC="$APP_REGISTRY/registry-center:$TAG"; OC="$APP_REGISTRY/orchestration-center:$TAG"; UI="$APP_REGISTRY/workflow-designer:$TAG"
 declare -A REFS=([registry-center]="$RC" [orchestration-center]="$OC" [workflow-designer]="$UI" [postgres]="postgres:15-alpine" [mysql]="mysql:8.4" [nginx]="nginx:1.27-alpine")
 for arch in "${ARCHS[@]}"; do

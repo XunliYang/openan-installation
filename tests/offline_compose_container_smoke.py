@@ -196,7 +196,24 @@ def run(bundle):
                 print(f"PASS: {db}, public_https={public_tls}, backend_https={backend_tls}, mtls={mtls}, verify_upstream={verify_upstream}, CRUD/auth/signing/restart persistence", flush=True)
             except BaseException:
                 if compose.is_file():
-                    print(command("docker", "compose", "-f", str(compose), "logs", "--tail", "60", check=False).stdout[-6000:])
+                    for service in ("openan-mysql" if db == "mysql" else "openan-postgres", "registry-center", "orchestration-center", "openan-nginx"):
+                        print(command("docker", "compose", "-f", str(compose), "logs", "--tail", "35", service, check=False).stdout[-6000:])
+                    if db == "mysql":
+                        # Synthetic fixtures only: identify the actual SQL error
+                        # without relying on production's sanitized pool logs.
+                        diagnostic = """import os,pymysql
+e=os.environ
+assert e['DB_PASSWORD'] == "Registry'$\\\\Smoke9!", 'password transport mismatch'
+try:
+    c=pymysql.connect(host=e['DB_HOST'],port=int(e['DB_PORT']),user=e['DB_USERNAME'],password=e['DB_PASSWORD'],database=e['DB_NAME'])
+    c.close(); print('Synthetic direct SQL connection passed')
+except Exception as exc:
+    print(type(exc).__name__, exc.args)
+    raise
+"""
+                        result = command("docker", "compose", "-f", str(compose), "run", "--rm", "--no-deps", "--entrypoint", "python",
+                                         "registry-center", "-c", diagnostic, check=False)
+                        print(result.stdout + result.stderr)
                 raise
             finally:
                 if compose.is_file():

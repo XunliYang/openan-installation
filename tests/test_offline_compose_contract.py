@@ -260,6 +260,9 @@ esac
         assert result.returncode == 0, result.stdout + result.stderr
         bundle = out / "openan-offline-compose-contract"
         assert (bundle / "web/index.html").is_file()
+        if os.name != "nt":
+            for script in (bundle / "compose/init").glob("*.sh"):
+                assert script.stat().st_mode & 0o777 == 0o755
         for file in bundle.rglob("*"):
             if file.is_file():
                 assert b"OPERATOR_SECRET_CANARY_MUST_NOT_SHIP" not in file.read_bytes(), file
