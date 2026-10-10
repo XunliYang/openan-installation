@@ -64,7 +64,7 @@ mkdir -p "$BUNDLE/docs"; cp "$SOURCE/docs/DEPENDENCIES.md" "$BUNDLE/docs/"
 # unprivileged MySQL/PostgreSQL entrypoint user that runs these public scripts.
 chmod 0755 "$BUNDLE/scripts/"*.sh "$BUNDLE/compose/init/"*.sh
 RC="$APP_REGISTRY/registry-center:$TAG"; OC="$APP_REGISTRY/orchestration-center:$TAG"; UI="$APP_REGISTRY/workflow-designer:$TAG"
-declare -A REFS=([registry-center]="$RC" [orchestration-center]="$OC" [workflow-designer]="$UI" [postgres]="postgres:15-alpine" [mysql]="mysql:8.4" [nginx]="nginx:1.27-alpine")
+declare -A REFS=([registry-center]="$RC" [orchestration-center]="$OC" [workflow-designer]="$UI" [postgres]="postgres:15-alpine" [mysql]="mysql:8.4" [nginx]="nginx:1.27.5-alpine")
 for arch in "${ARCHS[@]}"; do
     for component in registry-center orchestration-center workflow-designer postgres mysql nginx; do
         ref="${REFS[$component]}"
@@ -100,7 +100,7 @@ import json, sys
 with open(sys.argv[1], 'w', encoding='utf-8') as stream:
     json.dump({'architectures': [p.removeprefix('linux/') for p in sys.argv[2].split(',')],
                'images': dict(zip(['registry-center','orchestration-center','workflow-designer','postgres','nginx','mysql'],
-                                  [*sys.argv[3:], 'postgres:15-alpine','nginx:1.27-alpine','mysql:8.4']))}, stream, indent=2)
+                                  [*sys.argv[3:], 'postgres:15-alpine','nginx:1.27.5-alpine','mysql:8.4']))}, stream, indent=2)
 PY
 (cd "$BUNDLE" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum >SHA256SUMS)
 tar -C "$(dirname "$BUNDLE")" -czf "$BUNDLE.tar.gz" "$(basename "$BUNDLE")"

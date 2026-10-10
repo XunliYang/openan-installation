@@ -84,6 +84,10 @@ PUBLIC_ENABLE_HTTPS, REGISTRY_ENABLE_HTTPS and ORCH_ENABLE_HTTPS are independent
 The generated Nginx proxy selects each backend protocol; OC's public cookie
 scheme follows PUBLIC_ENABLE_HTTPS, not the OC backend protocol. Only Nginx's
 chosen PUBLIC_BIND/PUBLIC_PORT is exposed, not application or SQL ports.
+The bundled Nginx 1.27.5 uses Docker DNS with dynamic upstream resolution;
+replacing application containers does not require restarting the public proxy.
+During a restart/replacement requests can fail briefly while the application
+starts and DNS refreshes. This single-host deployment is not zero-downtime HA.
 
 Backend TLS bundles use server.cer / server_key.pem / cert_pwd / trust.cer.
 Use repository certificate tools for development, enterprise CA material for

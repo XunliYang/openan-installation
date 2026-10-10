@@ -16,8 +16,9 @@ import socket
 import ssl
 import subprocess
 import tempfile
+import time
 from http.cookiejar import CookieJar
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import HTTPSHandler, HTTPCookieProcessor, ProxyHandler, Request, build_opener
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -139,6 +140,51 @@ create_signature_verifier(lambda kid,jku:key,['RS256'])(ParseDict(json.load(sys.
     return workflow_id
 
 
+def wait_for_proxy(opener, base):
+    """Allow only bounded DNS/transport recovery; never retry business mutations."""
+    deadline = time.monotonic() + 30
+    while True:
+        try:
+            request(opener, base, "/registry/rest/v1/registry-center/agent-cards", expected=401)
+            request(opener, base, "/api/orchestrate/health")
+            return
+        except (AssertionError, URLError):
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(1)
+
+
+def replace_backends(compose):
+    """Reserve previous IPs so replacement really exercises runtime DNS updates."""
+    services = ("registry-center", "orchestration-center")
+    before = {}
+    for service in services:
+        cid = command("docker", "compose", "-f", str(compose), "ps", "-q", service).stdout.strip()
+        networks = json.loads(command("docker", "inspect", "--format", "{{json .NetworkSettings.Networks}}", cid).stdout)
+        assert len(networks) == 1
+        network, details = next(iter(networks.items()))
+        before[service] = (network, details["IPAddress"])
+    proxy = command("docker", "compose", "-f", str(compose), "ps", "-q", "openan-nginx").stdout.strip()
+    image = json.loads(compose.read_text())["services"]["openan-nginx"]["image"]
+    blockers = []
+    try:
+        command("docker", "compose", "-f", str(compose), "stop", *services)
+        command("docker", "compose", "-f", str(compose), "rm", "-f", *services)
+        for network, address in before.values():
+            blockers.append(command("docker", "run", "-d", "--network", network, "--ip", address,
+                                    "--entrypoint", "sleep", image, "600").stdout.strip())
+        command("docker", "compose", "-f", str(compose), "up", "-d", "--no-deps", "--pull", "never",
+                "--wait", "--wait-timeout", "180", *services)
+        for service, (network, address) in before.items():
+            cid = command("docker", "compose", "-f", str(compose), "ps", "-q", service).stdout.strip()
+            networks = json.loads(command("docker", "inspect", "--format", "{{json .NetworkSettings.Networks}}", cid).stdout)
+            assert networks[network]["IPAddress"] != address, "Backend IP did not change"
+        assert command("docker", "compose", "-f", str(compose), "ps", "-q", "openan-nginx").stdout.strip() == proxy
+    finally:
+        for cid in blockers:
+            command("docker", "rm", "-f", cid, check=False)
+
+
 def run(bundle):
     if os.name == "nt" or os.geteuid() != 0 or not shutil.which("docker"):
         raise SystemExit("Requires Linux Docker and root for isolated UID=10001 fixtures")
@@ -191,11 +237,15 @@ def run(bundle):
                         "import os; assert os.environ['EXTRA_LITERAL'] == 'price $5 ${NOT_EXPANDED} # text'")
                 opener = build_opener(ProxyHandler({}), HTTPCookieProcessor(CookieJar()), HTTPSHandler(context=ssl.create_default_context(cafile=str(ca))))
                 base = f"{'https' if public_tls else 'http'}://127.0.0.1:{port}"
+                wait_for_proxy(opener, base)
                 workflow_id = exercise(opener, base, compose)
                 command("docker", "compose", "-f", str(compose), "restart", "registry-center", "orchestration-center")
                 command("docker", "compose", "-f", str(compose), "up", "-d", "--pull", "never", "--wait", "--wait-timeout", "180")
+                wait_for_proxy(opener, base)
+                replace_backends(compose)
+                wait_for_proxy(opener, base)
                 exercise(opener, base, compose, first=False, workflow_id=workflow_id)
-                print(f"PASS: {db}, public_https={public_tls}, backend_https={backend_tls}, mtls={mtls}, verify_upstream={verify_upstream}, CRUD/auth/signing/restart persistence", flush=True)
+                print(f"PASS: {db}, public_https={public_tls}, backend_https={backend_tls}, mtls={mtls}, verify_upstream={verify_upstream}, CRUD/auth/signing/restart persistence/backend IP replacement", flush=True)
             except BaseException:
                 if compose.is_file():
                     for service in ("openan-mysql" if db == "mysql" else "openan-postgres", "registry-center", "orchestration-center", "openan-nginx"):

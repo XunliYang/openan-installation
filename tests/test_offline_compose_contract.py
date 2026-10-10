@@ -81,8 +81,14 @@ def test_compose_database_and_three_protocol_matrix(deployment, db, public_https
     assert services["registry-center"]["environment"]["REGISTRY_OWNER_IDENTITY_MODE"] == "token"
     assert services["orchestration-center"]["environment"]["ORCH_PUBLIC_SCHEME"] == ("https" if public_https == "true" else "http")
     assert services["orchestration-center"]["environment"]["AGENT_REGISTRY_URL"].startswith("https" if rc_https == "true" else "http")
-    assert f"proxy_pass {'https' if rc_https == 'true' else 'http'}://registry-center:5000/;" in nginx
-    assert f"proxy_pass {'https' if oc_https == 'true' else 'http'}://orchestration-center:5001/;" in nginx
+    assert f"proxy_pass {'https' if rc_https == 'true' else 'http'}://registry_center/;" in nginx
+    assert f"proxy_pass {'https' if oc_https == 'true' else 'http'}://orchestration_center/;" in nginx
+    assert "resolver 127.0.0.11 valid=2s ipv6=off;" in nginx
+    assert "server registry-center:5000 resolve;" in nginx
+    assert "server orchestration-center:5001 resolve;" in nginx
+    assert nginx.count("zone registry_center 64k;") == 1
+    assert nginx.count("zone orchestration_center 64k;") == 1
+    assert f"proxy_pass {'https' if oc_https == 'true' else 'http'}://orchestration_center;" in nginx
     assert 'proxy_set_header Connection "";' in nginx
     assert "ip_hash" not in nginx and "$request " not in nginx
 

@@ -113,14 +113,20 @@ def nginx_config(secure, locations, public_tls):
         if (public_tls / "cert_pwd").is_file():
             tls += "\nssl_password_file /etc/nginx/pki/public/cert_pwd;"
     blocks = []
+    upstreams = {}
     for prefix, backend, protocol, directives in locations:
+        upstream = backend.split(":", 1)[0].replace("-", "_")
+        upstreams[upstream] = f"""upstream {upstream} {{
+    zone {upstream} 64k;
+    server {backend} resolve;
+  }}"""
         # Exact prefix redirect plus ^~ prevents asset regex or SPA fallback from
         # swallowing API paths. A trailing slash strips only the proxy prefix.
         uri = "/" if prefix in {"/registry/", "/api/orchestrate/"} else ""
         blocks.append(f"""
 location = {prefix.rstrip('/')} {{ return 308 {prefix}; }}
 location ^~ {prefix} {{
-  proxy_pass {protocol}://{backend}{uri};
+  proxy_pass {protocol}://{upstream}{uri};
   proxy_http_version 1.1;
   proxy_set_header Connection "";
   proxy_set_header Host $host;
@@ -141,6 +147,10 @@ http {{
   log_format safe '$remote_addr $request_method $uri $status';
   access_log /var/log/nginx/access.log safe;
   client_max_body_size 50m;
+  # Docker's embedded DNS; backend replacement must not require a proxy restart.
+  resolver 127.0.0.11 valid=2s ipv6=off;
+  resolver_timeout 5s;
+  {' '.join(upstreams.values())}
   server {{
     listen {443 if secure else 80}{' ssl' if secure else ''};
     server_name _;
