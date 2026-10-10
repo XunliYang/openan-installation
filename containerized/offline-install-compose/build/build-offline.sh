@@ -1,199 +1,105 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# All Rights Reserved.
-#
 # SPDX-License-Identifier: Apache-2.0
-#
-# Build the OpenAN offline bundle for the Docker Compose deployment. Run this
-# on an INTERNET-CONNECTED Linux machine with Docker. The output is a
-# self-contained directory + tarball for a single offline host.
-#
-#   ./build-offline.sh                                  # pull app images from ghcr.io
-#   ./build-offline.sh --tag v1.0.0
-#   ./build-offline.sh --app-source build \
-#       --registry-src ~/src/registry-center \
-#       --orchestration-src ~/src/orchestration-center
-#   ./build-offline.sh --app-source tars --app-tars-dir ~/prebuilt
-#
-# Options:
-#   --tag <tag>                 app image tag (default v1.0.0)
-#   --app-registry <host/ns>    upstream app registry (default ghcr.io/project-openan)
-#   --app-source pull|build|tars
-#   --registry-src <dir>        registry-center source (with Dockerfile) for --app-source build
-#   --orchestration-src <dir>   orchestration-center source for --app-source build
-#   --app-tars-dir <dir>        directory of pre-built <base>-<arch>.tar for --app-source tars
-#   --platforms a,b             target architectures (default linux/amd64,linux/arm64)
-#   --out <dir>                 output directory (default ./dist)
-
-set -o pipefail
-
+# Build a clean offline bundle; credentials/runtime data are never copied.
+set -euo pipefail
+umask 077
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUNDLE_SRC="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
-log_info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
-log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
-log_step()  { echo -e "${CYAN}[STEP]${NC} $1"; }
-
-# Resolve a caller-supplied path to an absolute, symlink-resolved path. Docker
-# (buildx) resolves build contexts relative to the daemon's working directory,
-# so a relative path that bash can resolve (e.g. ../../../src/registry-center)
-# still fails inside docker with "unable to prepare context: path ... not found".
-# Normalize here so the same path works everywhere; a missing or unresolvable
-# path fails here with a clear error instead of failing deep inside docker.
-resolve_abs() {
-    local p
-    p="$(readlink -e "$1" 2>/dev/null)" && [ -n "$p" ] && { printf '%s\n' "$p"; return 0; }
-    p="$(realpath -e "$1" 2>/dev/null)" && [ -n "$p" ] && { printf '%s\n' "$p"; return 0; }
-    return 1
-}
-
-TAG="v1.0.0"
-APP_REGISTRY="ghcr.io/project-openan"
-APP_SOURCE="pull"
-REGISTRY_SRC=""
-ORCHESTRATION_SRC=""
-APP_TARS_DIR=""
-PLATFORMS="linux/amd64,linux/arm64"
-OUT_DIR="$SCRIPT_DIR/dist"
-
+SOURCE="$(cd "$SCRIPT_DIR/.." && pwd)"
+TAG=""; APP_REGISTRY="ghcr.io/project-openan"; APP_SOURCE="pull"
+REGISTRY_SRC=""; ORCHESTRATION_SRC=""; APP_TARS_DIR=""
+PLATFORMS="linux/amd64"; OUT_DIR="$SCRIPT_DIR/dist"
 while [ $# -gt 0 ]; do
+    if [[ "$1" == --* && "$1" != --help ]] && { [ $# -lt 2 ] || [[ "$2" == --* ]] || [ -z "$2" ]; }; then
+        echo "$1 requires a value" >&2; exit 2
+    fi
     case "$1" in
-        --tag)               TAG="$2"; shift 2 ;;
-        --app-registry)      APP_REGISTRY="$2"; shift 2 ;;
-        --app-source)        APP_SOURCE="$2"; shift 2 ;;
-        --registry-src)      REGISTRY_SRC="$2"; shift 2 ;;
+        --tag) TAG="$2"; shift 2 ;;
+        --app-registry) APP_REGISTRY="$2"; shift 2 ;;
+        --app-source) APP_SOURCE="$2"; shift 2 ;;
+        --registry-src) REGISTRY_SRC="$2"; shift 2 ;;
         --orchestration-src) ORCHESTRATION_SRC="$2"; shift 2 ;;
-        --app-tars-dir)      APP_TARS_DIR="$2"; shift 2 ;;
-        --platforms)         PLATFORMS="$2"; shift 2 ;;
-        --out)               OUT_DIR="$2"; shift 2 ;;
-        -h|--help)           sed -n '2,28p' "$0"; exit 0 ;;
-        *) log_error "Unknown argument: $1"; exit 2 ;;
+        --app-tars-dir) APP_TARS_DIR="$2"; shift 2 ;;
+        --platforms) PLATFORMS="$2"; shift 2 ;;
+        --out) OUT_DIR="$2"; shift 2 ;;
+        --help|-h) echo 'Use --tag <release> --app-source pull|build|tars [--platforms linux/amd64,linux/arm64] [--out <dir>]'; exit 0 ;;
+        *) echo "Unknown argument: $1" >&2; exit 2 ;;
     esac
 done
-
-for t in docker curl; do
-    command -v "$t" >/dev/null 2>&1 || { log_error "$t is required"; exit 1; }
-done
-
-REGISTRY_CENTER_REF="$APP_REGISTRY/registry-center:$TAG"
-ORCHESTRATION_CENTER_REF="$APP_REGISTRY/orchestration-center:$TAG"
-WORKFLOW_DESIGNER_REF="$APP_REGISTRY/workflow-designer:$TAG"
-
+[[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo 'Explicit valid --tag required' >&2; exit 2; }
+[[ "$APP_REGISTRY" =~ ^[A-Za-z0-9][A-Za-z0-9./:_-]*$ ]] || { echo 'Invalid app registry' >&2; exit 2; }
+[[ "$APP_SOURCE" == pull || "$APP_SOURCE" == build || "$APP_SOURCE" == tars ]] || { echo 'Invalid app source' >&2; exit 2; }
 ARCHS=()
-for p in ${PLATFORMS//,/ }; do ARCHS+=("${p#linux/}"); done
-
+for platform in ${PLATFORMS//,/ }; do
+    [[ "$platform" == linux/amd64 || "$platform" == linux/arm64 ]] || { echo 'Only linux/amd64 and linux/arm64 supported' >&2; exit 2; }
+    for previous in "${ARCHS[@]}"; do [ "${platform#linux/}" != "$previous" ] || { echo 'Duplicate architecture' >&2; exit 2; }; done
+    ARCHS+=("${platform#linux/}")
+done
+[ "${#ARCHS[@]}" -gt 0 ] || exit 2
+for tool in docker python3 tar sha256sum; do command -v "$tool" >/dev/null || { echo "$tool required" >&2; exit 1; }; done
+if [ "$APP_SOURCE" == build ]; then
+    [ -n "$REGISTRY_SRC" ] && [ -n "$ORCHESTRATION_SRC" ] || { echo 'Both source paths required' >&2; exit 2; }
+    REGISTRY_SRC="$(cd "$REGISTRY_SRC" && pwd)"
+    ORCHESTRATION_SRC="$(cd "$ORCHESTRATION_SRC" && pwd)"
+    [ -f "$REGISTRY_SRC/Dockerfile" ] && [ -f "$ORCHESTRATION_SRC/Dockerfile" ] && [ -f "$ORCHESTRATION_SRC/workflow-designer/Dockerfile" ] || { echo 'Complete service/frontend sources required' >&2; exit 1; }
+fi
+if [ "$APP_SOURCE" == tars ]; then [ -d "$APP_TARS_DIR" ] || { echo '--app-tars-dir required' >&2; exit 2; }; fi
 mkdir -p "$OUT_DIR"
 BUNDLE="$(cd "$OUT_DIR" && pwd)/openan-offline-compose-$TAG"
-rm -rf "$BUNDLE"
-mkdir -p "$BUNDLE/images" "$BUNDLE/deps"
-
-log_step "Assembling bundle at $BUNDLE"
-cp -r "$BUNDLE_SRC/scripts" "$BUNDLE/scripts"
-cp -r "$BUNDLE_SRC/compose" "$BUNDLE/compose"
-cp "$BUNDLE_SRC/config.env.example" "$BUNDLE/config.env.example"
-cp "$BUNDLE_SRC/README.md" "$BUNDLE/README.md" 2>/dev/null || true
-cp -r "$BUNDLE_SRC/docs" "$BUNDLE/docs" 2>/dev/null || true
-chmod +x "$BUNDLE/scripts"/*.sh "$BUNDLE/compose/init/create-databases.sh" 2>/dev/null || true
-
-# --- Images -------------------------------------------------------------------
-save_image() {
-    local ref="$1" base="$2"
-    for a in "${ARCHS[@]}"; do
-        log_info "  save $base ($a)"
-        docker pull --platform "linux/${a}" "$ref" >/dev/null || { log_error "pull failed: $ref"; return 1; }
-        docker save -o "$BUNDLE/images/${base}-${a}.tar" "$ref" || { log_error "save failed: $ref"; return 1; }
+# Never recursively remove a caller-specified/previous bundle. A failed build
+# leaves only its own partial output for diagnosis; it never publishes a tar.
+[ ! -e "$BUNDLE" ] && [ ! -e "$BUNDLE.tar.gz" ] || { echo 'Output exists; choose a fresh output/tag' >&2; exit 1; }
+mkdir -p "$BUNDLE/images" "$BUNDLE/deps" "$BUNDLE/scripts/lib" "$BUNDLE/compose/init"
+for script in install.sh check-env.sh uninstall.sh configure.py; do cp "$SOURCE/scripts/$script" "$BUNDLE/scripts/"; done
+cp "$SOURCE/scripts/lib/common.sh" "$BUNDLE/scripts/lib/"
+cp "$SOURCE/compose/init/create-databases.sh" "$SOURCE/compose/init/create-mysql-databases.sh" "$BUNDLE/compose/init/"
+cp "$SOURCE/config.env.example" "$BUNDLE/"
+mkdir -p "$BUNDLE/templates"
+for template in registry.env.example orchestration.env.example models.yaml.example integration_credentials.conf.example; do
+    cp "$SOURCE/templates/$template" "$BUNDLE/templates/"
+done
+cp "$SOURCE/README.md" "$BUNDLE/"
+mkdir -p "$BUNDLE/docs"; cp "$SOURCE/docs/DEPENDENCIES.md" "$BUNDLE/docs/"
+chmod +x "$BUNDLE/scripts/"*.sh "$BUNDLE/compose/init/"*.sh
+RC="$APP_REGISTRY/registry-center:$TAG"; OC="$APP_REGISTRY/orchestration-center:$TAG"; UI="$APP_REGISTRY/workflow-designer:$TAG"
+declare -A REFS=([registry-center]="$RC" [orchestration-center]="$OC" [workflow-designer]="$UI" [postgres]="postgres:15-alpine" [mysql]="mysql:8.4" [nginx]="nginx:1.27-alpine")
+for arch in "${ARCHS[@]}"; do
+    for component in registry-center orchestration-center workflow-designer postgres mysql nginx; do
+        ref="${REFS[$component]}"
+        echo "Preparing $component ($arch)"
+        if [[ "$component" == postgres || "$component" == mysql || "$component" == nginx || "$APP_SOURCE" == pull ]]; then
+            docker pull --platform "linux/$arch" "$ref"
+        elif [ "$APP_SOURCE" == build ]; then
+            case "$component" in registry-center) context="$REGISTRY_SRC" ;; orchestration-center) context="$ORCHESTRATION_SRC" ;; workflow-designer) context="$ORCHESTRATION_SRC/workflow-designer" ;; esac
+            docker buildx build --platform "linux/$arch" --load -t "$ref" "$context"
+        else
+            tarfile="$APP_TARS_DIR/$component-$arch.tar"
+            [ -s "$tarfile" ] || { echo "Missing image tar: $component-$arch.tar" >&2; exit 1; }
+            docker load -i "$tarfile"
+        fi
+        actual="$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$ref")"
+        [ "$actual" == "linux/$arch" ] || { echo "Wrong image architecture: $component ($arch)" >&2; exit 1; }
+        docker save -o "$BUNDLE/images/$component-$arch.tar" "$ref"
+        [ -s "$BUNDLE/images/$component-$arch.tar" ] || { echo 'Empty saved image' >&2; exit 1; }
     done
-}
-
-log_step "Pulling and saving infrastructure images"
-save_image "postgres:15-alpine" "postgres-15-alpine"
-save_image "nginx:1.25-alpine"  "nginx-1-25-alpine"
-
-log_step "Preparing application images ($APP_SOURCE)"
-case "$APP_SOURCE" in
-    pull)
-        save_image "$REGISTRY_CENTER_REF"      "registry-center"
-        save_image "$ORCHESTRATION_CENTER_REF" "orchestration-center"
-        save_image "$WORKFLOW_DESIGNER_REF"    "workflow-designer"
-        ;;
-    build)
-        [ -n "$REGISTRY_SRC" ] || { log_error "--registry-src is required for --app-source build"; exit 1; }
-        [ -n "$ORCHESTRATION_SRC" ] || { log_error "--orchestration-src is required for --app-source build"; exit 1; }
-        _path="$(resolve_abs "$REGISTRY_SRC")" || { log_error "--registry-src path not found: $REGISTRY_SRC"; exit 1; }
-        REGISTRY_SRC="$_path"
-        _path="$(resolve_abs "$ORCHESTRATION_SRC")" || { log_error "--orchestration-src path not found: $ORCHESTRATION_SRC"; exit 1; }
-        ORCHESTRATION_SRC="$_path"
-        for a in "${ARCHS[@]}"; do
-            log_info "  build registry-center ($a)"
-            docker buildx build --platform "linux/${a}" --load -t "$REGISTRY_CENTER_REF" "$REGISTRY_SRC" || exit 1
-            docker save -o "$BUNDLE/images/registry-center-${a}.tar" "$REGISTRY_CENTER_REF"
-            log_info "  build orchestration-center ($a)"
-            docker buildx build --platform "linux/${a}" --load -t "$ORCHESTRATION_CENTER_REF" "$ORCHESTRATION_SRC" || exit 1
-            docker save -o "$BUNDLE/images/orchestration-center-${a}.tar" "$ORCHESTRATION_CENTER_REF"
-            if [ -f "$ORCHESTRATION_SRC/workflow-designer/Dockerfile" ]; then
-                log_info "  build workflow-designer ($a)"
-                docker buildx build --platform "linux/${a}" --load -t "$WORKFLOW_DESIGNER_REF" "$ORCHESTRATION_SRC/workflow-designer" || exit 1
-                docker save -o "$BUNDLE/images/workflow-designer-${a}.tar" "$WORKFLOW_DESIGNER_REF"
-            else
-                log_warn "  no workflow-designer/Dockerfile — skipping"
-            fi
-        done
-        ;;
-    tars)
-        [ -d "$APP_TARS_DIR" ] || { log_error "--app-tars-dir is required for --app-source tars"; exit 1; }
-        APP_TARS_DIR="$(resolve_abs "$APP_TARS_DIR")"
-        for base in registry-center orchestration-center workflow-designer; do
-            for a in "${ARCHS[@]}"; do
-                [ -r "$APP_TARS_DIR/${base}-${a}.tar" ] || { log_error "missing $APP_TARS_DIR/${base}-${a}.tar"; exit 1; }
-                cp "$APP_TARS_DIR/${base}-${a}.tar" "$BUNDLE/images/"
-            done
-        done
-        ;;
-    *)
-        log_error "invalid --app-source: $APP_SOURCE (use pull|build|tars)"; exit 2 ;;
-esac
-
-# --- Frontend static assets (served directly by nginx) ------------------------
-log_step "Extracting frontend static assets"
-if [ -r "$BUNDLE/images/workflow-designer-${ARCHS[0]}.tar" ]; then
-    docker load -i "$BUNDLE/images/workflow-designer-${ARCHS[0]}.tar" >/dev/null
-    cid="$(docker create "$WORKFLOW_DESIGNER_REF" 2>/dev/null)"
-    if [ -n "$cid" ]; then
-        mkdir -p "$BUNDLE/web"
-        docker cp "$cid:/usr/share/nginx/html/." "$BUNDLE/web/" >/dev/null 2>&1 \
-            && log_info "web/ populated" \
-            || log_warn "could not copy /usr/share/nginx/html from the image"
-        docker rm -f "$cid" >/dev/null
-    else
-        log_warn "could not create a container from $WORKFLOW_DESIGNER_REF"
-    fi
-else
-    log_warn "workflow-designer tar missing — the frontend would be empty"
-fi
-
-# --- Record tags --------------------------------------------------------------
-{
-    echo "APP_REGISTRY_CENTER_TAG=$REGISTRY_CENTER_REF"
-    echo "APP_ORCHESTRATION_CENTER_TAG=$ORCHESTRATION_CENTER_REF"
-    echo "APP_WORKFLOW_DESIGNER_TAG=$WORKFLOW_DESIGNER_REF"
-} >"$BUNDLE/deps/image-tags.env"
-
-# --- Checksums ----------------------------------------------------------------
-log_step "Generating SHA256SUMS"
+done
+# Extract files without running the foreign-architecture frontend process.
+docker load -i "$BUNDLE/images/workflow-designer-${ARCHS[0]}.tar"
+cid="$(docker create --platform "linux/${ARCHS[0]}" "$UI")"
+trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+mkdir -p "$BUNDLE/web"
+docker cp "$cid:/usr/share/nginx/html/." "$BUNDLE/web/"
+[ -s "$BUNDLE/web/index.html" ] || { echo 'Frontend index.html missing' >&2; exit 1; }
+find "$BUNDLE/web" -type d -exec chmod 0755 {} +
+find "$BUNDLE/web" -type f -exec chmod 0644 {} +
+docker rm -f "$cid" >/dev/null; trap - EXIT
+python3 - "$BUNDLE/deps/image-tags.json" "$PLATFORMS" "$RC" "$OC" "$UI" <<'PY'
+import json, sys
+with open(sys.argv[1], 'w', encoding='utf-8') as stream:
+    json.dump({'architectures': [p.removeprefix('linux/') for p in sys.argv[2].split(',')],
+               'images': dict(zip(['registry-center','orchestration-center','workflow-designer','postgres','nginx','mysql'],
+                                  [*sys.argv[3:], 'postgres:15-alpine','nginx:1.27-alpine','mysql:8.4']))}, stream, indent=2)
+PY
 (cd "$BUNDLE" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum >SHA256SUMS)
-
-# --- Tarball ------------------------------------------------------------------
-log_step "Creating tarball"
 tar -C "$(dirname "$BUNDLE")" -czf "$BUNDLE.tar.gz" "$(basename "$BUNDLE")"
-log_info "Bundle:   $BUNDLE"
-log_info "Tarball:  $BUNDLE.tar.gz ($(du -sh "$BUNDLE.tar.gz" | cut -f1))"
-
-echo ""
-log_info "Done. Copy $BUNDLE.tar.gz to the target host, then:"
-log_info "  tar -xzf $(basename "$BUNDLE.tar.gz")"
-log_info "  cd $(basename "$BUNDLE")"
-log_info "  cp config.env.example config.env && vi config.env"
-log_info "  scripts/check-env.sh --config config.env"
-log_info "  sudo scripts/install.sh --config config.env"
+echo "Done. Offline bundle: $BUNDLE.tar.gz"

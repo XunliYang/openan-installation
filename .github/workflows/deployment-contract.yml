@@ -23,3 +23,32 @@ jobs:
         run: |
           bash -n containerized/online-install/install.sh
           bash -n containerized/build/build.sh
+          find containerized/offline-install-compose -name '*.sh' -exec bash -n {} \;
+  offline-compose-container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      # Pin the service contract being integrated, including reviewed PR heads.
+      # Update these pins when adopting a newer accepted service revision.
+      - uses: actions/checkout@v4
+        with:
+          repository: Zhoujie628/registry-center
+          ref: 1934de8572b82d3577971fdae6d5355e11a8c90a
+          path: service-sources/registry
+      - uses: actions/checkout@v4
+        with:
+          repository: Zhoujie628/orchestration-center
+          ref: 56ace08cc93679b7cec8704d71f549702982a343
+          path: service-sources/orchestration
+      - name: Build real offline release from matching source images
+        run: |
+          bash containerized/offline-install-compose/build/build-offline.sh \
+            --tag compose-contract --app-source build --platforms linux/amd64 \
+            --registry-src "$GITHUB_WORKSPACE/service-sources/registry" \
+            --orchestration-src "$GITHUB_WORKSPACE/service-sources/orchestration" \
+            --out "$RUNNER_TEMP/offline-build"
+      - name: Install real Compose SQL HTTP HTTPS mTLS and test public APIs
+        run: |
+          sudo python3 tests/offline_compose_container_smoke.py \
+            --bundle "$RUNNER_TEMP/offline-build/openan-offline-compose-compose-contract"

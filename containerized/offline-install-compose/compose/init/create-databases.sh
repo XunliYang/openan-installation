@@ -6,16 +6,18 @@
 #
 # Creates the OpenAN databases and roles on first postgres start.
 # Mirrors containerized/online-install/openan-chart/templates/postgres/statefulset.yaml.
-set -e
+set -euo pipefail
 
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<EOSQL
-CREATE USER registry WITH PASSWORD '${POSTGRES_PASSWORD}';
-CREATE DATABASE registry_center OWNER registry;
-GRANT ALL PRIVILEGES ON DATABASE registry_center TO registry;
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" \
+  -v password="$REGISTRY_DB_PASSWORD" -v dbuser="$REGISTRY_DB_USERNAME" -v dbname="$REGISTRY_DB_NAME" <<'EOSQL'
+CREATE USER :"dbuser" WITH PASSWORD :'password';
+CREATE DATABASE :"dbname" OWNER :"dbuser";
+GRANT ALL PRIVILEGES ON DATABASE :"dbname" TO :"dbuser";
 EOSQL
 
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<EOSQL
-CREATE USER opena2a_t WITH PASSWORD '${POSTGRES_PASSWORD}';
-CREATE DATABASE orchestration_center OWNER opena2a_t;
-GRANT ALL PRIVILEGES ON DATABASE orchestration_center TO opena2a_t;
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" \
+  -v password="$ORCH_DB_PASSWORD" -v dbuser="$ORCH_DB_USERNAME" -v dbname="$ORCH_DB_NAME" <<'EOSQL'
+CREATE USER :"dbuser" WITH PASSWORD :'password';
+CREATE DATABASE :"dbname" OWNER :"dbuser";
+GRANT ALL PRIVILEGES ON DATABASE :"dbname" TO :"dbuser";
 EOSQL
