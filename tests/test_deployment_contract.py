@@ -123,6 +123,17 @@ def test_existing_model_secret_wins_over_inline_key():
     env = docs["registry-center"]["spec"]["template"]["spec"]["containers"][0]["env"]
     entry = next(e for e in env if e["name"] == "LLM_CHAT_API_KEY")
     assert entry["valueFrom"]["secretKeyRef"]["name"] == "preferred-model-secret"
+    assert "llm-chat-api-key" not in (docs["registry-center-secret"]["stringData"] or {})
+
+
+@pytest.mark.parametrize("capability", ["chat", "embed", "rerank"])
+def test_orchestration_inline_model_secrets_match_environment_references(capability):
+    docs = render({f"orchestration.llm.{capability}.model": "test-model",
+                   f"orchestration.llm.{capability}.url": "https://example.invalid/model",
+                   f"orchestration.llm.{capability}.apiKey": "synthetic-model-key"})
+    env = docs["orchestration-center"]["spec"]["template"]["spec"]["containers"][0]["env"]
+    ref = next(e for e in env if e["name"] == f"LLM_{capability.upper()}_API_KEY")["valueFrom"]["secretKeyRef"]
+    assert docs[ref["name"]]["stringData"][ref["key"]] == "synthetic-model-key"
 
 
 def test_model_and_proxy_updates_roll_out_pods():
