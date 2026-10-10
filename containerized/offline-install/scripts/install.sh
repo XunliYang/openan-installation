@@ -51,7 +51,7 @@ STORAGE_CLASS=""
 STORAGE_SIZE="20Gi"
 HOSTPATH="/data/openan-postgres"
 STORAGE_NODE=""
-DB_TYPE="postgresql"
+DB_TYPE="mysql"
 DB_PASSWORD="openan-db-password"
 REGISTRY_CENTER_IMAGE="project-openan/registry-center:v1.0.0"
 ORCHESTRATION_CENTER_IMAGE="project-openan/orchestration-center:v1.0.0"
@@ -65,6 +65,7 @@ ORCH_CHAT_MODEL=""
 ORCH_CHAT_URL=""
 ORCH_CHAT_APIKEY=""
 LLM_VALIDATE="false"
+REGISTRY_SIGNATURE_VALIDATION_ENABLED="false"
 START_AGENTS_SERVER="false"
 
 [ -n "$CONFIG_FILE" ] && load_config "$CONFIG_FILE"
@@ -108,7 +109,7 @@ if [ "$ASSUME_YES" != "true" ] && [ -z "$CONFIG_FILE" ]; then
         METALLB_POOL="$(ask_input "  MetalLB IP pool (e.g. 192.168.1.200-192.168.1.250)" "$METALLB_POOL")"
     fi
     INGRESS_HOST="$(ask_input "  Ingress host (empty = access by IP)" "$INGRESS_HOST")"
-    DB_TYPE="$(ask_choice "  Database backend:" "postgresql" "mysql")"
+    DB_TYPE="$(ask_choice "  Database backend:" "mysql" "postgresql")"
     DB_PASSWORD="$(ask_input_secret "  Database password" "$DB_PASSWORD")"
     REGISTRY_CHAT_MODEL="$(ask_input "  Registry Center chat model" "$REGISTRY_CHAT_MODEL")"
     REGISTRY_CHAT_URL="$(ask_input "  Registry Center chat URL" "$REGISTRY_CHAT_URL")"
@@ -122,6 +123,8 @@ if [ "$ASSUME_YES" != "true" ] && [ -z "$CONFIG_FILE" ]; then
     fi
     LLM_VALIDATE_ANS="$(ask_input "  Validate LLM connectivity now? (true/false)" "$LLM_VALIDATE")"
     LLM_VALIDATE="$LLM_VALIDATE_ANS"
+    START_AGENTS_ANS="$(ask_input "  Start the sample agents server in orchestration-center? (true/false)" "$START_AGENTS_SERVER")"
+    START_AGENTS_SERVER="$START_AGENTS_ANS"
 fi
 
 if [ -z "$REGISTRY_NODE" ]; then
@@ -177,6 +180,7 @@ echo "  Ingress host:     ${INGRESS_HOST:-<none, IP access>}"
 echo "  Registry center:  $REGISTRY_CENTER_IMAGE"
 echo "  Orchestration:    $ORCHESTRATION_CENTER_IMAGE"
 echo "  Workflow designer:$WORKFLOW_DESIGNER_IMAGE"
+echo "  Sample agents:    $START_AGENTS_SERVER"
 echo "=========================================="
 echo ""
 
@@ -433,6 +437,7 @@ emit_db_storage() {
     echo "registry:"
     echo "  enabled: true"
     echo "  replicas: 2"
+    echo "  signatureValidationEnabled: ${REGISTRY_SIGNATURE_VALIDATION_ENABLED}"
     echo "  image:"
     echo "    repository: ${REG_HOST}/$(REF_REPO "$REGISTRY_CENTER_IMAGE")"
     echo "    tag: $(REF_TAG "$REGISTRY_CENTER_IMAGE")"

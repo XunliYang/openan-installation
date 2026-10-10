@@ -176,6 +176,7 @@ save_config() {
         echo "ORCH_CHAT_URL=\"${ORCH_CHAT_URL}\""
         echo "ORCH_CHAT_APIKEY=\"${ORCH_CHAT_APIKEY}\""
         echo "LLM_VALIDATE=\"${LLM_VALIDATE}\""
+        echo "REGISTRY_SIGNATURE_VALIDATION_ENABLED=\"${REGISTRY_SIGNATURE_VALIDATION_ENABLED}\""
         echo "START_AGENTS_SERVER=\"${START_AGENTS_SERVER}\""
     } >"$file"
     chmod 600 "$file"

@@ -178,6 +178,7 @@ kubectl -n openan port-forward svc/workflow-designer 8080:80
 | `registry.image.tag` | Image tag | `v1.0.0` |
 | `registry.image.pullPolicy` | Image pull policy | `Always` |
 | `registry.port` | Service port | `5000` |
+| `registry.signatureValidationEnabled` | Validate JWS signatures on AgentCards (`REGISTRY_SIGNATURE_VALIDATION_ENABLED`) | `false` |
 | `registry.llm.chat.model` | Chat model | `your-chat-model` |
 | `registry.llm.chat.url` | Chat API URL | `https://your-llm-provider.com/v1/chat/completions` |
 | `registry.llm.chat.apiKey` | Chat API Key | `your-api-key` |

@@ -115,6 +115,9 @@ registry:
     tag: v1.0.0
     pullPolicy: Always
   port: 5000
+  # Validate JWS signatures on AgentCards (server.conf signature_validation_enabled).
+  # Offline installs serve plain HTTP; keep false unless agents sign their cards.
+  signatureValidationEnabled: false
   # LLM configuration for registry-center
   llm:
     chat:

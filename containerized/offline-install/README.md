@@ -12,7 +12,8 @@ be changed on a node is reported as a manual step (see
 ## Topology
 
 - 2 × `registry-center`, 2 × `orchestration-center`, 2 × `workflow-designer`,
-  1 × database (PostgreSQL by default, or MySQL 8.4.3 when `DB_TYPE=mysql`).
+  1 × database (MySQL 8.4.3 by default, or PostgreSQL when
+  `DB_TYPE=postgresql`).
 - One `ingress-nginx` entry point behind a MetalLB LoadBalancer IP.
 - Images come from an **in-cluster private registry** (NodePort `30500`, plain
   HTTP) populated from the bundle.
@@ -73,12 +74,13 @@ you.
 
 | `DB_TYPE` | Bundled image | Used by |
 |---|---|---|
-| `postgresql` (default) | `postgres:15-alpine` | registry-center + orchestration-center |
-| `mysql` | `mysql:8.4.3` | registry-center + orchestration-center |
+| `mysql` (default) | `mysql:8.4.3` | registry-center + orchestration-center |
+| `postgresql` | `postgres:15-alpine` | registry-center + orchestration-center |
 
-When `mysql` is selected the installer deploys a single `openan-mysql`
-StatefulSet (hostPath fallback `/data/openan-mysql`), creates the same two
-databases, and points both applications at it (`PERSISTENCE_MODE=mysql`).
+When `mysql` is selected (the default) the installer deploys a single
+`openan-mysql` StatefulSet (hostPath fallback `/data/openan-mysql`), creates
+the same two databases, and points both applications at it
+(`PERSISTENCE_MODE=mysql`).
 > **Note:** MySQL mode in orchestration-center requires an application version
 > that implements the MySQL persistence handler; verify your image supports it
 > before selecting `DB_TYPE=mysql`.
