@@ -30,11 +30,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_DIR="$SCRIPT_DIR/build"
 CHART_DIR="$SCRIPT_DIR/openan-chart"
-
-# Ensure scripts are executable
-chmod +x "$BUILD_DIR/build.sh" 2>/dev/null || true
 
 log_info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }

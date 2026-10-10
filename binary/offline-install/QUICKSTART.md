@@ -1,6 +1,6 @@
 # OpenAN Offline Deployment Guide
 
-This directory provides the **offline installation scripts** for OpenAN, designed for air-gapped or network-restricted environments. Unlike the [one-click installer](../one-click/QUICKSTART.md) which downloads everything at install time, the offline workflow pre-downloads all dependencies (Python wheels, npm cache, source code) on an **online machine** using [`pack.sh`](../build/QUICKSTART.md) (located in `binary/build/`), producing self-contained tarballs that can be transferred to an **offline machine** and installed without any internet access.
+This directory provides the **offline installation scripts** for OpenAN, designed for offline or network-restricted environments. Unlike the [one-click installer](../one-click/QUICKSTART.md) which downloads everything at install time, the offline workflow pre-downloads all dependencies (Python wheels, npm cache, source code) on an **online machine** using [`pack.sh`](../build/QUICKSTART.md) (located in `binary/build/`), producing self-contained tarballs that can be transferred to an **offline machine** and installed without any internet access.
 
 ---
 
@@ -9,7 +9,7 @@ This directory provides the **offline installation scripts** for OpenAN, designe
 - [How It Works](#how-it-works)
 - [Prerequisites](#prerequisites)
 - [Phase 1: Build Offline Packages (Online Machine)](#phase-1-build-offline-packages-online-machine)
-- [Phase 2: Install on Air-Gapped Machine (Offline)](#phase-2-install-on-air-gapped-machine-offline)
+- [Phase 2: Install on Offline Machine](#phase-2-install-on-offline-machine)
 - [Script Reference](#script-reference)
 - [Interactive Prompts](#interactive-prompts)
 - [Service Ports and URLs](#service-ports-and-urls)
@@ -53,7 +53,7 @@ The install script auto-detects the target machine's architecture and installs t
 
 See [build/QUICKSTART.md](../build/QUICKSTART.md). In short: Linux with Python 3.12+, Node.js 20.19+ + npm (for `--orc`), curl, tar, and internet access (GitHub and PyPI).
 
-### Installing Machine (Offline / Air-Gapped)
+### Installing Machine (Offline)
 
 | Component | Minimum Version | Notes |
 |-----------|----------------|-------|
@@ -96,7 +96,7 @@ Each tarball is fully self-contained — no additional downloads are needed at i
 
 ---
 
-## Phase 2: Install on Air-Gapped Machine (Offline)
+## Phase 2: Install on Offline Machine
 
 Transfer the tarballs and scripts to the offline machine, then install.
 
@@ -283,7 +283,7 @@ The installer generates self-signed certificates automatically. For production u
 
 Replacing the **Nginx certificate** removes the browser security warning and is what most deployments need. The registry-center internal certificate only needs replacement if your security policy requires CA-signed keys for service-to-service communication.
 
-> If your CA's root certificate is not already trusted on the air-gapped machine, import it into the system trust store first (e.g., `sudo cp ca-root.crt /etc/pki/ca-trust/source/anchors/ && sudo update-ca-trust` on RHEL/CentOS, or `/usr/local/share/ca-certificates/` + `update-ca-certificates` on Debian/Ubuntu).
+> If your CA's root certificate is not already trusted on the offline machine, import it into the system trust store first (e.g., `sudo cp ca-root.crt /etc/pki/ca-trust/source/anchors/ && sudo update-ca-trust` on RHEL/CentOS, or `/usr/local/share/ca-certificates/` + `update-ca-certificates` on Debian/Ubuntu).
 
 ### 1. Obtain a CA-signed certificate
 

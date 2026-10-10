@@ -502,7 +502,7 @@ Note: venv and node_modules are NOT pre-built. They will be created on the
 target machine from the bundled wheels and npm cache. This ensures architecture
 compatibility (the target machine may have a different CPU architecture).
 
-To install on the air-gapped machine:
+To install on the offline machine:
   Copy this tarball and install.sh into the SAME directory, then run
   ./install.sh --orc — it handles everything: extraction, venv creation,
   dependency installation, frontend build, nginx configuration, and
@@ -650,7 +650,7 @@ fi
 
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
-echo "  1. Copy the tarball(s) and install.sh to the air-gapped machine"
+echo "  1. Copy the tarball(s) and install.sh to the offline machine"
 echo "     (USB, SCP, etc.)"
 echo "  2. Install:  ./install.sh"
 echo ""

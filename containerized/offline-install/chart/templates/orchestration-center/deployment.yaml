@@ -1,0 +1,108 @@
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{- if .Values.orchestration.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestration-center
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "openan.orchestration.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.orchestration.replicas }}
+  selector:
+    matchLabels:
+      {{- include "openan.orchestration.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openan.orchestration.selectorLabels" . | nindent 8 }}
+    spec:
+      terminationGracePeriodSeconds: 120
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  {{- include "openan.orchestration.selectorLabels" . | nindent 18 }}
+              topologyKey: kubernetes.io/hostname
+      initContainers:
+        # The image ships only etc/conf/db_config.json.template while the
+        # entrypoint edits etc/conf/db_config.json in place. Copy the whole
+        # etc tree onto a writable emptyDir so the entrypoint can write.
+        - name: seed-etc
+          image: "{{ .Values.orchestration.image.repository }}:{{ .Values.orchestration.image.tag }}"
+          imagePullPolicy: {{ .Values.orchestration.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              cp -r --no-preserve=timestamps,ownership /opt/orchestration-center/etc/. /seeded/ 2>/dev/null || \
+                cp -r /opt/orchestration-center/etc/. /seeded/
+              if [ ! -f /seeded/conf/db_config.json ] && [ -f /seeded/conf/db_config.json.template ]; then
+                cp /seeded/conf/db_config.json.template /seeded/conf/db_config.json
+              fi
+              ls -la /seeded/conf/
+          volumeMounts:
+            - name: etc-dir
+              mountPath: /seeded
+      containers:
+      - name: orchestration-center
+        image: "{{ .Values.orchestration.image.repository }}:{{ .Values.orchestration.image.tag }}"
+        imagePullPolicy: {{ .Values.orchestration.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.orchestration.port }}
+        envFrom:
+        - configMapRef:
+            name: orchestration-center-config
+        env:
+        - name: DB_PASSWORD
+          {{- if and (ne (include "openan.dbType" .) "mysql") .Values.postgresql.existingSecret }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.postgresql.existingSecret }}
+              key: postgres-password
+          {{- else if and (eq (include "openan.dbType" .) "mysql") .Values.mysql.existingSecret }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.mysql.existingSecret }}
+              key: mysql-root-password
+          {{- else }}
+          valueFrom:
+            secretKeyRef:
+              name: orchestration-center-secret
+              key: db-password
+          {{- end }}
+        {{- if .Values.orchestration.llm.chat.apiKey }}
+        - name: LLM_CHAT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: orchestration-center-secret
+              key: llm-chat-api-key
+        {{- else if .Values.orchestration.llm.chat.existingSecret }}
+        - name: LLM_CHAT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.orchestration.llm.chat.existingSecret }}
+              key: {{ .Values.orchestration.llm.chat.existingSecretKey }}
+        {{- end }}
+        startupProbe:
+          {{- toYaml .Values.orchestration.startupProbe | nindent 10 }}
+        livenessProbe:
+          {{- toYaml .Values.orchestration.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.orchestration.readinessProbe | nindent 10 }}
+        resources:
+          {{- toYaml .Values.orchestration.resources | nindent 10 }}
+        volumeMounts:
+        - name: etc-dir
+          mountPath: /opt/orchestration-center/etc
+      volumes:
+      - name: etc-dir
+        emptyDir: {}
+{{- end }}
