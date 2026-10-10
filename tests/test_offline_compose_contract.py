@@ -182,7 +182,9 @@ def test_config_is_literal_and_dollar_text_survives_compose(deployment):
         result = subprocess.run(["docker", "compose", "-f", str(generated), "config", "--format", "json"],
                                 capture_output=True, encoding="utf-8", timeout=30, check=True)
         resolved = json.loads(result.stdout)
-        assert resolved["services"]["orchestration-center"]["environment"]["EXTRA_LITERAL"] == "price $5 ${NOT_EXPANDED} # text"
+        # config re-escapes dollars for round-trip serialization; it is not the
+        # container environment. The live smoke asserts the process value.
+        assert resolved["services"]["orchestration-center"]["environment"]["EXTRA_LITERAL"] == "price $$5 $${NOT_EXPANDED} # text"
 
 
 def test_legacy_data_and_project_identity_are_not_silently_replaced(deployment):

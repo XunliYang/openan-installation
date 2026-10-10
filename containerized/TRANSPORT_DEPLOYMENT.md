@@ -1,6 +1,6 @@
 # HTTP/HTTPS 与数据库部署契约
 
-本次范围为 `online-install` 在线 Chart 与共享镜像构建脚本。上游新增的 `offline-install`、`offline-install-compose` 保留原实现，尚未纳入本轮整改/验证；不要假定它们已经具有相同契约。
+本次范围为 `online-install` 在线 Chart、共享镜像构建脚本，以及新增整改的单机 `offline-install-compose`。`offline-install` 离线 Kubernetes 与二进制安装器未纳入本轮验证，不能假定它们已经具有相同契约。下文 Helm 字段针对在线 Chart；Compose 使用独立的 [部署指南](offline-install-compose/README.md) 和配置模板。
 
 本版本 Chart 必须配合包含本次部署整改的 RC/OC 镜像。不能将旧 v1.0.0 镜像视作已包含新功能。先构建并明确指定镜像 tag，再部署；源码 Git ref 与镜像 tag 分开。
 
@@ -140,3 +140,11 @@ helm template openan online-install/openan-chart -f /path/to/deployment.yaml
 install.sh 现在只负责用显式 values 部署/升级，不再交互收集 Token/模型密钥、自动安装基础设施或在业务镜像内启动 samples。Kubernetes、Helm、Ingress、Secret 由运维提前准备。镜像中保留公共 solution_packages 示例数据，但不携带样例账户和 Agent 服务。数据库不存在时按服务已有创建权限/迁移策略处理，生产推荐 DBA 预建。
 
 CI 分别验证 Helm 矩阵、错误配置和构建失败退出；RC 已有 Linux 容器 smoke，OC 的真实启动/API 回归可独立执行。上线验收必须另外运行真实镜像+MySQL+nginx/Ingress，覆盖登录 Cookie、AgentCard CRUD/JWS、工作流 CRUD/SSE、证书缺失/错误密码、无/错 Token、断连和重启。Helm 渲染通过不是集群实测。
+
+## 单机离线 Compose
+
+使用 `offline-install-compose/build/build-offline.sh` 将匹配服务源码构建的镜像、前端静态文件与公共模板打成白名单发布包；不会复制本地 config.env、runtime、PKI 或业务数据。离线端不拉镜像，校验失败阻止安装，配置按字面解析而不执行 shell。
+
+数据库可选外部/内置 MySQL 或 PostgreSQL，两个服务使用独立业务库和凭据。应用各单实例，Nginx 是唯一公开入口，公共协议、两个后端协议与客户端证书校验分别配置。TLS、签名和 Token 身份保持独立。全量 models.yaml 只读挂载，密钥由私有 runtime env 注入。生成的 runtime/compose.json 含敏感值，不应提交或上传。
+
+Linux CI 构建真实镜像与离线发布包，再执行 MySQL/PostgreSQL、HTTP/HTTPS、混合公共/后端协议与 mTLS 场景，覆盖公开入口鉴权、标准签名、登录/退出、CRUD 与重启后 SQL 数据保留。只有对应提交的容器 job 通过，才能认定这些场景已验证；该结果不替代离线 Kubernetes、外部 IAM/模型、arm64 或完整工作流/SSE 的验收。卸载保留 SQL 卷和应用数据，旧目录数据需显式备份/恢复迁移。

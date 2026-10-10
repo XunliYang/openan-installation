@@ -89,7 +89,7 @@ cd binary/one-click
 ./uninstall.sh
 ```
 
-The offline Kubernetes and Compose installers remain available as contributed upstream. This change adapts and validates the **online** chart only; offline installers are not yet covered by the same deployment contract.
+The single-host [offline Compose installer](containerized/offline-install-compose/README.md) supports internal/external MySQL or PostgreSQL, independent public/backend HTTP/HTTPS, explicit credentials and readonly PKI/model mounts. It deploys one instance per application, not an HA cluster. Offline Kubernetes remains outside this remediation and is not certified against the same deployment contract.
 
 ## Upgrade
 

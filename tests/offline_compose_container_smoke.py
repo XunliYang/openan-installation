@@ -141,13 +141,14 @@ def run(bundle):
     if os.name == "nt" or os.geteuid() != 0 or not shutil.which("docker"):
         raise SystemExit("Requires Linux Docker and root for isolated UID=10001 fixtures")
     bundle = Path(bundle).resolve()
-    cases = [("mysql", False, False, False), ("postgresql", False, False, False),
-             ("mysql", True, True, False), ("postgresql", True, True, False),
-             ("mysql", False, True, False), ("mysql", True, True, True)]
+    cases = [("mysql", False, False, False, True), ("postgresql", False, False, False, True),
+             ("mysql", True, True, False, True), ("postgresql", True, True, False, True),
+             ("mysql", False, True, False, True), ("mysql", True, True, True, True),
+             ("mysql", True, True, True, False)]
     with tempfile.TemporaryDirectory(prefix="openan-compose-smoke-") as temp:
         root = Path(temp)
         server, client, signing, ca = certificates(root)
-        for index, (db, public_tls, backend_tls, mtls) in enumerate(cases):
+        for index, (db, public_tls, backend_tls, mtls, verify_upstream) in enumerate(cases):
             case = root / f"case-{index}"
             # Reuse immutable image files without copying gigabytes; this is a
             # controlled smoke fixture, not the distributed release layout.
@@ -165,13 +166,14 @@ def run(bundle):
             model.write_text("models:\n  chat:\n    provider: openai_compatible\n    model: synthetic-model\n    url: http://127.0.0.1:9/v1/chat/completions\n")
             model.chmod(0o600); os.chown(model, 10001, 10001)
             (case / "rc.env").write_text(f"INTEGRATION_TOKEN_HMAC_KEY={HMAC}\nINTEGRATION_FINGERPRINT_KEY=synthetic-fingerprint\nREGISTRY_AGENT_APPROVAL_ENABLED=false\nREGISTRY_SIGNATURE_VALIDATION_ENABLED=false\nREGISTRY_HEARTBEAT_ENABLED=false\n")
-            (case / "oc.env").write_text(f"OC_ADMIN_INITIAL_PASSWORD='{ADMIN}'\nORCH_API_TOKEN={MACHINE_TOKEN}\nREGISTRY_ACCESS_TOKEN={TOKEN}\n")
+            (case / "oc.env").write_text(f"OC_ADMIN_INITIAL_PASSWORD='{ADMIN}'\nORCH_API_TOKEN={MACHINE_TOKEN}\nREGISTRY_ACCESS_TOKEN={TOKEN}\nEXTRA_LITERAL='price $5 ${{NOT_EXPANDED}} # text'\n")
             settings = {"PROJECT_NAME": f"openan-smoke-{os.getpid()}-{index}", "PUBLIC_BIND": "127.0.0.1", "PUBLIC_PORT": str(port),
                         "PUBLIC_ENABLE_HTTPS": str(public_tls).lower(), "PUBLIC_TLS_DIR": str(server),
                         "DATABASE_TYPE": db, "DATABASE_INTERNAL": "true", "REGISTRY_DB_PASSWORD": "Registry'$\\Smoke9!",
                         "ORCH_DB_PASSWORD": "Orch'$\\Smoke9!", "POSTGRES_PASSWORD": "RootSmoke9!", "MYSQL_ROOT_PASSWORD": "RootSmoke9!",
                         "REGISTRY_ENABLE_HTTPS": str(backend_tls).lower(), "ORCH_ENABLE_HTTPS": str(backend_tls).lower(),
                         "REGISTRY_VERIFY_CLIENT": str(mtls).lower(), "ORCH_VERIFY_CLIENT": str(mtls).lower(),
+                        "BACKEND_VERIFY_SERVER": str(verify_upstream).lower(), "ORCH_CLIENT_VERIFY_SERVER": str(verify_upstream).lower(),
                         "REGISTRY_TLS_DIR": str(server), "ORCH_TLS_DIR": str(server), "REGISTRY_PROXY_TLS_DIR": str(client),
                         "ORCH_PROXY_TLS_DIR": str(client), "REGISTRY_CLIENT_TLS_DIR": str(client),
                         "REGISTRY_SIGN_DIR": str(signing), "REGISTRY_CREDENTIAL_FILE": str(credentials),
@@ -183,13 +185,15 @@ def run(bundle):
             compose = case / "runtime/compose.json"
             try:
                 command("bash", str(case / "scripts/install.sh"), "--config", str(config))
+                command("docker", "compose", "-f", str(compose), "exec", "-T", "orchestration-center", "python", "-c",
+                        "import os; assert os.environ['EXTRA_LITERAL'] == 'price $5 ${NOT_EXPANDED} # text'")
                 opener = build_opener(ProxyHandler({}), HTTPCookieProcessor(CookieJar()), HTTPSHandler(context=ssl.create_default_context(cafile=str(ca))))
                 base = f"{'https' if public_tls else 'http'}://127.0.0.1:{port}"
                 workflow_id = exercise(opener, base, compose)
                 command("docker", "compose", "-f", str(compose), "restart", "registry-center", "orchestration-center")
                 command("docker", "compose", "-f", str(compose), "up", "-d", "--pull", "never", "--wait", "--wait-timeout", "180")
                 exercise(opener, base, compose, first=False, workflow_id=workflow_id)
-                print(f"PASS: {db}, public_https={public_tls}, backend_https={backend_tls}, mtls={mtls}, CRUD/auth/signing/restart persistence", flush=True)
+                print(f"PASS: {db}, public_https={public_tls}, backend_https={backend_tls}, mtls={mtls}, verify_upstream={verify_upstream}, CRUD/auth/signing/restart persistence", flush=True)
             except BaseException:
                 if compose.is_file():
                     print(command("docker", "compose", "-f", str(compose), "logs", "--tail", "60", check=False).stdout[-6000:])
