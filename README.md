@@ -12,7 +12,7 @@ openan-installation/
 │   ├── README.md                    # Binary installation guide
 └── containerized/                   # Containerized installation
     ├── online-install/              # Internet-connected installation
-    │   ├── install.sh               # Interactive installation tool
+    │   ├── install.sh               # Explicit values deployment tool
     │   ├── uninstall.sh             # One-click uninstall script
     │   ├── openan-chart/            # Helm chart
     │   └── QUICKSTART.md            # Installation guide
@@ -25,19 +25,19 @@ openan-installation/
 
 ### 1. Clustered Containerized Installation (Kubernetes)
 
-Production-grade installation using Helm charts. Supports multi-node clusters, HPA auto-scaling, and TLS certificates.
+Helm deployment with explicit database, protocol, credentials and certificate settings. OC remains single-replica until shared sessions are implemented. Read [the deployment contract](containerized/TRANSPORT_DEPLOYMENT.md) before upgrading; this chart requires matching newly built service images.
 
 ```bash
 git clone https://github.com/project-openan/openan-installation.git
 cd openan-installation/containerized/online-install
-./install.sh
+bash install.sh --values /path/to/deployment.yaml
 ```
 
 **Features:**
 - Modular component selection (Registry Center, Orchestration Center, Workflow Designer)
 - Fully configurable parameters by helm values(LLM API keys, image registry, storage)
-- Auto-detects cluster environment (StorageClass, Ingress Controller, LoadBalancer)
-- MetalLB auto-installation for bare-metal clusters
+- Existing cluster/Helm/Ingress infrastructure managed independently
+- HTTP/HTTPS, external MySQL/PostgreSQL, and credential/certificate Secret injection
 - One-click uninstall with optional data cleanup
 
 **Manual / System Admin Installation:**
@@ -47,7 +47,7 @@ If you prefer to manually install the Helm chart, follow these steps:
 - Customize the Helm chart values in `containerized/online-install/openan-chart/values.yaml`, and then install the chart using Helm:
 ```bash
 cd containerized/online-install
-helm install openan ./openan-chart -n openan --create-namespace
+helm upgrade --install openan ./openan-chart -n openan --create-namespace -f /path/to/deployment.yaml
 ```
 
 ### 2. One-Click Binary Installation
@@ -89,13 +89,15 @@ cd binary/one-click
 ./uninstall.sh
 ```
 
+The offline Kubernetes and Compose installers remain available as contributed upstream. This change adapts and validates the **online** chart only; offline installers are not yet covered by the same deployment contract.
+
 ## Upgrade
 
-> **Note:** Upgrade functionality including single component upgrades and all-in-one upgrades is currently under development and not yet available.
+> Container upgrades use the same explicit values file via install.sh (helm upgrade --install). Back up data, pin image tags/source refs, and restart Pods when subPath Secrets change. Binary installer compatibility is outside this container remediation.
 
 ## Documentation
 
-- [Quick Start](./containerized/online-install/QUICKSTART.md) - One-click installation guide
+- [Quick Start](./containerized/online-install/QUICKSTART.md) - Online container deployment guide
 - [Helm Chart](./containerized/online-install/openan-chart/README.md) - Helm configuration reference
 - [Image Build](./containerized/build/README.md) - Custom image building
 - [Offline Installation (Kubernetes)](./containerized/offline-install/README.md) - Offline Kubernetes deployment

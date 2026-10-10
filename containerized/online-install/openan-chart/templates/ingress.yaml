@@ -50,6 +50,15 @@ metadata:
     {{- include "openan.labels" . | nindent 4 }}
     app.kubernetes.io/component: orchestration
   annotations:
+    {{- if .Values.orchestration.tls.enabled }}
+    nginx.ingress.kubernetes.io/proxy-ssl-verify: {{ ternary "on" "off" .Values.ingress.backendVerifyServer | quote }}
+    nginx.ingress.kubernetes.io/proxy-ssl-server-name: "true"
+    nginx.ingress.kubernetes.io/proxy-ssl-name: "orchestration-center"
+    {{- end }}
+    nginx.ingress.kubernetes.io/backend-protocol: {{ ternary "HTTPS" "HTTP" .Values.orchestration.tls.enabled | quote }}
+    {{- if and .Values.orchestration.tls.enabled (or .Values.orchestration.tls.verifyClient .Values.ingress.backendVerifyServer) }}
+    nginx.ingress.kubernetes.io/proxy-ssl-secret: {{ printf "%s/%s" .Values.namespace (required "orchestration mTLS ingress requires ingressClientSecret (tls.crt,tls.key,ca.crt)" .Values.orchestration.ingressClientSecret) | quote }}
+    {{- end }}
     {{- toYaml .Values.ingress.annotations | nindent 4 }}
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /$2
@@ -90,6 +99,15 @@ metadata:
     {{- include "openan.labels" . | nindent 4 }}
     app.kubernetes.io/component: registry
   annotations:
+    {{- if .Values.registry.tls.enabled }}
+    nginx.ingress.kubernetes.io/proxy-ssl-verify: {{ ternary "on" "off" .Values.ingress.backendVerifyServer | quote }}
+    nginx.ingress.kubernetes.io/proxy-ssl-server-name: "true"
+    nginx.ingress.kubernetes.io/proxy-ssl-name: "registry-center"
+    {{- end }}
+    nginx.ingress.kubernetes.io/backend-protocol: {{ ternary "HTTPS" "HTTP" .Values.registry.tls.enabled | quote }}
+    {{- if and .Values.registry.tls.enabled (or .Values.registry.tls.verifyClient .Values.ingress.backendVerifyServer) }}
+    nginx.ingress.kubernetes.io/proxy-ssl-secret: {{ printf "%s/%s" .Values.namespace (required "registry mTLS ingress requires ingressClientSecret (tls.crt,tls.key,ca.crt)" .Values.registry.ingressClientSecret) | quote }}
+    {{- end }}
     {{- toYaml .Values.ingress.annotations | nindent 4 }}
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /$2

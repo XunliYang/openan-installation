@@ -1,0 +1,12 @@
+# Local review/design notes and deployment secrets are not release inputs.
+reviews/
+.env
+.env.*
+!*.example
+*.local.yaml
+*.local.yml
+__pycache__/
+.pytest_cache/
+*.pem
+*.key
+cert_pwd

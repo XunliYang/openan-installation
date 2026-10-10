@@ -1,8 +1,5 @@
-# Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0
-
 {{- if .Values.registry.enabled }}
+{{- $c := .Values.registry }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -11,124 +8,117 @@ metadata:
   labels:
     {{- include "openan.registry.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.registry.replicas }}
+  replicas: {{ $c.replicas }}
   selector:
     matchLabels:
-      {{- include "openan.registry.selectorLabels" . | nindent 6 }}
+      app: registry-center
   template:
     metadata:
       labels:
-        {{- include "openan.registry.selectorLabels" . | nindent 8 }}
+        app: registry-center
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/registry-center/configmap.yaml") . | sha256sum }}
+        checksum/models: {{ include (print $.Template.BasePath "/registry-center/models.yaml") . | sha256sum }}
     spec:
       terminationGracePeriodSeconds: 60
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchLabels:
-                  {{- include "openan.registry.selectorLabels" . | nindent 18 }}
-              topologyKey: kubernetes.io/hostname
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
       containers:
       - name: registry-center
-        image: "{{ .Values.registry.image.repository }}:{{ .Values.registry.image.tag }}"
-        imagePullPolicy: {{ .Values.registry.image.pullPolicy }}
+        image: "{{ $c.image.repository }}:{{ $c.image.tag }}"
+        imagePullPolicy: {{ $c.image.pullPolicy }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
         ports:
-        - containerPort: {{ .Values.registry.port }}
+        - containerPort: {{ $c.port }}
         envFrom:
         - configMapRef:
             name: registry-center-config
+        - secretRef:
+            name: {{ $c.runtimeSecret }}
         env:
         - name: DB_PASSWORD
-          {{- if .Values.postgresql.existingSecret }}
           valueFrom:
             secretKeyRef:
+              {{- if (index .Values.database "registry").existingSecret }}
+              name: {{ (index .Values.database "registry").existingSecret }}
+              key: {{ (index .Values.database "registry").passwordKey }}
+              {{- else if .Values.postgresql.existingSecret }}
               name: {{ .Values.postgresql.existingSecret }}
               key: postgres-password
-          {{- else }}
-          valueFrom:
-            secretKeyRef:
+              {{- else }}
               name: registry-center-secret
               key: db-password
-          {{- end }}
-        {{- if .Values.registry.llm.chat.apiKey }}
-        - name: LLM_CHAT_API_KEY
+              {{- end }}
+        {{- range $cap, $model := $c.llm }}
+        {{- if or $model.existingSecret $model.apiKey }}
+        - name: LLM_{{ upper $cap }}_API_KEY
           valueFrom:
             secretKeyRef:
-              name: registry-center-secret
-              key: llm-chat-api-key
-        {{- else if .Values.registry.llm.chat.existingSecret }}
-        - name: LLM_CHAT_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Values.registry.llm.chat.existingSecret }}
-              key: {{ .Values.registry.llm.chat.existingSecretKey }}
+              name: {{ default "registry-center-secret" $model.existingSecret }}
+              key: {{ ternary $model.existingSecretKey (printf "llm-%s-api-key" $cap) (not (empty $model.existingSecret)) }}
         {{- end }}
-        {{- if .Values.registry.llm.embed.apiKey }}
-        - name: LLM_EMBED_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: registry-center-secret
-              key: llm-embed-api-key
-        {{- else if .Values.registry.llm.embed.existingSecret }}
-        - name: LLM_EMBED_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Values.registry.llm.embed.existingSecret }}
-              key: {{ .Values.registry.llm.embed.existingSecretKey }}
         {{- end }}
-        {{- if .Values.registry.llm.rerank.apiKey }}
-        - name: LLM_RERANK_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: registry-center-secret
-              key: llm-rerank-api-key
-        {{- else if .Values.registry.llm.rerank.existingSecret }}
-        - name: LLM_RERANK_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Values.registry.llm.rerank.existingSecret }}
-              key: {{ .Values.registry.llm.rerank.existingSecretKey }}
-        {{- end }}
+
         livenessProbe:
-          {{- toYaml .Values.registry.livenessProbe | nindent 10 }}
+          {{- toYaml $c.livenessProbe | nindent 10 }}
         readinessProbe:
-          {{- toYaml .Values.registry.readinessProbe | nindent 10 }}
+          {{- toYaml $c.readinessProbe | nindent 10 }}
         resources:
-          {{- toYaml .Values.registry.resources | nindent 10 }}
-        {{- if or (ne .Values.registry.tls.mode "off") (ne .Values.registry.signing.mode "off") }}
+          {{- toYaml $c.resources | nindent 10 }}
         volumeMounts:
-        {{- if ne .Values.registry.tls.mode "off" }}
-        - name: tls-certs
-          mountPath: /opt/registry-center/etc/ssl
+        - name: models
+          mountPath: /opt/registry-center/etc/config/models.yaml
+          subPath: models.yaml
+          readOnly: true
+        {{- if $c.tls.enabled }}
+        {{- $keys := list "server.cer" "server_key.pem" "cert_pwd" "trust.cer" }}
+        {{- if $c.tls.verifyClient }}{{ $keys = concat $keys (list "probe-client.cer" "probe-client.key") }}{{ end }}
+        {{- range $key := $keys }}
+        - name: tls
+          mountPath: /opt/registry-center/etc/ssl/{{ $key }}
+          subPath: {{ $key }}
           readOnly: true
         {{- end }}
-        {{- if ne .Values.registry.signing.mode "off" }}
-        - name: signing-certs
-          mountPath: /opt/registry-center/etc/sign_cert
+        {{- end }}
+        {{- if ne $c.signing.mode "off" }}
+        {{- range $key := list "sign.cer" "sign_key.pem" "cert_pwd" }}
+        - name: signing
+          mountPath: /opt/registry-center/etc/sign_cert/{{ $key }}
+          subPath: {{ $key }}
           readOnly: true
         {{- end }}
         {{- end }}
-      {{- if or (ne .Values.registry.tls.mode "off") (ne .Values.registry.signing.mode "off") }}
+        {{- if $c.credentialSecret }}
+        - name: credentials
+          mountPath: /opt/registry-center/etc/conf/integration_credentials.conf
+          subPath: integration_credentials.conf
+          readOnly: true
+        {{- end }}
       volumes:
-      {{- if ne .Values.registry.tls.mode "off" }}
-      - name: tls-certs
+      - name: models
+        configMap:
+          name: {{ default "registry-center-models" $c.modelsConfigMap }}
+      {{- if $c.tls.enabled }}
+      - name: tls
         secret:
-          {{- if eq .Values.registry.tls.mode "auto" }}
-          secretName: registry-center-tls
-          {{- else }}
-          secretName: {{ .Values.registry.tls.existingSecret }}
-          {{- end }}
+          secretName: {{ $c.tls.existingSecret }}
+          defaultMode: 0440
       {{- end }}
-      {{- if ne .Values.registry.signing.mode "off" }}
-      - name: signing-certs
+      {{- if ne $c.signing.mode "off" }}
+      - name: signing
         secret:
-          {{- if eq .Values.registry.signing.mode "auto" }}
-          secretName: registry-center-signing
-          {{- else }}
-          secretName: {{ .Values.registry.signing.existingSecret }}
-          {{- end }}
+          secretName: {{ ternary "registry-center-signing" $c.signing.existingSecret (eq $c.signing.mode "auto") }}
+          defaultMode: 0440
       {{- end }}
+      {{- if $c.credentialSecret }}
+      - name: credentials
+        secret:
+          secretName: {{ $c.credentialSecret }}
+          defaultMode: 0440
       {{- end }}
 {{- end }}

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # All Rights Reserved.
 #
@@ -15,7 +16,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-#!/bin/bash
 # OpenAN Platform - One-line Image Build Script
 # Usage: ./build.sh [components] [options]
 #   No arguments = build all components with defaults
@@ -32,11 +32,12 @@
 #   --image-registry <url>     Image registry (default: ghcr.io)
 #   --namespace <ns>           Image namespace (default: project-openan)
 #   --tag <tag>                Image tag (default: v1.0.0)
+#   --source-ref <ref>         Source Git ref, independent of the image tag
 #   --platforms <platforms>    Target platforms (default: linux/amd64,linux/arm64)
 #   --no-push                  Build local only (single-arch only)
 #   --help                     Show help
 
-set -o pipefail
+set -euo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -48,6 +49,7 @@ NC='\033[0m'
 IMAGE_REGISTRY="ghcr.io"
 NAMESPACE="project-openan"
 TAG="v1.0.0"
+SOURCE_REF="v1.0.0"
 REGISTRY_RELEASE=""
 ORCHESTRATION_RELEASE=""
 PLATFORMS="linux/amd64,linux/arm64"
@@ -65,7 +67,7 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_step()  { echo -e "${CYAN}[STEP]${NC} $1"; }
 
 cleanup() {
-    if [ -n "$TEMP_DIR" ] && [ -d "$TEMP_DIR" ]; then
+    if [ -n "$TEMP_DIR" ] && [ -d "$TEMP_DIR" ] && [[ "${TEMP_DIR##*/}" == openan-build.* ]]; then
         rm -rf "$TEMP_DIR"
     fi
 }
@@ -86,6 +88,7 @@ Options:
   --image-registry <url>     Image registry (default: ghcr.io)
   --namespace <ns>           Image namespace (default: project-openan)
   --tag <tag>                Image tag (default: v1.0.0)
+  --source-ref <ref>         Source Git tag/commit (default: v1.0.0), independent of image tag
   --registry-release <url>   Registry Center release tarball URL
   --orchestration-release <url>  Orchestration Center release tarball URL
   --platforms <platforms>    Target platforms (default: linux/amd64,linux/arm64)
@@ -106,12 +109,19 @@ EOF
 
 # ===== Parse arguments =====
 while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --image-registry|--namespace|--tag|--source-ref|--registry-release|--orchestration-release|--platforms)
+            if [ "$#" -lt 2 ] || [ -z "$2" ] || [[ "$2" == --* ]]; then
+                log_error "$1 requires a value"; exit 2
+            fi ;;
+    esac
     case $1 in
         registry)                BUILD_REGISTRY=true; COMPONENTS_SPECIFIED=true; shift ;;
         orchestration)           BUILD_ORCHESTRATION=true; COMPONENTS_SPECIFIED=true; shift ;;
         --image-registry)        IMAGE_REGISTRY="$2"; shift 2 ;;
         --namespace)             NAMESPACE="$2"; shift 2 ;;
         --tag)                   TAG="$2"; shift 2 ;;
+        --source-ref)            SOURCE_REF="$2"; shift 2 ;;
         --registry-release)      REGISTRY_RELEASE="$2"; shift 2 ;;
         --orchestration-release) ORCHESTRATION_RELEASE="$2"; shift 2 ;;
         --platforms)             PLATFORMS="$2"; shift 2 ;;
@@ -127,18 +137,18 @@ if [ "$COMPONENTS_SPECIFIED" = false ]; then
     BUILD_ORCHESTRATION=true
 fi
 
-# Auto-generate release URLs based on TAG if not explicitly specified
+# Auto-generate source URLs from SOURCE_REF, not the image TAG if not explicitly specified
 if [ -z "$REGISTRY_RELEASE" ]; then
-    REGISTRY_RELEASE="https://github.com/project-openan/registry-center/archive/refs/tags/${TAG}.tar.gz"
+    REGISTRY_RELEASE="https://github.com/project-openan/registry-center/archive/${SOURCE_REF}.tar.gz"
 fi
 if [ -z "$ORCHESTRATION_RELEASE" ]; then
-    ORCHESTRATION_RELEASE="https://github.com/project-openan/orchestration-center/archive/refs/tags/${TAG}.tar.gz"
+    ORCHESTRATION_RELEASE="https://github.com/project-openan/orchestration-center/archive/${SOURCE_REF}.tar.gz"
 fi
 
 # Multi-arch requires push
 if [[ "$PLATFORMS" == *","* ]] && [ "$PUSH" = false ]; then
-    log_warn "Multi-arch images must be pushed to registry, enabling push automatically"
-    PUSH=true
+    log_error "--no-push requires one platform (e.g. --platforms linux/amd64); nothing was pushed"
+    exit 2
 fi
 
 # ===== Print configuration =====
@@ -171,7 +181,7 @@ echo ""
 echo "=========================================="
 echo ""
 
-TEMP_DIR=$(mktemp -d)
+TEMP_DIR=$(mktemp -d -t openan-build.XXXXXXXX)
 
 # ===== Download release packages =====
 download_release() {
@@ -251,11 +261,13 @@ else
     docker buildx use multiarch-builder
 fi
 
-BUILD_CMD="docker buildx build --platform $PLATFORMS"
+BUILD_CMD=(docker buildx build --platform "$PLATFORMS"
+    --label "org.opencontainers.image.version=$TAG"
+    --label "io.openan.source.ref=$SOURCE_REF")
 if [ "$PUSH" = true ]; then
-    BUILD_CMD="$BUILD_CMD --push"
+    BUILD_CMD+=(--push)
 else
-    BUILD_CMD="$BUILD_CMD --load"
+    BUILD_CMD+=(--load)
 fi
 
 TOTAL=0
@@ -273,14 +285,14 @@ CURRENT=0
 if [ "$BUILD_REGISTRY" = true ] && [ -n "$RC_SRC" ]; then
     CURRENT=$((CURRENT + 1))
     log_step "[$CURRENT/$TOTAL] Building Registry Center..."
-    $BUILD_CMD -t "$REGISTRY_IMAGE" "$RC_SRC"
+    "${BUILD_CMD[@]}" --label "org.opencontainers.image.source=$REGISTRY_RELEASE" -t "$REGISTRY_IMAGE" "$RC_SRC"
     log_info "Done: $REGISTRY_IMAGE"
 fi
 
 if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ]; then
     CURRENT=$((CURRENT + 1))
     log_step "[$CURRENT/$TOTAL] Building Orchestration Center..."
-    $BUILD_CMD -t "$ORCHESTRATION_IMAGE" "$OC_SRC"
+    "${BUILD_CMD[@]}" --label "org.opencontainers.image.source=$ORCHESTRATION_RELEASE" -t "$ORCHESTRATION_IMAGE" "$OC_SRC"
     log_info "Done: $ORCHESTRATION_IMAGE"
 fi
 
@@ -292,7 +304,7 @@ if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ]; then
     if [ -n "$WD_SRC" ]; then
         CURRENT=$((CURRENT + 1))
         log_step "[$CURRENT/$TOTAL] Building Workflow Designer..."
-        $BUILD_CMD -t "$FRONTEND_IMAGE" "$WD_SRC"
+        "${BUILD_CMD[@]}" --label "org.opencontainers.image.source=$ORCHESTRATION_RELEASE" -t "$FRONTEND_IMAGE" "$WD_SRC"
         log_info "Done: $FRONTEND_IMAGE"
     else
         log_warn "Workflow Designer Dockerfile not found, skipping"
@@ -317,7 +329,7 @@ if [ -n "$WD_SRC" ]; then
 fi
 echo ""
 echo "  Deploy:"
-echo "    helm install openan ./online-install/openan-chart -n openan --create-namespace \\"
+echo "    helm upgrade --install openan ./online-install/openan-chart -n openan --create-namespace -f /path/to/deployment.yaml \\"
 if [ "$BUILD_REGISTRY" = true ] && [ -n "$RC_SRC" ]; then
     echo "      --set registry.image.repository=$IMAGE_REGISTRY/$NAMESPACE/registry-center --set registry.image.tag=$TAG \\"
 fi

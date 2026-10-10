@@ -25,7 +25,7 @@ cd build
 ./build.sh
 ```
 
-This single command downloads release v1.0.0 packages from GitHub, builds all component images, and pushes them to ghcr.io.
+This single command downloads the source archive for tag v1.0.0 from GitHub, builds all component images, and pushes them to ghcr.io.
 
 ### Build Specific Components
 
@@ -65,7 +65,8 @@ If no components specified, all components are built. Specify one or both to bui
 |--------|-------------|---------|
 | `--image-registry <url>` | Image registry address | `ghcr.io` |
 | `--namespace <ns>` | Image namespace | `project-openan` |
-| `--tag <tag>` | Image tag | `v1.0.0` |
+| `--tag <tag>` | Image tag (independent of source) | `v1.0.0` |
+| `--source-ref <ref>` | Source Git tag/SHA; build each component at its own SHA | `v1.0.0` |
 | `--registry-release <url>` | Registry Center release tarball URL | GitHub release v1.0.0 |
 | `--orchestration-release <url>` | Orchestration Center release tarball URL | GitHub release v1.0.0 |
 | `--platforms <platforms>` | Target platform architectures | `linux/amd64,linux/arm64` |
@@ -97,12 +98,12 @@ If no components specified, all components are built. Specify one or both to bui
 ./build.sh --image-registry harbor.example.com --namespace myorg
 ```
 
-### Default Release URLs
+### Default Source URLs
 
-The script downloads from these GitHub releases by default:
+The script downloads these source archives by default:
 
-- Registry Center: `https://github.com/project-openan/registry-center/releases/download/v1.0.0/registry-center-v1.0.0.tar.gz`
-- Orchestration Center: `https://github.com/project-openan/orchestration-center/releases/download/v1.0.0/orchestration-center-v1.0.0.tar.gz`
+- Registry Center: `https://github.com/project-openan/registry-center/archive/v1.0.0.tar.gz`
+- Orchestration Center: `https://github.com/project-openan/orchestration-center/archive/v1.0.0.tar.gz`
 
 Override with `--registry-release` and `--orchestration-release` to use custom URLs or different versions.
 
@@ -212,7 +213,8 @@ After building, deploy using the Helm Chart:
 
 ```bash
 # Using command-line overrides
-helm install openan ./online-install/openan-chart \
+helm upgrade --install openan ./online-install/openan-chart \
+  -f /path/to/deployment.yaml \
   -n openan --create-namespace \
   --set registry.image.repository=ghcr.io/project-openan/registry-center \
   --set registry.image.tag=v1.0.0 \
@@ -235,7 +237,7 @@ helm install openan ./online-install/openan-chart \
 #     repository: ghcr.io/project-openan/workflow-designer
 #     tag: v1.0.0
 
-helm install openan ./online-install/openan-chart -n openan --create-namespace -f values-custom.yaml
+helm upgrade --install openan ./online-install/openan-chart -n openan --create-namespace -f /path/to/deployment.yaml -f values-custom.yaml
 ```
 
 ## FAQ

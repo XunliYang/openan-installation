@@ -1,48 +1,35 @@
-# Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0
-
 {{- if .Values.registry.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: registry-center-config
   namespace: {{ .Values.namespace }}
-  labels:
-    {{- include "openan.registry.labels" . | nindent 4 }}
 data:
-  # Server
   REGISTRY_IP: "0.0.0.0"
   REGISTRY_PORT: {{ .Values.registry.port | quote }}
-  REGISTRY_ENABLE_HTTPS: "false"
-  REGISTRY_FORWARDED_ALLOW_IPS: "*"
-  REGISTRY_OWNER__VALIDATION__MODE: "relaxed"
-
-  # Persistence
-  PERSISTENCE_MODE: "postgresql"
-  DB_HOST: {{ include "openan.postgresHost" . | quote }}
-  DB_PORT: {{ .Values.postgresql.port | quote }}
-  DB_NAME: "registry_center"
-  DB_USERNAME: "registry"
-  DB_POOL_MIN: "2"
-  DB_POOL_MAX: "10"
-
-  # LLM Chat
-  LLM_CHAT_MODEL: {{ .Values.registry.llm.chat.model | quote }}
-  LLM_CHAT_URL: {{ .Values.registry.llm.chat.url | quote }}
-
-  # LLM Embed
-  LLM_EMBED_MODEL: {{ .Values.registry.llm.embed.model | quote }}
-  LLM_EMBED_URL: {{ .Values.registry.llm.embed.url | quote }}
-
-  # LLM Rerank
-  LLM_RERANK_MODEL: {{ .Values.registry.llm.rerank.model | quote }}
-  LLM_RERANK_URL: {{ .Values.registry.llm.rerank.url | quote }}
-
-  # VectorDB
-  USE_VECTORDB: {{ .Values.registry.vectordb.enabled | quote }}
+  REGISTRY_ENABLE_HTTPS: {{ .Values.registry.tls.enabled | quote }}
+  REGISTRY_VERIFY_CLIENT: {{ .Values.registry.tls.verifyClient | quote }}
+  REGISTRY_FORWARDED_ALLOW_IPS: "127.0.0.1"
+  REGISTRY_STARTUP_STRICT_IDENTITY: "true"
+  REGISTRY_OWNER_IDENTITY_MODE: {{ .Values.registry.identityMode | quote }}
+  REGISTRY_INTEGRATION_AUTH_MODE: {{ .Values.registry.authMode | quote }}
+  REGISTRY_REGISTRY_PUBLIC_BASE_URL: {{ .Values.registry.publicBaseUrl | quote }}
+  REGISTRY_REGISTRY_SIGN_ENABLED: {{ ne .Values.registry.signing.mode "off" | quote }}
+  PERSISTENCE_MODE: {{ .Values.database.type | quote }}
+  DB_HOST: {{ include "openan.databaseHost" . | quote }}
+  DB_PORT: {{ include "openan.databasePort" . | quote }}
+  DB_NAME: {{ .Values.database.registry.name | quote }}
+  DB_USERNAME: {{ .Values.database.registry.username | quote }}
+  REGISTRY_USE_VECTORDB: {{ .Values.registry.vectordb.enabled | quote }}
   {{- if .Values.registry.vectordb.enabled }}
-  VECTORDB_HOST: {{ .Values.registry.vectordb.host | quote }}
-  VECTORDB_PORT: {{ .Values.registry.vectordb.port | quote }}
+  MILVUS_URI: {{ printf "http://%s:%v" .Values.registry.vectordb.host .Values.registry.vectordb.port | quote }}
+  {{- end }}
+  LLM_CONFIG_FILE: "/opt/registry-center/etc/config/models.yaml"
+  {{- if .Values.registry.tls.verifyClient }}
+  REGISTRY_HEALTHCHECK_CLIENT_CERT: "/opt/registry-center/etc/ssl/probe-client.cer"
+  REGISTRY_HEALTHCHECK_CLIENT_KEY: "/opt/registry-center/etc/ssl/probe-client.key"
+  {{- end }}
+  {{- range $key, $value := .Values.registry.extraEnv }}
+  {{ $key }}: {{ $value | quote }}
   {{- end }}
 {{- end }}
