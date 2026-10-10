@@ -113,6 +113,8 @@ create_signature_verifier(lambda kid,jku:key,['RS256'])(ParseDict(json.load(sys.
     command("docker", "compose", "-f", str(compose), "exec", "-T", "registry-center", "python", "-c", verify, input=json.dumps(signed))
     request(opener, base, "/registry/rest/v1/registry-center/keys")
     auth = "/api/orchestrate/rest/v1/orchestrate/auth"
+    if first:
+        request(opener, base, auth + "/login", expected=401, method="POST", body={"username": "admin", "password": "OpenAN@2026"})
     _, cookie = request(opener, base, auth + "/login", method="POST", body={"username": "admin", "password": ADMIN if first else NEW_ADMIN})
     assert ("; secure" in cookie["Set-Cookie"].lower()) == base.startswith("https:")
     if first:
