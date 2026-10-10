@@ -298,3 +298,27 @@ def test_failed_image_pull_never_produces_offline_release(tmp_path):
     assert result.returncode == 17, result.stdout + result.stderr
     assert not list(out.glob("*.tar.gz"))
     assert "Done." not in result.stdout
+
+
+def test_uninstall_targets_generated_project_and_retains_volumes(tmp_path):
+    if not BASH:
+        pytest.skip("Bash unavailable")
+    bundle = tmp_path / "bundle"
+    (bundle / "runtime").mkdir(parents=True)
+    (bundle / "runtime/compose.json").write_text(json.dumps({"name": "controlled-stack"}))
+    shutil.copytree(OFFLINE / "scripts", bundle / "scripts")
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    python_shim(shim)
+    docker = shim / "docker"
+    docker.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$@"\n', newline="\n")
+    docker.chmod(0o755)
+    result = subprocess.run([BASH, "-c", 'export PATH="$1:$PATH"; export COMPOSE_PROJECT_NAME=unrelated-stack; exec bash "$2"',
+                             "test", shell_path(shim), shell_path(bundle / "scripts/uninstall.sh")],
+                            encoding="utf-8", capture_output=True, timeout=10)
+    assert result.returncode == 0, result.stdout + result.stderr
+    args = result.stdout.splitlines()
+    assert args[:3] == ["compose", "--project-name", "controlled-stack"]
+    assert "down" in args and "--volumes" not in args
+    assert "unrelated-stack" not in args
+    assert (bundle / "runtime/compose.json").exists()

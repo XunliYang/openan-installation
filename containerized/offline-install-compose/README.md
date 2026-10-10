@@ -14,7 +14,7 @@ images are not certified. Build from the accepted revisions or the explicitly
 reviewed PR source trees when those changes are not yet merged:
 
 ```bash
-build/build-offline.sh --tag deployment-20261010 --app-source build \
+bash build/build-offline.sh --tag deployment-20261010 --app-source build \
   --registry-src /path/to/registry-center \
   --orchestration-src /path/to/orchestration-center \
   --platforms linux/amd64 --out /path/to/new-output

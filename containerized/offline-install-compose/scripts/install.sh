@@ -18,10 +18,9 @@ for image in registry-center orchestration-center workflow-designer postgres mys
     docker load -i "$BUNDLE_DIR/images/$image-$ARCH.tar"
 done
 python3 "$SCRIPT_DIR/configure.py" --config "$CONFIG_FILE" --bundle "$BUNDLE_DIR" --arch "$ARCH" --write
-COMPOSE_FILE="$BUNDLE_DIR/runtime/compose.json"
 # Do not print resolved config: it includes private runtime credentials.
-docker compose -f "$COMPOSE_FILE" config --quiet
-docker compose -f "$COMPOSE_FILE" up -d --pull never --remove-orphans --force-recreate --wait --wait-timeout 180
-docker compose -f "$COMPOSE_FILE" exec -T openan-nginx nginx -t
-docker compose -f "$COMPOSE_FILE" ps
+run_compose config --quiet
+run_compose up -d --pull never --remove-orphans --force-recreate --wait --wait-timeout 180
+run_compose exec -T openan-nginx nginx -t
+run_compose ps
 echo 'Containers ready. Verify public login, registry authorization, signing and model/workflow behavior before production acceptance.'

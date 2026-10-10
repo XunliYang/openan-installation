@@ -16,3 +16,11 @@ verify_bundle() {
         [ -s "$BUNDLE_DIR/images/$image-$ARCH.tar" ] || { echo "Missing image: $image-$ARCH.tar" >&2; return 1; }
     done
 }
+
+run_compose() {
+    # CLI precedence prevents a stale COMPOSE_PROJECT_NAME/.env from targeting
+    # another stack, especially during uninstall. Read only our generated name.
+    local project
+    project="$(python3 -c 'import json,re,sys; name=json.load(open(sys.argv[1]))["name"]; assert re.fullmatch(r"[a-z0-9][a-z0-9_-]*",name); print(name)' "$BUNDLE_DIR/runtime/compose.json")"
+    docker compose --project-name "$project" -f "$BUNDLE_DIR/runtime/compose.json" "$@"
+}
