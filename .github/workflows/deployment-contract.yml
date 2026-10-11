@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Zhoujie628/orchestration-center
-          ref: 40b6f0d1129666cfd14ccabf64c3e190dd5fd07c
+          ref: 23065f38f9e29be78e24e3448467896b4914746f
           path: service-sources/orchestration
       - name: Build real offline release from matching source images
         run: |
