@@ -155,7 +155,12 @@ def wait_for_proxy(opener, base):
 
 
 def replace_backends(compose):
-    """Reserve previous IPs so replacement really exercises runtime DNS updates."""
+    """Consume freed addresses and require actual IP changes after replacement.
+
+    Default Docker networks have automatic IPAM and reject --ip reservations.
+    Use automatic allocation for blockers too; explicit assertions below prevent
+    a same-address replacement from falsely passing the DNS regression.
+    """
     services = ("registry-center", "orchestration-center")
     before = {}
     for service in services:
@@ -170,9 +175,12 @@ def replace_backends(compose):
     try:
         command("docker", "compose", "-f", str(compose), "stop", *services)
         command("docker", "compose", "-f", str(compose), "rm", "-f", *services)
-        for network, address in before.values():
-            blockers.append(command("docker", "run", "-d", "--network", network, "--ip", address,
-                                    "--entrypoint", "sleep", image, "600").stdout.strip())
+        project = json.loads(compose.read_text())["name"]
+        for index, (network, _) in enumerate(before.values()):
+            name = f"{project}-dns-blocker-{index}"
+            blockers.append(name)  # Also clean up containers whose start fails.
+            command("docker", "run", "-d", "--name", name, "--network", network,
+                    "--entrypoint", "sleep", image, "600")
         command("docker", "compose", "-f", str(compose), "up", "-d", "--no-deps", "--pull", "never",
                 "--wait", "--wait-timeout", "180", *services)
         for service, (network, address) in before.items():

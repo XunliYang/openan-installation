@@ -11,6 +11,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -20,6 +21,42 @@ BASH = os.environ.get("BASH_BIN") or shutil.which("bash")
 SPEC = importlib.util.spec_from_file_location("offline_configure", OFFLINE / "scripts/configure.py")
 configure = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(configure)
+
+
+@pytest.mark.parametrize("same_ips", [False, True])
+def test_dns_replacement_fixture_uses_automatic_ipam_and_checks_changes(tmp_path, monkeypatch, same_ips):
+    spec = importlib.util.spec_from_file_location("compose_smoke", ROOT / "tests/offline_compose_container_smoke.py")
+    smoke = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(smoke)
+    compose = tmp_path / "compose.json"
+    compose.write_text(json.dumps({"name": "synthetic-project", "services": {"openan-nginx": {"image": "synthetic/nginx:test"}}}))
+    calls, replaced = [], False
+
+    def command(*args, **kwargs):
+        nonlocal replaced
+        calls.append(args)
+        output = ""
+        if args[1] == "compose" and "ps" in args:
+            output = args[-1]
+        elif args[1] == "inspect":
+            offset = 0 if same_ips or not replaced else 10
+            last = 3 if args[-1] == "registry-center" else 4
+            output = json.dumps({"synthetic-network": {"IPAddress": f"172.18.0.{last + offset}"}})
+        elif args[1] == "compose" and "up" in args:
+            replaced = True
+        return SimpleNamespace(stdout=output)
+
+    monkeypatch.setattr(smoke, "command", command)
+    if same_ips:
+        with pytest.raises(AssertionError, match="IP did not change"):
+            smoke.replace_backends(compose)
+    else:
+        smoke.replace_backends(compose)
+    blockers = [call for call in calls if call[1] == "run"]
+    assert len(blockers) == 2
+    assert all("--network" in call and "--ip" not in call for call in blockers)
+    assert [call[-1] for call in calls if call[1:3] == ("rm", "-f")] == [
+        "synthetic-project-dns-blocker-0", "synthetic-project-dns-blocker-1"]
 
 
 @pytest.fixture
