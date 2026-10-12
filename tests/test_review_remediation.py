@@ -63,6 +63,27 @@ def test_probe_san_host_overrides_are_rendered():
                    "orchestration.extraEnv.ORCH_HEALTHCHECK_HOST": "orchestration-center"})
     assert docs["registry-center-config"]["data"]["REGISTRY_HEALTHCHECK_HOST"] == "registry-center"
     assert docs["orchestration-center-config"]["data"]["ORCH_HEALTHCHECK_HOST"] == "orchestration-center"
+    # Avoid a bootstrap loop: Service endpoints don't exist until these probes pass.
+    for component in ("registry", "orchestration"):
+        spec = docs[component + "-center"]["spec"]["template"]["spec"]
+        assert spec["hostAliases"] == [{"ip": "127.0.0.1", "hostnames": [component + "-center"]}]
+
+
+def test_default_ip_probe_needs_no_dns_alias():
+    docs = render()
+    assert "hostAliases" not in docs["registry-center"]["spec"]["template"]["spec"]
+    assert "hostAliases" not in docs["orchestration-center"]["spec"]["template"]["spec"]
+
+
+@pytest.mark.parametrize("settings", [
+    {"orchestration.extraEnv.ORCH_HEALTHCHECK_HOST": "registry-center"},
+    {"registry.extraEnv.REGISTRY_HEALTHCHECK_HOST": "orchestration-center.openan.svc.cluster.local"},
+    {"registry.extraEnv.REGISTRY_HEALTHCHECK_HOST": "openan-postgres"},
+    {"orchestration.extraEnv.ORCH_HEALTHCHECK_HOST": "external.example",
+     "orchestration.agentRegistryUrl": "https://external.example:8443"},
+])
+def test_probe_dns_alias_must_not_shadow_known_upstream(settings):
+    assert "probe host must not shadow" in render(settings, success=False)
 
 
 def test_public_example_really_renders():

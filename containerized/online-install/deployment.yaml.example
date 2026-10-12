@@ -33,6 +33,7 @@ registry:
     existingSecret: rc-tls
   ingressClientSecret: rc-ingress-trust
   extraEnv:
+    # Pod-local probe DNS alias; do not reuse a remote dependency hostname.
     REGISTRY_HEALTHCHECK_HOST: registry-center # SAN in server.cer, resolves to this Pod
 orchestration:
   image:
@@ -48,6 +49,7 @@ orchestration:
     existingSecret: oc-tls
   ingressClientSecret: oc-ingress-trust
   extraEnv:
+    # Resolves to this Pod, not a Service with unavailable readiness endpoints.
     ORCH_HEALTHCHECK_HOST: orchestration-center
 frontend:
   image:

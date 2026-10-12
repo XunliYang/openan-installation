@@ -116,7 +116,7 @@ credential.oc.token_hash=<64-character-HMAC-SHA256>
 
 生产证书由企业 CA 提供。演示可用两个服务自己的 generate_selfsign_cert.py：serverAuth 生成 TLS bundle，dataSigning 生成签名 bundle，--issue-client 生成客户端身份。不要再使用 Helm 的空口令 TLS 自动生成逻辑。
 
-SAN 应包含对应 Service DNS，以及探针使用的 127.0.0.1；或设置 REGISTRY_HEALTHCHECK_HOST / ORCH_HEALTHCHECK_HOST 为证书包含且可解析到本 Pod 的名称。后端监听 0.0.0.0 不是公开 JWKS 地址；可设置 registry.publicBaseUrl 为真正的 HTTPS 入口。HTTP 使用预置可信公钥，不降低远程 JWKS 的 HTTPS/SSRF 约束。
+SAN 应包含对应 Service DNS，以及探针使用的 127.0.0.1；或设置 REGISTRY_HEALTHCHECK_HOST / ORCH_HEALTHCHECK_HOST 为证书包含的专用探针 DNS 名（通常是对应服务名）。Chart 会把此 DNS 名通过 Pod hostAliases 解析到本 Pod 的 127.0.0.1，避免探针依赖尚未 Ready 的 Service 端点。该映射影响 Pod 内所有解析，不能复用远端模型、注册中心或 SQL 主机名；已知跨服务/SQL 冲突会被拒绝。后端监听 0.0.0.0 不是公开 JWKS 地址；可设置 registry.publicBaseUrl 为真正的 HTTPS 入口。HTTP 使用预置可信公钥，不降低远程 JWKS 的 HTTPS/SSRF 约束。
 
 Kubernetes TLS/签名文件使用只读 subPath 挂载，UID/fsGroup=10001，文件 0440，镜像目录 0700。Secret 文件变化需滚动重启（subPath 不会热更新），签名轮换还需同步可信公钥。auto 签名升级使用 lookup 保留旧 key，并兼容旧 server.cer/server_key.pem 名称；不要用离线 template 生成的随机 Secret 覆盖已有线上签名材料。
 

@@ -27,6 +27,7 @@ spec:
         checksum/config: {{ include (print $.Template.BasePath "/orchestration-center/configmap.yaml") . | sha256sum }}
         checksum/models: {{ include (print $.Template.BasePath "/orchestration-center/models.yaml") . | sha256sum }}
     spec:
+      {{- include "openan.probeHostAliases" (dict "component" "orchestration" "config" $c) | nindent 6 }}
       terminationGracePeriodSeconds: 120
       securityContext:
         runAsUser: 10001

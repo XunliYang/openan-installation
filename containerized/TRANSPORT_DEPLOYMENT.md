@@ -107,7 +107,7 @@ orchestration:
     ORCH_HEALTHCHECK_HOST: orchestration-center
 ```
 
-These overrides already work via extraEnv. Do not duplicate managed listener/authentication settings.
+These overrides work via extraEnv. For DNS names, the chart adds a Pod-local loopback hostAlias so startup/readiness never depends on a Service's not-yet-ready endpoints. Use a dedicated probe/SAN name (normally the component's own Service name), not a shared remote model, registry or SQL hostname: the alias affects all DNS lookups in that Pod. Known cross-service/SQL collisions are rejected. Do not duplicate managed listener/authentication settings.
 /health is minimal readiness, not proof of every business/model operation.
 
 ## Persistence and migration
