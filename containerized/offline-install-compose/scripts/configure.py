@@ -123,6 +123,9 @@ def nginx_config(secure, locations, public_tls):
         # Exact prefix redirect plus ^~ prevents asset regex or SPA fallback from
         # swallowing API paths. A trailing slash strips only the proxy prefix.
         uri = "/" if prefix in {"/registry/", "/api/orchestrate/"} else ""
+        browser_policy = 'proxy_set_header X-OpenAN-Browser-Gateway "1";' if prefix in {
+            "/api/orchestrate/", "/rest/v1/orchestrate/",
+        } else ""
         blocks.append(f"""
 location = {prefix.rstrip('/')} {{ return 308 {prefix}; }}
 location ^~ {prefix} {{
@@ -134,6 +137,8 @@ location ^~ {prefix} {{
   proxy_set_header X-Forwarded-For $remote_addr;
   proxy_set_header X-Forwarded-Proto $scheme;
   proxy_set_header Authorization $http_authorization;
+  {browser_policy}
+  gzip off;
   proxy_buffering off;
   proxy_read_timeout 3600s;
   {directives}
@@ -157,8 +162,21 @@ http {{
     {tls}
     root /usr/share/nginx/html;
     index index.html;
+    gzip on;
+    gzip_vary on;
+    gzip_types text/css application/javascript image/svg+xml;
     add_header X-Content-Type-Options nosniff always;
     {''.join(blocks)}
+    location ~ "^/assets/[^/]+-[A-Za-z0-9_-]{{8,}}\\\\.(js|css|svg|png|jpg|woff2)$" {{
+      try_files $uri =404;
+      add_header Cache-Control "public, max-age=31536000, immutable";
+      add_header X-Content-Type-Options nosniff always;
+    }}
+    location = /index.html {{
+      add_header Cache-Control "no-store";
+      add_header X-Content-Type-Options nosniff always;
+    }}
+    # X-XSS-Protection intentionally omitted: deprecated legacy filter.
     location / {{ try_files $uri $uri/ /index.html; }}
   }}
 }}
@@ -239,12 +257,10 @@ def plan(config_file, bundle, arch):
                 material(signing, ["sign.cer", "sign_key.pem", "cert_pwd"], "Registry signing")
                 mounts.append(bind(signing, home + "/etc/sign_cert"))
         else:
-            for key in ("OC_ADMIN_INITIAL_PASSWORD", "ORCH_API_TOKEN", "REGISTRY_ACCESS_TOKEN"):
+            for key in ("OC_ADMIN_INITIAL_PASSWORD", "REGISTRY_ACCESS_TOKEN"):
                 required(env, key)
-            if len(env["ORCH_API_TOKEN"].encode()) < 32:
-                raise ValueError("ORCH_API_TOKEN must be at least 32 bytes")
             managed.update(ORCH_PUBLIC_SCHEME="https" if boolean(config, "PUBLIC_ENABLE_HTTPS") else "http",
-                           ORCH_EXTERNAL_AUTH_MODE="bearer", ORCH_CLIENT_VERIFY_SERVER=config["ORCH_CLIENT_VERIFY_SERVER"],
+                           ORCH_EXTERNAL_AUTH_MODE="user", ORCH_CLIENT_VERIFY_SERVER=config["ORCH_CLIENT_VERIFY_SERVER"],
                            AGENT_REGISTRY_URL=f"{'https' if boolean(config, 'REGISTRY_ENABLE_HTTPS') else 'http'}://registry-center:5000")
             if boolean(config, "REGISTRY_ENABLE_HTTPS"):
                 if config["REGISTRY_CLIENT_TLS_DIR"]:

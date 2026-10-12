@@ -1,3 +1,6 @@
+{{/* Copyright (c) 2026 Huawei Technologies Co., Ltd.
+All Rights Reserved.
+SPDX-License-Identifier: Apache-2.0 */}}
 {{- if .Values.orchestration.enabled }}
 {{- $c := .Values.orchestration }}
 apiVersion: apps/v1
@@ -9,6 +12,10 @@ metadata:
     {{- include "openan.orchestration.labels" . | nindent 4 }}
 spec:
   replicas: {{ $c.replicas }}
+  # A single replica must also remain single during upgrades; shared RWO files
+  # and process-local sessions cannot safely use the default surge strategy.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: orchestration-center
@@ -25,6 +32,18 @@ spec:
         runAsUser: 10001
         runAsGroup: 10001
         fsGroup: 10001
+      initContainers:
+      - name: prepare-runtime
+        image: "{{ $c.image.repository }}:{{ $c.image.tag }}"
+        imagePullPolicy: {{ $c.image.pullPolicy }}
+        command: ["python", "-c", "from pathlib import Path; [Path('/runtime', p).mkdir(mode=0o770, exist_ok=True) for p in ('data', 'log')]"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: runtime
+          mountPath: /runtime
       containers:
       - name: orchestration-center
         image: "{{ $c.image.repository }}:{{ $c.image.tag }}"
@@ -72,6 +91,12 @@ spec:
         resources:
           {{- toYaml $c.resources | nindent 10 }}
         volumeMounts:
+        - name: runtime
+          mountPath: /opt/orchestration-center/data
+          subPath: data
+        - name: runtime
+          mountPath: /opt/orchestration-center/log
+          subPath: log
         - name: models
           mountPath: /opt/orchestration-center/etc/config/models.yaml
           subPath: models.yaml
@@ -92,6 +117,9 @@ spec:
           readOnly: true
         {{- end }}
       volumes:
+      - name: runtime
+        persistentVolumeClaim:
+          claimName: {{ default "orchestration-center-runtime" $c.persistence.existingClaim }}
       - name: models
         configMap:
           name: {{ default "orchestration-center-models" $c.modelsConfigMap }}

@@ -9,10 +9,10 @@ openan-installation/
 ├── binary/one-click/                # Binary installation
 │   ├── install.sh                   # one-click installation script
 │   ├── uninstall.sh                 # one-click uninstall script
-│   ├── README.md                    # Binary installation guide
+│   ├── QUICKSTART.md                # Historical binary installation guide
 └── containerized/                   # Containerized installation
     ├── online-install/              # Internet-connected installation
-    │   ├── install.sh               # Explicit values deployment tool
+    │   ├── one_click_install.sh     # Guided, skippable phases or prepared values
     │   ├── uninstall.sh             # One-click uninstall script
     │   ├── openan-chart/            # Helm chart
     │   └── QUICKSTART.md            # Installation guide
@@ -30,7 +30,7 @@ Helm deployment with explicit database, protocol, credentials and certificate se
 ```bash
 git clone https://github.com/project-openan/openan-installation.git
 cd openan-installation/containerized/online-install
-bash install.sh --values /path/to/deployment.yaml
+bash one_click_install.sh --skip-build --skip-infra --values /path/to/deployment.yaml
 ```
 
 **Features:**
@@ -52,7 +52,7 @@ helm upgrade --install openan ./openan-chart -n openan --create-namespace -f /pa
 
 ### 2. One-Click Binary Installation
 
-Binary-based installation for virtual machines or bare-metal servers. Downloads and starts all services locally with automatic dependency setup.
+Historical binary installer for virtual machines/bare metal. It has not been validated against the current authentication/configuration contract; do not treat it as a supported current-service deployment. Use maintained Helm or single-host Compose for current images.
 
 **Linux/macOS:**
 ```bash
@@ -64,7 +64,7 @@ cd binary/one-click
 - Downloads and starts all services locally (PostgreSQL, Registry, Orchestration, Frontend)
 - Automatic dependency setup (Python venvs, Node.js)
 - Modular component selection (Registry Center, Orchestration Center, Workflow Designer in nginx)
-- Ready for installation in minutes
+- Historical flow only; current service compatibility is not certified
 
 ## Uninstall
 
@@ -89,11 +89,11 @@ cd binary/one-click
 ./uninstall.sh
 ```
 
-The single-host [offline Compose installer](containerized/offline-install-compose/README.md) supports internal/external MySQL or PostgreSQL, independent public/backend HTTP/HTTPS, explicit credentials and readonly PKI/model mounts. It deploys one instance per application, not an HA cluster. Offline Kubernetes remains outside this remediation and is not certified against the same deployment contract.
+The single-host [offline Compose installer](containerized/offline-install-compose/README.md) supports internal/external MySQL or PostgreSQL, independent public/backend HTTP/HTTPS, explicit credentials and readonly PKI/model mounts. It deploys one instance per application, not an HA cluster. The legacy independent offline Kubernetes build/install paths are blocked until they reuse and validate the maintained chart.
 
 ## Upgrade
 
-> Container upgrades use the same explicit values file via install.sh (helm upgrade --install). Back up data, pin image tags/source refs, and restart Pods when subPath Secrets change. Binary installer compatibility is outside this container remediation.
+> Container upgrades use the same explicit values file via one_click_install.sh --skip-build --skip-infra (or native helm upgrade --install). Back up data, pin image tags/source refs, and restart Pods when subPath Secrets change. Binary installer compatibility is outside this container remediation.
 
 ## Documentation
 
@@ -102,5 +102,4 @@ The single-host [offline Compose installer](containerized/offline-install-compos
 - [Image Build](./containerized/build/README.md) - Custom image building
 - [Offline Installation (Kubernetes)](./containerized/offline-install/README.md) - Offline Kubernetes deployment
 - [Offline Installation (Docker Compose)](./containerized/offline-install-compose/README.md) - Offline single-host deployment
-- [Binary Installation](./binary/one-click/README.md) - Binary installation details
-
+- [Binary Installation](./binary/one-click/QUICKSTART.md) - Binary installation details

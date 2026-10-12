@@ -1,0 +1,24 @@
+{{/* Copyright (c) 2026 Huawei Technologies Co., Ltd. SPDX-License-Identifier: Apache-2.0 */}}
+{{- range $component, $name := dict "registry" "registry-center" "orchestration" "orchestration-center" }}
+{{- $c := index $.Values $component }}
+{{- if and $c.enabled (not $c.persistence.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}-runtime
+  namespace: {{ $.Values.namespace }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- if eq $c.persistence.storageClassName "-" }}
+  storageClassName: ""
+  {{- else if $c.persistence.storageClassName }}
+  storageClassName: {{ $c.persistence.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $c.persistence.size | quote }}
+{{- end }}
+{{- end }}

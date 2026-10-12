@@ -1,3 +1,6 @@
+{{/* Copyright (c) 2026 Huawei Technologies Co., Ltd.
+All Rights Reserved.
+SPDX-License-Identifier: Apache-2.0 */}}
 {{- if .Values.orchestration.enabled }}
 apiVersion: v1
 kind: ConfigMap
@@ -11,11 +14,15 @@ data:
   ORCH_VERIFY_CLIENT: {{ .Values.orchestration.tls.verifyClient | quote }}
   ORCH_FORWARDED_ALLOW_IPS: "127.0.0.1"
   ORCH_CLIENT_VERIFY_SERVER: {{ .Values.orchestration.clientVerifyServer | quote }}
-  ORCH_EXTERNAL_AUTH_MODE: {{ ternary "mtls" "bearer" (and .Values.orchestration.tls.enabled .Values.orchestration.tls.verifyClient) | quote }}
+  # The Ingress/client proxy certificate identifies the proxy, not its caller.
+  # Use frontend accounts, never the proxy certificate as caller identity.
+  ORCH_EXTERNAL_AUTH_MODE: "user"
   ORCH_PUBLIC_SCHEME: {{ include "openan.publicScheme" . | quote }}
   AGENT_REGISTRY_URL: {{ include "openan.registryUrl" . | quote }}
   {{- if .Values.orchestration.registryClientSecret }}
+  {{- if .Values.orchestration.clientVerifyServer }}
   REGISTRY_CA_FILE: "/opt/orchestration-center/etc/registry_tls/trust.cer"
+  {{- end }}
   {{- if .Values.registry.tls.verifyClient }}
   REGISTRY_CLIENT_CERT: "/opt/orchestration-center/etc/registry_tls/client.cer"
   REGISTRY_CLIENT_KEY: "/opt/orchestration-center/etc/registry_tls/client_key.pem"

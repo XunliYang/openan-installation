@@ -1,150 +1,139 @@
-# HTTP/HTTPS 与数据库部署契约
+# HTTP/HTTPS, Authentication and Database Deployment Contract
 
-本次范围为 `online-install` 在线 Chart、共享镜像构建脚本，以及新增整改的单机 `offline-install-compose`。`offline-install` 离线 Kubernetes 与二进制安装器未纳入本轮验证，不能假定它们已经具有相同契约。下文 Helm 字段针对在线 Chart；Compose 使用独立的 [部署指南](offline-install-compose/README.md) 和配置模板。
+[中文](TRANSPORT_DEPLOYMENT.zh.md) · [Quickstart](online-install/QUICKSTART.md) · [Offline Compose](offline-install-compose/README.md)
 
-本版本 Chart 必须配合包含本次部署整改的 RC/OC 镜像。不能将旧 v1.0.0 镜像视作已包含新功能。先构建并明确指定镜像 tag，再部署；源码 Git ref 与镜像 tag 分开。
+## Supported scope and source baseline
 
-## 配置职责
+This contract covers the maintained online Helm chart, shared image builder and single-host offline Compose.
+The independent legacy offline Kubernetes chart and binary installer are not validated against current revisions.
+Legacy Kubernetes build/install entrypoints now refuse execution. Future offline Kubernetes packaging must reuse
+the maintained chart, not fork its templates again.
 
-- database.type 选择 postgresql/mysql；postgresql.enabled 只决定是否创建内置 PostgreSQL。MySQL 使用已有外部实例，不创建数据库容器。
-- database.registry / database.orchestration 分别配置库名、用户和密码 Secret。两个服务不要共用业务库。
-- 内置 PostgreSQL 当前用 postgresql.existingSecret 的 postgres-password 同时初始化业务用户；独立业务密码 Secret 仅用于外部数据库，不能配置成与初始化密码不同。生产推荐外部数据库和独立用户凭据。
-- registry.tls / orchestration.tls 分别控制各自监听协议及客户端证书校验。
-- 认证与 TLS 独立。RC 的 token 身份复用已有 static_bearer/oauth2_jwt/oauth2_introspection/custom provider；主端口实例与第三方接入端口实例不共用异步客户端。OC 机器接口独立使用 Bearer/mTLS/custom，不接受用户 Cookie 替代机器凭据。
-- registry.signing 独立控制 AgentCard 标准 JWS 签名。off 是明确禁用，非“自动生成”。auto 仅用于演示；生产使用 secret。
-- 模型定义通过完整 models.yaml ConfigMap 注入，秘密通过 runtimeSecret 或各能力 existingSecret 注入。自定义 provider/auth 字段请使用 modelsConfigMap，内置 llm 快捷配置仅用于 OpenAI-compatible。
+CI builds accepted organization revisions, not personal forks:
 
-默认模板不携带可用密码、机器 Token 或厂商密钥。缺失必要 Secret、HTTP+客户端证书校验等错误组合会明确拒绝渲染/启动。
+| Component | Source | Fixed revision |
+| --- | --- | --- |
+| Registry | project-openan/registry-center | `49d9c2463c2d4d3a369db295b6d0b87ef244a27e` |
+| Orchestration and designer | project-openan/orchestration-center | `77ee99e485c4b1d3de76bef975cb6f0ef7a517a1` |
 
-## 现网：外部 MySQL + HTTPS + 不校验客户端证书
+Old v1.0.0 images are not compatible-contract evidence. Build and explicitly set enabled
+`registry/orchestration/frontend.image.tag` values; the chart has no usable default.
+Image tags and source revisions are independent. OCI source labels use repository URLs,
+with a Git revision when available (otherwise unknown).
 
-示例只包含 Secret 名称，没有真实敏感值：
+## Configuration responsibilities
+
+- `database.type`: postgresql/mysql. `postgresql.enabled` controls only bundled PostgreSQL; Helm MySQL is external.
+- External `database.host/port`: null/omitted port selects PostgreSQL 5432 or MySQL 3306; integer 1..65535.
+  Bundled PostgreSQL instead uses `postgresql.port`.
+- `database.registry/orchestration`: separate names/users/password Secret references.
+  Both services cannot use the same external database name at the shared host.
+- Bundled PostgreSQL initializes its users with the shared `postgresql.existingSecret/postgres-password`;
+  independent external password Secrets cannot be mixed into that initialization. Production should use separate credentials.
+- `modelsConfigMap`: complete models.yaml; secret environment variables come from runtime/per-capability Secrets.
+  The `llm` shortcut supports OpenAI-compatible profiles only; other provider/auth profiles need complete ConfigMaps.
+- `namespace` must equal Helm `--namespace`. Release is selectable, but resource names are fixed: one stack per namespace.
+
+## Authentication is independent of TLS
+
+Registry Token identity reuses static_bearer, OAuth2 JWT/introspection or custom providers.
+Main and integration listeners own separate async clients. Static credential files contain HMAC-SHA256 digests,
+identities, roles and enabled entries, not plaintext Tokens. Missing/unusable selected materials reject startup.
+Ordinary roles discover public cards; vendors write their own cards; administrative/integration policy remains separate.
+
+Orchestration uses the same account as web login in HTTP/HTTPS/mTLS:
+
+1. Empty SQL users: supply `OC_ADMIN_INITIAL_PASSWORD` from a Secret; existing accounts are not reset.
+2. Log in to the UI, change the initial password and log in again.
+3. `POST /api/v1/auth/token` returns top-level `access_token`, `token_type`, `expires_in`.
+4. Use an explicit Bearer header on public APIs; cookies alone and query Tokens do not authorize them.
+5. Logout, password change and account deletion revoke sessions. Expiry/restart requires re-login.
+
+Helm/Compose explicitly choose `ORCH_EXTERNAL_AUTH_MODE=user`; no fixed ORCH_API_TOKEN is required.
+Gateway certificates identify proxies, not anonymous users. Internal browser APIs keep cookie/Bearer authentication;
+shipped proxies mark browser traffic without replacing caller authentication.
+
+| False setting | Effect | Still required |
+| --- | --- | --- |
+| tls.verifyClient | No inbound client certificate | Application authentication |
+| orchestration.clientVerifyServer | OC skips RC server verification | Client identity if RC requires mTLS |
+| frontend.backendTls.verifyServer | Designer skips OC server verification | User login/Token |
+| ingress.backendVerifyServer | Ingress skips backend server verification | Upstream client identity if required |
+
+Prefer verification with trusted CA material. Explicit OC verification-off does not inject REGISTRY_CA_FILE,
+but still loads client identity when RC requires it. HTTPS-no-mTLS plus client verify=False can communicate
+with a valid Token; absent/invalid Tokens remain rejected. Configure public_scheme/publicScheme from the
+browser entrance: public HTTPS uses Secure cookies even over a private HTTP backend hop.
+
+## Secrets, signing and permissions
+
+| Secret role | Contents |
+| --- | --- |
+| RC/OC database | db-password or configured passwordKey |
+| RC runtime | INTEGRATION_FINGERPRINT_KEY; static mode also INTEGRATION_TOKEN_HMAC_KEY; selected OAuth/model variables |
+| RC credentials | integration_credentials.conf: token digests, identity, role, enabled |
+| OC runtime | OC_ADMIN_INITIAL_PASSWORD on first boot, REGISTRY_ACCESS_TOKEN, model secret variables |
+| Backend TLS | server.cer, server_key.pem, cert_pwd, trust.cer; mTLS probe-client.cer/probe-client.key |
+| Signing | sign.cer, sign_key.pem, cert_pwd |
+| OC registry client | trust.cer; mTLS client.cer/client_key.pem; encrypted key password via REGISTRY_CLIENT_KEY_PASSWORD |
+| Designer backend | trust.cer; mTLS client.cer/client_key.pem loadable by Nginx |
+| Ingress upstream | ca.crt; mTLS tls.crt/tls.key |
+
+Signing and TLS material are independent. signing.mode=off explicitly disables signing, not certificate generation.
+auto is evaluation-only and preserves online material via lookup; production uses secret.
+Enabled signing with missing/invalid material refuses service, never silently emits unsigned cards.
+Use service certificate tools only for development, managed PKI for production. Do not replace an online signing
+Secret with random offline helm-template output; rotation also requires updating trusted public keys.
+
+Prefer existing Secrets or the wizard's stdin creation. Never put secrets in generated values, --set, shell history
+or logs. Disable tracing and protect Secret RBAC/etcd. The wizard never overwrites Secrets and is not transactional:
+after a partial failure reconcile already-created objects explicitly rather than rerunning or deleting credentials.
+Kubernetes Secret files use subPath, UID/fsGroup 10001 and mode 0440 in restricted image directories.
+SubPath changes require restart. Compose binds actual files, never creates missing files as directories;
+use owner 10001 with directory 0700/file 0600 or read-only service-group access.
+
+## HTTP/HTTPS and probes
+
+Start with [deployment.yaml.example](online-install/deployment.yaml.example) for external MySQL + HTTPS-no-mTLS.
+Specify complete models, compatible tags and all prepared Secrets. HTTP disables backend TLS, not authentication/signing.
+HTTPS probes validate the server CA; mTLS probes also present client identity. SANs must match actual proxy/probe names:
 
 ```yaml
-postgresql:
-  enabled: false
-database:
-  type: mysql
-  host: mysql.example.internal
-  port: 3306
-  registry:
-    name: registry_center
-    username: registry
-    existingSecret: rc-db
-    passwordKey: db-password
-  orchestration:
-    name: orchestration_center
-    username: orchestration
-    existingSecret: oc-db
-    passwordKey: db-password
 registry:
-  runtimeSecret: rc-runtime
-  credentialSecret: rc-credentials
-  identityMode: token
-  authMode: static_bearer
-  signing:
-    mode: secret
-    existingSecret: rc-signing
-  tls:
-    enabled: true
-    verifyClient: false
-    mode: secret
-    existingSecret: rc-tls
-  ingressClientSecret: rc-ingress-trust
+  extraEnv:
+    REGISTRY_HEALTHCHECK_HOST: registry-center
 orchestration:
-  runtimeSecret: oc-runtime
-  registryClientSecret: oc-registry-trust
-  clientVerifyServer: true
-  tls:
-    enabled: true
-    verifyClient: false
-    mode: secret
-    existingSecret: oc-tls
-  ingressClientSecret: oc-ingress-trust
-frontend:
-  backendTls:
-    verifyServer: true
-    existingSecret: frontend-trust
+  extraEnv:
+    ORCH_HEALTHCHECK_HOST: orchestration-center
 ```
 
-必须同时覆盖 registry/orchestration/frontend.image.tag 为本次镜像版本。省略的 llm 配置仍是占位符，需改为实际模型或指定已有 modelsConfigMap。
+These overrides already work via extraEnv. Do not duplicate managed listener/authentication settings.
+/health is minimal readiness, not proof of every business/model operation.
 
-关闭对端校验有不同含义，不能混作一个开关：
+## Persistence and migration
 
-- tls.verifyClient=false：服务端不要求调用方证书，应用 Token 鉴权仍有效。
-- orchestration.clientVerifyServer=false：OC 不校验 RC 的服务端证书。
-- frontend.backendTls.verifyServer=false：前端 nginx 不校验 OC 的服务端证书。
-- ingress.backendVerifyServer=false：ingress-nginx 不校验后端证书。
-- 关闭服务端校验并不会取消后端的客户端证书要求；启用 mTLS 时仍必须提供客户端证书。
+RC/OC are single-instance Recreate, without OC HPA: events, schedulers and account sessions are process-local.
+Upgrades interrupt service and revoke in-memory sessions. SQL does not make these services HA.
+Separate retained ReadWriteOnce runtime PVCs hold data/log subdirectories. OC PreFlow, sandbox reports,
+Stub templates and solution packages, and RC local audit records, remain files even in SQL mode.
+Non-root init creates directories without recursively chowning old data; storage must support fsGroup.
+Use existing writable claims or StorageClass when there is no provisioner; Pending Pods are not successful installs.
 
-推荐保留服务端校验并挂载 CA。确需跳过时显式设置，不依赖隐藏默认值。
+Before replacing old ephemeral Pods, stop writes and export data/log; back up SQL and PKI/Secrets.
+Restore into separate claims and check UID permissions/checksums before deploying. Attaching an empty PVC is not migration.
+Uninstall retains claims; deletion is operator-controlled. Follow CSI expansion rules; do not shrink volumes via Helm.
 
-## Secret 文件与环境变量
+## Acceptance and troubleshooting
 
-| Secret | 内容 |
-|---|---|
-| rc-db / oc-db | db-password |
-| rc-runtime | INTEGRATION_FINGERPRINT_KEY；静态模式还需 INTEGRATION_TOKEN_HMAC_KEY；OAuth2 模式按 RC 公共模板提供凭据和配置引用 |
-| rc-credentials | integration_credentials.conf，保存 Token 的 HMAC-SHA256 摘要、identity、role，不能保存明文 Token |
-| oc-runtime | OC_ADMIN_INITIAL_PASSWORD（SQL 初次启动）；ORCH_API_TOKEN（至少 32 字节）；REGISTRY_ACCESS_TOKEN（访问 RC）；模型密钥变量 |
-| rc-tls / oc-tls | server.cer、server_key.pem、cert_pwd、trust.cer；mTLS 探针还需 probe-client.cer、probe-client.key |
-| rc-signing | sign.cer、sign_key.pem、cert_pwd |
-| oc-registry-trust | trust.cer；RC mTLS 时还需 client.cer、client_key.pem（加密客户端私钥通过 REGISTRY_CLIENT_KEY_PASSWORD 提供口令） |
-| frontend-trust | trust.cer；OC mTLS 时还需 client.cer、client_key.pem（nginx 客户端私钥需可直接加载） |
-| rc/oc-ingress-trust | ingress-nginx 格式 ca.crt；mTLS 还需 tls.crt、tls.key |
+CI builds matching sources and runs real Compose combinations separately from render tests. Verify UI login,
+change-password/re-login, public Token/logout/expiry, ownership/JWS/JWKS, workflow CRUD, sandbox/templates, audit,
+SSE and file retention after replacement. Cover both SQL types and public/backend HTTP/HTTPS/mTLS/verify settings.
+Compose passes cannot prove real Kubernetes PVC, non-root Secret permissions, SAN probes or migration.
 
-签名私钥可以是未加密 key + 空 cert_pwd，服务会归一为 None；TLS 私钥要求遵循服务现有证书校验契约（加密私钥、非空合规口令、足够强度）。两者不能混用规则。
-
-静态 Token 凭据文件示例（token_hash 必须为以 INTEGRATION_TOKEN_HMAC_KEY 为密钥计算的 HMAC-SHA256 十六进制摘要）：
-
-```properties
-credential.oc.identity=orchestration
-credential.oc.role=partner_service
-credential.oc.token_hash=<64-character-HMAC-SHA256>
-```
-
-用于注册、更新和删除 AgentCard 的身份应配置 vendor_agent，所有者取验证后的 identity，不取归属说明 owner。nms_oss 可以进入管理接口，原有所有者校验仍保留。非管理身份在主端口仅开放公开发现与供应商自己的卡片写操作；订阅/审计等请使用已授权的 integration 操作。
-
-## TLS 与公开地址
-
-生产证书由企业 CA 提供。演示可用两个服务自己的 generate_selfsign_cert.py：serverAuth 生成 TLS bundle，dataSigning 生成签名 bundle，--issue-client 生成客户端身份。不要再使用 Helm 的空口令 TLS 自动生成逻辑。
-
-SAN 应包含对应 Service DNS，以及探针使用的 127.0.0.1；或设置 REGISTRY_HEALTHCHECK_HOST / ORCH_HEALTHCHECK_HOST 为证书包含且可解析到本 Pod 的名称。后端监听 0.0.0.0 不是公开 JWKS 地址；可设置 registry.publicBaseUrl 为真正的 HTTPS 入口。HTTP 使用预置可信公钥，不降低远程 JWKS 的 HTTPS/SSRF 约束。
-
-Kubernetes TLS/签名文件使用只读 subPath 挂载，UID/fsGroup=10001，文件 0440，镜像目录 0700。Secret 文件变化需滚动重启（subPath 不会热更新），签名轮换还需同步可信公钥。auto 签名升级使用 lookup 保留旧 key，并兼容旧 server.cer/server_key.pem 名称；不要用离线 template 生成的随机 Secret 覆盖已有线上签名材料。
-
-Chart 自己生成的 models.yaml 和 nginx 配置带 Pod checksum，Helm 更新会触发滚动重启。外部 modelsConfigMap 内容更新不属于 Helm 输入，须由运维滚动重启；同样不能期待 subPath 文件热更新。
-
-当前 RC 的 legacy use_vectordb=true 会切换成缺少权威 SQL 记录的向量专用模式，不能用于完整业务 API。本 Chart 明确拒绝 vectordb.enabled=true。SQL 主存储加派生向量索引的完整实现是后续独立需求，本轮不宣称已提供该能力。
-
-## HTTP 模式
-
-将两个 tls.enabled 改为 false，verifyClient=false；RC 保持 token 身份，OC 保留用户和机器凭据。无需 TLS Secret。签名与入站签名校验并不因 HTTP 自动关闭。HTTP 仅适用于受信内网/演示，凭据会在链路明文传输。
-
-Cookie 的 Secure 以公共入口为准。前端/Ingress 公共 TLS 启用时自动采用 https；外部网关终止 TLS 时显式 orchestration.publicScheme=https。应用不直接信任任意 X-Forwarded-Proto。主机直连 HTTPS 而不使用该 HTTP 前端时也应显式配置 publicScheme=https。
-
-OC 会话仍为进程内状态，当前仅支持 replicas=1、HPA=false。不能仅加副本就声称登录高可用。
-
-## 构建、部署与验证
-
-```bash
-# 为每个组件使用准确的源码 SHA；两个仓库的 SHA 不相同。
-bash build/build.sh registry --source-ref <RC_SHA> --tag <IMAGE_TAG> --platforms linux/amd64 --no-push
-bash build/build.sh orchestration --source-ref <OC_SHA> --tag <IMAGE_TAG> --platforms linux/amd64 --no-push
-# 需要多架构时显式推送；多架构 --no-push 会拒绝，不会偷偷 --push。
-bash online-install/install.sh --values /path/to/deployment.yaml
-helm lint online-install/openan-chart -f /path/to/deployment.yaml
-helm template openan online-install/openan-chart -f /path/to/deployment.yaml
-```
-
-install.sh 现在只负责用显式 values 部署/升级，不再交互收集 Token/模型密钥、自动安装基础设施或在业务镜像内启动 samples。Kubernetes、Helm、Ingress、Secret 由运维提前准备。镜像中保留公共 solution_packages 示例数据，但不携带样例账户和 Agent 服务。数据库不存在时按服务已有创建权限/迁移策略处理，生产推荐 DBA 预建。
-
-CI 分别验证 Helm 矩阵、错误配置和构建失败退出；RC 已有 Linux 容器 smoke，OC 的真实启动/API 回归可独立执行。上线验收必须另外运行真实镜像+MySQL+nginx/Ingress，覆盖登录 Cookie、AgentCard CRUD/JWS、工作流 CRUD/SSE、证书缺失/错误密码、无/错 Token、断连和重启。Helm 渲染通过不是集群实测。
-
-## 单机离线 Compose
-
-使用 `offline-install-compose/build/build-offline.sh` 将匹配服务源码构建的镜像、前端静态文件与公共模板打成白名单发布包；不会复制本地 config.env、runtime、PKI 或业务数据。离线端不拉镜像，校验失败阻止安装，配置按字面解析而不执行 shell。
-
-数据库可选外部/内置 MySQL 或 PostgreSQL，两个服务使用独立业务库和凭据。应用各单实例，Nginx 是唯一公开入口，公共协议、两个后端协议与客户端证书校验分别配置。TLS、签名和 Token 身份保持独立。全量 models.yaml 只读挂载，密钥由私有 runtime env 注入。生成的 runtime/compose.json 含敏感值，不应提交或上传。
-
-Linux CI 构建真实镜像与离线发布包，再执行 MySQL/PostgreSQL、HTTP/HTTPS、混合公共/后端协议与 mTLS 场景，覆盖公开入口鉴权、标准签名、登录/退出、CRUD 与重启后 SQL 数据保留。只有对应提交的容器 job 通过，才能认定这些场景已验证；该结果不替代离线 Kubernetes、外部 IAM/模型、arm64 或完整工作流/SSE 的验收。卸载保留 SQL 卷和应用数据，旧目录数据需显式备份/恢复迁移。
+- Render failures: missing references/tags, invalid port, namespace mismatch, replicas or identical database names.
+- Startup failures/503: selected provider, signing material, SQL bootstrap secret; never disable authentication to hide failure.
+- TLS failures: distinguish CA/hostname verification from required client identity; verify=false does not supply a certificate.
+- Pending PVC: inspect provisioner/capacity/fsGroup, not an ephemeral workaround.
+- 401 after change-password/restart: login again; 403 is permission, not refresh. Never replay writes blindly.
+- UI caching: index.html is no-store; only content-hashed assets are immutable. API/SSE compression stays off.
+  X-XSS-Protection is intentionally absent because the legacy filter is deprecated.

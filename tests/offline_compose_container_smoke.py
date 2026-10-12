@@ -26,7 +26,78 @@ TOKEN = "synthetic-registry-container-token-000000000000"
 HMAC = "synthetic-container-hmac-key"
 ADMIN = "ContainerInitial9!"
 NEW_ADMIN = "ContainerUpdated9!"
-MACHINE_TOKEN = "synthetic-container-machine-token-0000000000000"
+CASES = [("mysql", False, False, False, False, True),
+         ("postgresql", False, False, False, False, True),
+         ("mysql", True, True, True, False, True),
+         ("postgresql", True, True, True, False, True),
+         ("mysql", False, True, True, False, True),
+         ("mysql", True, True, True, True, True),
+         ("mysql", True, True, True, True, False),
+         ("mysql", True, False, False, False, True),
+         ("mysql", True, True, False, False, True),
+         ("mysql", True, False, True, False, True)]
+
+
+def require_card(cards, description="Synthetic container test"):
+    matches = [c for c in cards if c.get("name") == "ComposeAgent"
+               and c.get("provider", {}).get("organization") == "ComposeOrg"]
+    assert len(matches) == 1, "Expected registered card is missing or duplicated"
+    assert matches[0]["description"] == description, "Card description was not persisted"
+    assert matches[0]["version"] == "1.0", "Card version was not persisted"
+    return matches[0]
+
+
+def require_workflow(payload, workflow_id):
+    workflow = payload["data"]
+    assert workflow["id"] == workflow_id, "Wrong persisted workflow"
+    assert workflow["name"] == "Compose workflow", "Workflow name was not persisted"
+    assert len(workflow["steps"]) == 1, "Workflow steps were lost"
+    subtask = workflow["steps"][0]["subtasks"][0]
+    assert subtask["task_id"] == "t1" and subtask["skill"] == "skill_a", "Workflow task content was lost"
+
+
+def seed_runtime_records(compose):
+    """Seed via real storage components, not an external model or task execution."""
+    code = """from orchestrate.sandbox.store import SandboxStore
+from orchestrate.sandbox.models import SandboxRunReport, StubTemplate
+from orchestrate.solution_package.manager import SolutionPackageManager
+from orchestrate.core.model.preflow import PreFlow
+from orchestrate.core.persistence import WorkflowStorage
+s=SandboxStore()
+s.save_report(SandboxRunReport(verification_id='compose-verification',workflow_id='compose-workflow',workflow_name='Compose workflow',scenario='success',verdict='pass'), [{'marker':'persisted-event'}])
+s.save_templates('compose-workflow',[StubTemplate(template_id='compose-stub',response_text='persisted-stub')])
+assert SolutionPackageManager().store_solution_package('compose-persistence.pdf', {'Synthetic chapter':'persisted-package'})
+WorkflowStorage().save_preflow(PreFlow(id='compose-preflow',name='Compose preflow',steps_md='persisted-preflow'))
+"""
+    command("docker", "compose", "-f", str(compose), "exec", "-T", "orchestration-center", "python", "-c", code)
+
+
+def require_runtime_records(compose):
+    code = """from orchestrate.sandbox.store import SandboxStore
+from orchestrate.core.persistence import WorkflowStorage
+s=SandboxStore()
+assert s.load_report('compose-verification')['events'] == [{'marker':'persisted-event'}]
+assert s.load_templates('compose-workflow')[0].response_text == 'persisted-stub'
+assert WorkflowStorage().load_preflow('compose-preflow').steps_md == 'persisted-preflow'
+"""
+    command("docker", "compose", "-f", str(compose), "exec", "-T", "orchestration-center", "python", "-c", code)
+
+
+def audit_snapshot(compose, previous=None):
+    """Prove old audit bytes survive replacement while new records can append."""
+    code = """import hashlib,json,sys
+from pathlib import Path
+p=Path('log/audit/audit.log')
+data=p.read_bytes()
+assert data, 'No audit records to test'
+before=json.load(sys.stdin)
+if before:
+    assert len(data)>=before['size'] and hashlib.sha256(data[:before['size']]).hexdigest()==before['sha256'], 'Audit history was lost'
+print(json.dumps({'size':len(data),'sha256':hashlib.sha256(data).hexdigest()}))
+"""
+    output = command("docker", "compose", "-f", str(compose), "exec", "-T", "registry-center", "python", "-c", code,
+                     input=json.dumps(previous)).stdout
+    return json.loads(output)
 
 
 def command(*args, check=True, input=None):
@@ -101,7 +172,7 @@ def exercise(opener, base, compose, first=True, workflow_id=None):
     if first:
         request(opener, base, registry, expected=201, method="POST", body={"agentCards": [card]}, headers=headers)
     raw, _ = request(opener, base, target, headers=headers)
-    signed = json.loads(raw)["agentCards"][0]
+    signed = require_card(json.loads(raw)["agentCards"])
     assert signed["signatures"]
     verify = """import json, sys
 from cryptography import x509
@@ -120,23 +191,57 @@ create_signature_verifier(lambda kid,jku:key,['RS256'])(ParseDict(json.load(sys.
     assert ("; secure" in cookie["Set-Cookie"].lower()) == base.startswith("https:")
     if first:
         request(opener, base, auth + "/change-password", method="POST", body={"old_password": ADMIN, "new_password": NEW_ADMIN})
+        # A credential change revokes all sessions, including the login cookie.
+        request(opener, base, auth + "/login", method="POST", body={"username": "admin", "password": NEW_ADMIN})
     # OC reaches RC through its own separately authenticated/TLS registry client.
-    request(opener, base, "/api/orchestrate/rest/v1/orchestrate/agent-cards")
+    raw, _ = request(opener, base, "/api/orchestrate/rest/v1/orchestrate/agent-cards")
+    require_card(json.loads(raw)["data"])
     workflows = "/api/orchestrate/rest/v1/orchestrate/workflows"
     if first:
         psop = {"id": "compose-workflow", "name": "Compose workflow", "description": "Synthetic",
                 "steps": [{"name": "step", "type": "AllSuccess", "subtasks": [{"task_id": "t1", "description": "Synthetic", "agent": "agent_a", "skill": "skill_a", "status": "pending"}], "next": None, "layer": 0}], "tags": []}
         body, _ = request(opener, base, workflows, expected=201, method="POST", body={"psop": psop})
         workflow_id = json.loads(body)["data"]["workflow_id"]
-    request(opener, base, workflows + "/" + workflow_id)
+    raw, _ = request(opener, base, workflows + "/" + workflow_id)
+    require_workflow(json.loads(raw), workflow_id)
     external = "/api/v1/orchestrate/psop/" + workflow_id
-    request(opener, base, external, expected=401)  # Cookie is not a machine token.
-    request(opener, base, external, headers={"Authorization": "Bearer " + MACHINE_TOKEN})
-    request(opener, base, auth + "/logout", method="POST")
-    request(opener, base, workflows, expected=401)
+    request(opener, base, external, expected=401)  # Cookie alone is not public API authorization.
+    raw, _ = request(opener, base, "/api/orchestrate/api/v1/auth/token", method="POST",
+                     body={"username": "admin", "password": NEW_ADMIN})
+    bearer = {"Authorization": "Bearer " + json.loads(raw)["access_token"]}
+    raw, _ = request(opener, base, external, headers=bearer)
+    require_workflow(json.loads(raw), workflow_id)
+    request(opener, base, "/api/orchestrate" + external, expected=401)
+    raw, _ = request(opener, base, "/api/orchestrate" + external, headers=bearer)
+    require_workflow(json.loads(raw), workflow_id)
+    if first:
+        seed_runtime_records(compose)
+    require_runtime_records(compose)
+    api = "/api/orchestrate/rest/v1/orchestrate"
+    raw, _ = request(opener, base, api + "/sandbox/verifications/compose-verification")
+    assert json.loads(raw)["data"]["events"] == [{"marker": "persisted-event"}]
+    raw, _ = request(opener, base, api + "/sandbox/templates/compose-workflow")
+    assert json.loads(raw)["data"][0]["response_text"] == "persisted-stub"
+    raw, _ = request(opener, base, api + "/solution-packages/compose-persistence.pdf")
+    assert json.loads(raw)["data"]["chapters"] == {"Synthetic chapter": "persisted-package"}
     if not first:
         request(opener, base, target, method="PUT", headers=headers, body={"agentCards": [dict(card, description="Updated")]})
+        raw, _ = request(opener, base, target, headers=headers)
+        require_card(json.loads(raw)["agentCards"], "Updated")
         request(opener, base, target, method="DELETE", headers=headers)
+        # RC's published lookup contract is 200 + an empty agentCards list,
+        # unlike OC's workflow lookup, which uses HTTP 404.
+        raw, _ = request(opener, base, target, headers=headers)
+        assert json.loads(raw)["agentCards"] == [], "Deleted card can still be retrieved"
+        raw, _ = request(opener, base, registry, headers=headers)
+        assert not any(c.get("name") == "ComposeAgent" for c in json.loads(raw)["agentCards"]), "Deleted card remains listed"
+        request(opener, base, workflows + "/" + workflow_id, method="DELETE")
+        request(opener, base, workflows + "/" + workflow_id, expected=404)
+        request(opener, base, external, expected=404, headers=bearer)
+    request(opener, base, "/api/orchestrate/api/v1/auth/logout", method="POST", headers=bearer)
+    request(opener, base, external, expected=401, headers=bearer)
+    request(opener, base, auth + "/logout", method="POST")
+    request(opener, base, workflows, expected=401)
     return workflow_id
 
 
@@ -197,14 +302,10 @@ def run(bundle):
     if os.name == "nt" or os.geteuid() != 0 or not shutil.which("docker"):
         raise SystemExit("Requires Linux Docker and root for isolated UID=10001 fixtures")
     bundle = Path(bundle).resolve()
-    cases = [("mysql", False, False, False, True), ("postgresql", False, False, False, True),
-             ("mysql", True, True, False, True), ("postgresql", True, True, False, True),
-             ("mysql", False, True, False, True), ("mysql", True, True, True, True),
-             ("mysql", True, True, True, False)]
     with tempfile.TemporaryDirectory(prefix="openan-compose-smoke-") as temp:
         root = Path(temp)
         server, client, signing, ca = certificates(root)
-        for index, (db, public_tls, backend_tls, mtls, verify_upstream) in enumerate(cases):
+        for index, (db, public_tls, registry_tls, orchestration_tls, mtls, verify_upstream) in enumerate(CASES):
             case = root / f"case-{index}"
             # Reuse immutable image files without copying gigabytes; this is a
             # controlled smoke fixture, not the distributed release layout.
@@ -222,12 +323,12 @@ def run(bundle):
             model.write_text("models:\n  chat:\n    provider: openai_compatible\n    model: synthetic-model\n    url: http://127.0.0.1:9/v1/chat/completions\n")
             model.chmod(0o600); os.chown(model, 10001, 10001)
             (case / "rc.env").write_text(f"INTEGRATION_TOKEN_HMAC_KEY={HMAC}\nINTEGRATION_FINGERPRINT_KEY=synthetic-fingerprint\nREGISTRY_AGENT_APPROVAL_ENABLED=false\nREGISTRY_SIGNATURE_VALIDATION_ENABLED=false\nREGISTRY_HEARTBEAT_ENABLED=false\n")
-            (case / "oc.env").write_text(f"OC_ADMIN_INITIAL_PASSWORD='{ADMIN}'\nORCH_API_TOKEN={MACHINE_TOKEN}\nREGISTRY_ACCESS_TOKEN={TOKEN}\nEXTRA_LITERAL='price $5 ${{NOT_EXPANDED}} # text'\n")
+            (case / "oc.env").write_text(f"OC_ADMIN_INITIAL_PASSWORD='{ADMIN}'\nREGISTRY_ACCESS_TOKEN={TOKEN}\nEXTRA_LITERAL='price $5 ${{NOT_EXPANDED}} # text'\n")
             settings = {"PROJECT_NAME": f"openan-smoke-{os.getpid()}-{index}", "PUBLIC_BIND": "127.0.0.1", "PUBLIC_PORT": str(port),
                         "PUBLIC_ENABLE_HTTPS": str(public_tls).lower(), "PUBLIC_TLS_DIR": str(server),
                         "DATABASE_TYPE": db, "DATABASE_INTERNAL": "true", "REGISTRY_DB_PASSWORD": "Registry'$\\Smoke9!",
                         "ORCH_DB_PASSWORD": "Orch'$\\Smoke9!", "POSTGRES_PASSWORD": "RootSmoke9!", "MYSQL_ROOT_PASSWORD": "RootSmoke9!",
-                        "REGISTRY_ENABLE_HTTPS": str(backend_tls).lower(), "ORCH_ENABLE_HTTPS": str(backend_tls).lower(),
+                        "REGISTRY_ENABLE_HTTPS": str(registry_tls).lower(), "ORCH_ENABLE_HTTPS": str(orchestration_tls).lower(),
                         "REGISTRY_VERIFY_CLIENT": str(mtls).lower(), "ORCH_VERIFY_CLIENT": str(mtls).lower(),
                         "BACKEND_VERIFY_SERVER": str(verify_upstream).lower(), "ORCH_CLIENT_VERIFY_SERVER": str(verify_upstream).lower(),
                         "REGISTRY_TLS_DIR": str(server), "ORCH_TLS_DIR": str(server), "REGISTRY_PROXY_TLS_DIR": str(client),
@@ -247,13 +348,15 @@ def run(bundle):
                 base = f"{'https' if public_tls else 'http'}://127.0.0.1:{port}"
                 wait_for_proxy(opener, base)
                 workflow_id = exercise(opener, base, compose)
+                history = audit_snapshot(compose)
                 command("docker", "compose", "-f", str(compose), "restart", "registry-center", "orchestration-center")
                 command("docker", "compose", "-f", str(compose), "up", "-d", "--pull", "never", "--wait", "--wait-timeout", "180")
                 wait_for_proxy(opener, base)
                 replace_backends(compose)
                 wait_for_proxy(opener, base)
                 exercise(opener, base, compose, first=False, workflow_id=workflow_id)
-                print(f"PASS: {db}, public_https={public_tls}, backend_https={backend_tls}, mtls={mtls}, verify_upstream={verify_upstream}, CRUD/auth/signing/restart persistence/backend IP replacement", flush=True)
+                audit_snapshot(compose, history)
+                print(f"PASS: {db}, public_https={public_tls}, registry_https={registry_tls}, orchestration_https={orchestration_tls}, mtls={mtls}, verify_upstream={verify_upstream}, CRUD content/auth/signing/SQL+file persistence/backend IP replacement", flush=True)
             except BaseException:
                 if compose.is_file():
                     for service in ("openan-mysql" if db == "mysql" else "openan-postgres", "registry-center", "orchestration-center", "openan-nginx"):

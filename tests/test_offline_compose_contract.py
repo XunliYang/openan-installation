@@ -23,6 +23,100 @@ configure = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(configure)
 
 
+def load_smoke():
+    spec = importlib.util.spec_from_file_location("compose_smoke", ROOT / "tests/offline_compose_container_smoke.py")
+    smoke = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(smoke)
+    return smoke
+
+
+@pytest.mark.parametrize("gap", [None, "oc-card-missing", "ui-workflow-empty", "machine-workflow-wrong",
+                                     "put-stale", "deleted-card-listed", "deleted-card-returned"])
+def test_container_smoke_checks_business_content_not_only_status(monkeypatch, gap):
+    smoke = load_smoke()
+    card = {"name": "ComposeAgent", "provider": {"organization": "ComposeOrg"},
+            "description": "Synthetic container test", "version": "1.0", "signatures": ["synthetic"]}
+    workflow = {"id": "compose-workflow", "name": "Compose workflow", "steps": [
+        {"subtasks": [{"task_id": "t1", "skill": "skill_a"}]}]}
+    updated = False
+    deleted = False
+
+    def request(opener, base, path, expected=200, method="GET", body=None, headers=None):
+        nonlocal updated, deleted
+        payload, response_headers = {}, {}
+        if path.endswith("/auth/login"):
+            response_headers["Set-Cookie"] = "synthetic=cookie; Secure"
+        elif path.endswith("/api/v1/auth/token"):
+            payload = {"access_token": "synthetic-account-token", "token_type": "Bearer", "expires_in": 43200}
+        elif path.endswith("/agent-cards/ComposeOrg/ComposeAgent"):
+            if method == "PUT":
+                updated = True
+            elif method == "DELETE":
+                deleted = True
+            else:
+                value = dict(card, description="Updated" if updated and gap != "put-stale" else card["description"])
+                payload = {"agentCards": [] if deleted and gap != "deleted-card-returned" else [value]}
+        elif path.endswith("/agent-cards"):
+            if path.startswith("/api/orchestrate"):
+                payload = {"data": [] if gap == "oc-card-missing" else [card]}
+            else:
+                payload = {"agentCards": [card] if updated and gap == "deleted-card-listed" else []}
+        elif "/workflows/" in path or "/psop/" in path:
+            value = workflow
+            if gap == "ui-workflow-empty" and "/workflows/" in path:
+                value = dict(workflow, steps=[])
+            if gap == "machine-workflow-wrong" and "/psop/" in path:
+                value = dict(workflow, id="wrong-workflow")
+            payload = {"data": value}
+        elif "/sandbox/verifications/" in path:
+            payload = {"data": {"events": [{"marker": "persisted-event"}]}}
+        elif "/sandbox/templates/" in path:
+            payload = {"data": [{"response_text": "persisted-stub"}]}
+        elif "/solution-packages/" in path:
+            payload = {"data": {"chapters": {"Synthetic chapter": "persisted-package"}}}
+        return json.dumps(payload).encode(), response_headers
+
+    monkeypatch.setattr(smoke, "request", request)
+    monkeypatch.setattr(smoke, "command", lambda *a, **kw: SimpleNamespace(stdout=""))
+    monkeypatch.setattr(smoke, "require_runtime_records", lambda *a: None, raising=False)
+    if gap:
+        with pytest.raises(AssertionError):
+            smoke.exercise(None, "https://synthetic.invalid", Path("synthetic.json"), first=False, workflow_id=workflow["id"])
+    else:
+        assert smoke.exercise(None, "https://synthetic.invalid", Path("synthetic.json"), first=False, workflow_id=workflow["id"]) == workflow["id"]
+
+
+def test_smoke_protocol_matrix_includes_independent_backends():
+    cases = load_smoke().CASES
+    assert ("mysql", True, False, False, False, True) in cases
+    assert ("mysql", True, True, False, False, True) in cases
+    assert ("mysql", True, False, True, False, True) in cases
+    assert all(not mtls or (rc_tls and oc_tls) for _, _, rc_tls, oc_tls, mtls, _ in cases)
+
+
+def test_audit_persistence_check_rejects_truncated_history(tmp_path, monkeypatch):
+    smoke = load_smoke()
+    audit = tmp_path / "log/audit/audit.log"
+    audit.parent.mkdir(parents=True)
+    audit.write_bytes(b"synthetic-original-audit\n")
+
+    def command(*args, input=None, **kwargs):
+        result = subprocess.run([sys.executable, "-c", args[-1]], cwd=tmp_path, input=input,
+                                capture_output=True, text=True, timeout=10)
+        if result.returncode:
+            raise RuntimeError(result.stderr)
+        return result
+
+    monkeypatch.setattr(smoke, "command", command)
+    before = smoke.audit_snapshot(Path("synthetic-compose.json"))
+    with audit.open("ab") as stream:
+        stream.write(b"synthetic-new-record\n")
+    assert smoke.audit_snapshot(Path("synthetic-compose.json"), before)["size"] > before["size"]
+    audit.write_bytes(b"synthetic-new-record\n")
+    with pytest.raises(RuntimeError, match="Audit history was lost"):
+        smoke.audit_snapshot(Path("synthetic-compose.json"), before)
+
+
 @pytest.mark.parametrize("same_ips", [False, True])
 def test_dns_replacement_fixture_uses_automatic_ipam_and_checks_changes(tmp_path, monkeypatch, same_ips):
     spec = importlib.util.spec_from_file_location("compose_smoke", ROOT / "tests/offline_compose_container_smoke.py")
@@ -72,7 +166,7 @@ def deployment(tmp_path):
     shutil.copyfile(OFFLINE / "compose/init/create-mysql-databases.sh", bundle / "compose/init/create-mysql-databases.sh")
     key, token = "synthetic-hmac-key", "synthetic-registry-token"
     (tmp_path / "registry.env").write_text(f"INTEGRATION_TOKEN_HMAC_KEY={key}\nINTEGRATION_FINGERPRINT_KEY=synthetic-fingerprint\n")
-    (tmp_path / "orchestration.env").write_text(f"REGISTRY_ACCESS_TOKEN={token}\nOC_ADMIN_INITIAL_PASSWORD=synthetic-admin-password\nORCH_API_TOKEN={'x'*32}\n")
+    (tmp_path / "orchestration.env").write_text(f"REGISTRY_ACCESS_TOKEN={token}\nOC_ADMIN_INITIAL_PASSWORD=synthetic-admin-password\n")
     digest = hmac.new(key.encode(), token.encode(), hashlib.sha256).hexdigest()
     (tmp_path / "credentials.conf").write_text(f"credential.oc.identity=orchestration\ncredential.oc.token_hash={digest}\ncredential.oc.role=partner_service\n")
     for name in ("registry-models.yaml", "orchestration-models.yaml"):
@@ -127,6 +221,8 @@ def test_compose_database_and_three_protocol_matrix(deployment, db, public_https
     assert nginx.count("zone orchestration_center 64k;") == 1
     assert f"proxy_pass {'https' if oc_https == 'true' else 'http'}://orchestration_center;" in nginx
     assert 'proxy_set_header Connection "";' in nginx
+    assert "location ^~ /api/orchestrate/api/ { return 404; }" not in nginx
+    assert nginx.count('proxy_set_header X-OpenAN-Browser-Gateway "1";') == 2
     assert "ip_hash" not in nginx and "$request " not in nginx
 
 
@@ -140,7 +236,7 @@ def test_mtls_stays_authenticated_when_upstream_verification_is_off(deployment):
         assert env[role + "_HEALTHCHECK_CLIENT_CERT"].endswith("probe-client.cer")
     env = compose["services"]["orchestration-center"]["environment"]
     assert env["REGISTRY_CLIENT_KEY"].endswith("client_key.pem")
-    assert env["ORCH_EXTERNAL_AUTH_MODE"] == "bearer"
+    assert env["ORCH_EXTERNAL_AUTH_MODE"] == "user"
     assert "proxy_ssl_certificate_key" in nginx and "proxy_ssl_verify off;" in nginx
 
 

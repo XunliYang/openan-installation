@@ -134,7 +134,11 @@ PostgreSQL host
 {{- end -}}
 {{- end -}}
 {{- define "openan.databasePort" -}}
-{{- if eq .Values.database.type "postgresql" -}}{{ .Values.postgresql.port }}{{- else -}}{{ .Values.database.port }}{{- end -}}
+{{- if and (eq .Values.database.type "postgresql") .Values.postgresql.enabled -}}
+{{- .Values.postgresql.port -}}
+{{- else -}}
+{{- if eq .Values.database.port nil -}}{{- ternary 5432 3306 (eq .Values.database.type "postgresql") -}}{{- else -}}{{- .Values.database.port -}}{{- end -}}
+{{- end -}}
 {{- end -}}
 {{- define "openan.publicScheme" -}}
 {{- default (ternary "https" "http" (and .Values.ingress.enabled .Values.ingress.tls.enabled)) .Values.orchestration.publicScheme -}}

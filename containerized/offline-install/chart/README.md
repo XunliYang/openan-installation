@@ -1,5 +1,8 @@
 # OpenAN Platform Helm Chart
 
+> **Historical / unsupported for current service revisions.** The independent chart below does not implement the current account-bootstrap, TLS, model and database contracts. Its build/install entrypoints now fail before external operations. Do not override this guard or pair it with current images. Use the maintained online chart for connected Kubernetes or `offline-install-compose` for a single offline Docker host. Kubernetes offline support requires a separately validated package that reuses the maintained chart; no current support claim is made.
+
+
 Helm Chart for deploying the OpenAN platform on Kubernetes.
 
 ## Components
@@ -407,7 +410,7 @@ registry:
 ## Related Documentation
 
 - [Quick Start](../QUICKSTART.md)
-- [Image Build Guide](../build/README.md)
+- [Image Build Guide](../../build/README.md)
 
 ## License
 

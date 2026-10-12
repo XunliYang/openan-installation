@@ -1,15 +1,56 @@
-# OpenAN 容器部署快速开始
+# OpenAN Online Container Quickstart
 
-本次 Chart 已支持独立 HTTP/HTTPS、外部 MySQL/PostgreSQL、应用认证与签名。升级前先阅读 [部署契约](../TRANSPORT_DEPLOYMENT.md)，必须构建包含服务端配套修改的新镜像，不能继续沿用旧 v1.0.0 镜像。
+[中文](QUICKSTART.zh.md) · [Full deployment contract](../TRANSPORT_DEPLOYMENT.md)
 
-1. 提前准备 Kubernetes、Helm、Ingress；创建数据库和运行凭据/模型/证书 Secret。
-2. 复制部署契约中的 values 示例，修改镜像版本、数据库连接、模型配置和 Secret 名称。不要把真实密码写入版本库或 Helm --set 命令。
-3. 执行 `helm lint openan-chart -f deployment.yaml`、`helm template openan openan-chart -f deployment.yaml`。
-4. 执行 `bash install.sh --values deployment.yaml`。
-5. 检查 Pod、探针和日志；再通过真实入口验收登录、卡片/工作流操作、签名与 SSE。
+## Migration / breaking change
 
-HTTP 仍需要认证；HTTPS 关闭客户端证书校验也仍需要认证。TLS、签名和数据库是各自独立的配置职责。默认 values 刻意不提供可用秘密，未配置不会自动生成演示账户。
+The old install.sh is replaced by **one_click_install.sh**. Unauthenticated defaults, fixed machine Tokens,
+unreviewed infrastructure downloads and inline secrets are not retained. Use compatible rebuilt images,
+separate databases/prepared Secrets, migrate file data before Pod replacement, then log in again.
+Old v1.0.0 images do not implement this contract.
 
-脚本现在只负责部署/升级，不安装集群/Helm/LoadBalancer，不把 samples Agent 启动在业务镜像中。相关基础设施请使用运维标准流程管理。
+## Helm-native production operations
 
-本地回归：安装 pytest/PyYAML/Helm/Bash 后在仓库根目录执行 `python -m pytest tests/ -q`。没有 Helm/Bash 会明确跳过对应测试；这不是容器或集群验收。
+Prepare Kubernetes, Helm, ingress/storage, SQL databases and model/credential/PKI references from the contract.
+Copy [deployment.yaml.example](deployment.yaml.example), set all tags and non-secret fields:
+
+```bash
+helm lint openan-chart --namespace openan -f deployment.yaml
+helm template openan openan-chart --namespace openan -f deployment.yaml > rendered.yaml
+helm upgrade --install openan openan-chart --namespace openan --create-namespace -f deployment.yaml --wait --timeout 10m
+```
+
+Namespace must match values. Never put secrets in values/--set; if legacy inline fields were intentionally used,
+rendered output may contain them, so protect it. Verify APIs at the actual public entrance, not only probes.
+
+## Guided one-click phases
+
+```bash
+# Prepared images/infrastructure/Secrets; --values avoids every prompt.
+bash one_click_install.sh --skip-build --skip-infra --values deployment.yaml --release openan --namespace openan
+
+# Prepared images/infrastructure; guided external SQL + HTTP evaluation setup.
+bash one_click_install.sh --skip-build --skip-infra --release openan --namespace openan
+```
+
+The wizard asks for separate SQL databases/users, existing models.yaml ConfigMaps, a signing Secret,
+compatible image tag and public hostname. SQL/admin passwords are collected without echo.
+Fresh Kubernetes Secrets are created through stdin. Service Token/HMAC/fingerprint keys and their digest
+are never printed or placed in generated values. Only non-secret deployment.generated.json is written;
+existing files/Secrets are never overwritten. After partial creation, reconcile objects and use --values for upgrades.
+This guided HTTP profile is evaluation-only; use reviewed HTTPS values for confidential/production traffic.
+It does not manufacture models or signing material.
+
+For image building, omit --skip-build and provide --tag, --registry-release and --orchestration-release:
+organization archive URLs at accepted revisions in the contract. Configure registry credentials first;
+the build pushes images, and values must match their repositories/tags.
+For infrastructure, omit --skip-infra and supply reviewed local --metallb-chart, --metallb-values,
+--ingress-chart and --ingress-values. Helm uses those explicit packages; no guessed IP pool or automatic
+OS/cluster reconfiguration. Verify cluster compatibility first. See --help.
+
+## Verification and troubleshooting
+
+With Python/PyYAML/pytest, Helm and Bash installed, run python -m pytest tests/ -q.
+Missing tools explicitly skip related tests; render passes are not container/cluster passes.
+CI separately builds the real Compose matrix. See [acceptance and troubleshooting](../TRANSPORT_DEPLOYMENT.md#acceptance-and-troubleshooting)
+for auth/TLS/SQL/PVC and frontend diagnosis. Single-instance upgrades briefly interrupt service.

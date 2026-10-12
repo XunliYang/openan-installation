@@ -1,3 +1,6 @@
+{{/* Copyright (c) 2026 Huawei Technologies Co., Ltd.
+All Rights Reserved.
+SPDX-License-Identifier: Apache-2.0 */}}
 {{- if .Values.registry.enabled }}
 {{- $c := .Values.registry }}
 apiVersion: apps/v1
@@ -9,6 +12,8 @@ metadata:
     {{- include "openan.registry.labels" . | nindent 4 }}
 spec:
   replicas: {{ $c.replicas }}
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: registry-center
@@ -25,6 +30,18 @@ spec:
         runAsUser: 10001
         runAsGroup: 10001
         fsGroup: 10001
+      initContainers:
+      - name: prepare-runtime
+        image: "{{ $c.image.repository }}:{{ $c.image.tag }}"
+        imagePullPolicy: {{ $c.image.pullPolicy }}
+        command: ["python", "-c", "from pathlib import Path; [Path('/runtime', p).mkdir(mode=0o770, exist_ok=True) for p in ('data', 'log')]"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: runtime
+          mountPath: /runtime
       containers:
       - name: registry-center
         image: "{{ $c.image.repository }}:{{ $c.image.tag }}"
@@ -71,6 +88,12 @@ spec:
         resources:
           {{- toYaml $c.resources | nindent 10 }}
         volumeMounts:
+        - name: runtime
+          mountPath: /opt/registry-center/data
+          subPath: data
+        - name: runtime
+          mountPath: /opt/registry-center/log
+          subPath: log
         - name: models
           mountPath: /opt/registry-center/etc/config/models.yaml
           subPath: models.yaml
@@ -100,6 +123,9 @@ spec:
           readOnly: true
         {{- end }}
       volumes:
+      - name: runtime
+        persistentVolumeClaim:
+          claimName: {{ default "registry-center-runtime" $c.persistence.existingClaim }}
       - name: models
         configMap:
           name: {{ default "registry-center-models" $c.modelsConfigMap }}

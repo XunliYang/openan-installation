@@ -1,4 +1,15 @@
+{{/* Copyright (c) 2026 Huawei Technologies Co., Ltd.
+All Rights Reserved.
+SPDX-License-Identifier: Apache-2.0 */}}
 {{/* Reject combinations that render but cannot serve safely. */}}
+{{- $port := include "openan.databasePort" . }}
+{{- if or (not (regexMatch "^[0-9]+$" $port)) (lt (int $port) 1) (gt (int $port) 65535) }}{{ fail "SQL port must be an integer in 1..65535" }}{{ end }}
+{{- if ne .Values.namespace .Release.Namespace }}{{ fail "namespace must match Helm --namespace" }}{{ end }}
+{{- if and .Values.registry.enabled .Values.orchestration.enabled (not .Values.postgresql.enabled) (eq .Values.database.registry.name .Values.database.orchestration.name) }}{{ fail "registry and orchestration require separate external database names" }}{{ end }}
+{{- range $name := list "registry" "orchestration" "frontend" }}
+{{- $c := index $.Values $name }}
+{{- if and $c.enabled (not $c.image.tag) }}{{ fail (printf "%s.image.tag is required; use images built from the accepted service revisions" $name) }}{{ end }}
+{{- end }}
 {{- if not (has .Values.database.type (list "postgresql" "mysql")) }}{{ fail "database.type must be postgresql or mysql" }}{{ end }}
 {{- if and (eq .Values.database.type "mysql") .Values.postgresql.enabled }}{{ fail "mysql requires postgresql.enabled=false" }}{{ end }}
 {{- if and (eq .Values.database.type "mysql") (not .Values.database.host) }}{{ fail "mysql requires database.host" }}{{ end }}
@@ -15,6 +26,7 @@
 {{- end }}
 {{- end }}
 {{- if .Values.registry.enabled }}
+{{- if ne (toString .Values.registry.replicas) "1" }}{{ fail "RC events and dispatchers are process-local: use one replica until distributed coordination exists" }}{{ end }}
 {{- if not (has .Values.registry.identityMode (list "token" "certificate")) }}{{ fail "registry.identityMode must be token or certificate" }}{{ end }}
 {{- if and (eq .Values.registry.identityMode "certificate") (not (and .Values.registry.tls.enabled .Values.registry.tls.verifyClient)) }}{{ fail "certificate identity requires registry HTTPS and client verification" }}{{ end }}
 {{- if and (eq .Values.registry.identityMode "token") (eq .Values.registry.authMode "static_bearer") (not .Values.registry.credentialSecret) }}{{ fail "static_bearer requires registry.credentialSecret with integration_credentials.conf" }}{{ end }}
@@ -22,7 +34,14 @@
 {{- if and (eq .Values.registry.signing.mode "secret") (not .Values.registry.signing.existingSecret) }}{{ fail "signing.mode=secret requires existingSecret" }}{{ end }}
 {{- if .Values.registry.vectordb.enabled }}{{ fail "Current RC legacy vector-only mode has no authoritative SQL record store; keep vectordb.enabled=false for full business APIs" }}{{ end }}
 {{- end }}
-{{- if and .Values.orchestration.enabled (or (ne (int .Values.orchestration.replicas) 1) .Values.orchestration.hpa.enabled) }}{{ fail "OC sessions are process-local: use one replica and disable HPA until shared sessions exist" }}{{ end }}
+{{- if and .Values.orchestration.enabled (or (ne (toString .Values.orchestration.replicas) "1") .Values.orchestration.hpa.enabled) }}{{ fail "OC sessions are process-local: use one replica and disable HPA until shared sessions exist" }}{{ end }}
+{{- $registryClaim := default "registry-center-runtime" .Values.registry.persistence.existingClaim }}
+{{- $orchestrationClaim := default "orchestration-center-runtime" .Values.orchestration.persistence.existingClaim }}
+{{- if and .Values.registry.enabled .Values.orchestration.enabled (eq $registryClaim $orchestrationClaim) }}{{ fail "registry and orchestration must use separate runtime claims" }}{{ end }}
+{{- range $name := list "registry" "orchestration" }}
+{{- $c := index $.Values $name }}
+{{- if and $c.enabled (not $c.persistence.existingClaim) (not $c.persistence.size) }}{{ fail (printf "%s.persistence.size is required when creating a runtime PVC" $name) }}{{ end }}
+{{- end }}
 {{- if and .Values.frontend.enabled (not .Values.orchestration.enabled) }}{{ fail "frontend requires orchestration.enabled=true" }}{{ end }}
 {{- if and .Values.frontend.enabled .Values.orchestration.tls.enabled }}
 {{- if and (or .Values.frontend.backendTls.verifyServer .Values.orchestration.tls.verifyClient) (not .Values.frontend.backendTls.existingSecret) }}{{ fail "frontend HTTPS verification/mTLS requires frontend.backendTls.existingSecret" }}{{ end }}

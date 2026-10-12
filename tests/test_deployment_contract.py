@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 HELM = os.environ.get("HELM_BIN") or shutil.which("helm")
 BASH = os.environ.get("BASH_BIN") or shutil.which("bash")
 CHART = ROOT / "containerized/online-install/openan-chart"
-BASE = {"postgresql.existingSecret": "postgres-secret", "registry.runtimeSecret": "rc-runtime",
+BASE = {"registry.image.tag": "contract", "orchestration.image.tag": "contract", "frontend.image.tag": "contract",
+        "postgresql.existingSecret": "postgres-secret", "registry.runtimeSecret": "rc-runtime",
         "registry.credentialSecret": "rc-credentials", "orchestration.runtimeSecret": "oc-runtime",
         "registry.signing.mode": "off"}
 
@@ -22,7 +23,7 @@ BASE = {"postgresql.existingSecret": "postgres-secret", "registry.runtimeSecret"
 def render(settings=None, success=True):
     if not HELM:
         pytest.skip("Set HELM_BIN to run real Helm render validation")
-    command = [HELM, "template", "contract", str(CHART)]
+    command = [HELM, "template", "contract", str(CHART), "--namespace", "openan"]
     for key, value in {**BASE, **(settings or {})}.items():
         command += ["--set", f"{key}={str(value).lower() if isinstance(value, bool) else value}"]
     result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", timeout=40)
@@ -66,9 +67,12 @@ def test_database_and_protocol_matrix(protocol, db):
         assert container["envFrom"][1]["secretRef"]["name"] in {"rc-runtime", "oc-runtime"}
         assert any(m["subPath"] == "models.yaml" for m in container["volumeMounts"] if "subPath" in m)
     assert docs["orchestration-center-config"]["data"]["AGENT_REGISTRY_URL"].startswith(protocol + "://")
+    assert docs["orchestration-center-config"]["data"]["ORCH_EXTERNAL_AUTH_MODE"] == "user"
     nginx = docs["workflow-designer-nginx-config"]["data"]["default.conf"]
     assert f"proxy_pass {protocol}://orchestration-center:5001" in nginx
     assert "proxy_set_header Connection \"\"" in nginx
+    assert "location ^~ /api/orchestrate/api/ { return 404; }" not in nginx
+    assert nginx.count('proxy_set_header X-OpenAN-Browser-Gateway "1";') == 2
     assert docs["openan-registry-ingress"]["metadata"]["annotations"][
         "nginx.ingress.kubernetes.io/backend-protocol"] == protocol.upper()
     if db == "mysql":
@@ -89,6 +93,7 @@ def test_mtls_material_and_probes_are_wired():
         mounts = docs[comp]["spec"]["template"]["spec"]["containers"][0]["volumeMounts"]
         assert any(m.get("subPath") == "probe-client.key" for m in mounts)
     assert docs["orchestration-center-config"]["data"]["REGISTRY_CLIENT_CERT"].endswith("client.cer")
+    assert docs["orchestration-center-config"]["data"]["ORCH_EXTERNAL_AUTH_MODE"] == "user"
     assert "proxy_ssl_certificate_key" in docs["workflow-designer-nginx-config"]["data"]["default.conf"]
 
 
@@ -99,6 +104,13 @@ def test_mtls_material_and_probes_are_wired():
     ({"registry.runtimeSecret": ""}, "runtimeSecret is required"),
     ({"registry.identityMode": "certificate"}, "certificate identity requires"),
     ({"orchestration.replicas": 2}, "sessions are process-local"),
+    ({"registry.replicas": 2}, "events and dispatchers are process-local"),
+    ({"registry.replicas": 1.5}, "events and dispatchers are process-local"),
+    ({"orchestration.replicas": 1.5}, "sessions are process-local"),
+    ({"registry.persistence.size": ""}, "persistence.size is required"),
+    ({"registry.persistence.existingClaim": "shared", "orchestration.persistence.existingClaim": "shared"}, "separate runtime claims"),
+    ({"registry.persistence.existingClaim": "orchestration-center-runtime"}, "separate runtime claims"),
+    ({"orchestration.persistence.existingClaim": "registry-center-runtime"}, "separate runtime claims"),
     ({"ingress.tls.enabled": True}, "requires ingress.host"),
     ({"registry.vectordb.enabled": True}, "no authoritative SQL record store"),
     ({"registry.extraEnv.REGISTRY_ENABLE_HTTPS": True}, "duplicates managed setting"),
@@ -115,6 +127,71 @@ def test_signing_names_and_full_model_mount():
     assert set(docs["registry-center-signing"]["data"]) == {"sign.cer", "sign_key.pem", "cert_pwd"}
     models = yaml.safe_load(docs["registry-center-models"]["data"]["models.yaml"])
     assert set(models["models"]) == {"chat", "embed", "rerank"}
+
+
+@pytest.mark.parametrize("verify_server", [False, True])
+@pytest.mark.parametrize("mtls", [False, True])
+def test_registry_trust_and_client_identity_are_independent(verify_server, mtls):
+    docs = render({"registry.tls.enabled": True, "registry.tls.existingSecret": "rc-tls",
+                   "registry.tls.verifyClient": mtls, "registry.ingressClientSecret": "ingress-client",
+                   "orchestration.registryClientSecret": "registry-client",
+                   "orchestration.clientVerifyServer": verify_server})
+    env = docs["orchestration-center-config"]["data"]
+    assert ("REGISTRY_CA_FILE" in env) is verify_server
+    assert ("REGISTRY_CLIENT_CERT" in env) is mtls
+    assert ("REGISTRY_CLIENT_KEY" in env) is mtls
+    assert env["ORCH_CLIENT_VERIFY_SERVER"] == str(verify_server).lower()
+
+
+@pytest.mark.parametrize("component,name", [("registry", "registry-center"), ("orchestration", "orchestration-center")])
+def test_runtime_files_use_retained_pvc_and_nonoverlapping_rollout(component, name, tmp_path):
+    docs = render()
+    deployment = docs[name]
+    assert deployment["spec"]["replicas"] == 1
+    assert deployment["spec"]["strategy"] == {"type": "Recreate"}
+    pod = deployment["spec"]["template"]["spec"]
+    volume = next(v for v in pod["volumes"] if v["name"] == "runtime")
+    assert volume["persistentVolumeClaim"]["claimName"] == name + "-runtime"
+    mounts = {m["subPath"]: m["mountPath"] for m in pod["containers"][0]["volumeMounts"] if m["name"] == "runtime"}
+    assert mounts == {"data": f"/opt/{name}/data", "log": f"/opt/{name}/log"}
+    initializer = pod["initContainers"][0]
+    assert initializer["image"] == pod["containers"][0]["image"]
+    assert initializer["command"][:2] == ["python", "-c"]
+    # Execute the rendered initializer against a controlled local volume root.
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    code = initializer["command"][2].replace("/runtime", runtime.as_posix())
+    import sys
+    subprocess.run([sys.executable, "-c", code], check=True, timeout=10)
+    subprocess.run([sys.executable, "-c", code], check=True, timeout=10)
+    assert (runtime / "data").is_dir() and (runtime / "log").is_dir()
+    assert pod["securityContext"]["runAsUser"] == 10001
+    assert initializer["securityContext"]["allowPrivilegeEscalation"] is False
+    pvc = docs[name + "-runtime"]
+    assert pvc["kind"] == "PersistentVolumeClaim"
+    assert pvc["metadata"]["annotations"]["helm.sh/resource-policy"] == "keep"
+    assert pvc["spec"]["accessModes"] == ["ReadWriteOnce"]
+    assert "storageClassName" not in pvc["spec"]
+    assert pvc["spec"]["resources"]["requests"]["storage"]
+
+
+def test_existing_runtime_claims_are_reused_without_creating_resources():
+    docs = render({"registry.persistence.existingClaim": "retained-rc", "orchestration.persistence.existingClaim": "retained-oc"})
+    for name, claim in [("registry-center", "retained-rc"), ("orchestration-center", "retained-oc")]:
+        assert name + "-runtime" not in docs
+        volumes = docs[name]["spec"]["template"]["spec"]["volumes"]
+        assert next(v for v in volumes if v["name"] == "runtime")["persistentVolumeClaim"]["claimName"] == claim
+
+
+@pytest.mark.parametrize("storage_class,expected", [("-", ""), ("fast", "fast")])
+def test_runtime_storage_class_selection(storage_class, expected):
+    docs = render({"registry.persistence.storageClassName": storage_class})
+    assert docs["registry-center-runtime"]["spec"]["storageClassName"] == expected
+
+
+def test_disabled_registry_has_no_runtime_claim_or_replica_guard():
+    docs = render({"registry.enabled": False, "registry.replicas": 2})
+    assert "registry-center-runtime" not in docs
 
 
 def test_existing_model_secret_wins_over_inline_key():

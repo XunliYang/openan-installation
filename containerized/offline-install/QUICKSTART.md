@@ -1,5 +1,8 @@
 # OpenAN Offline Installation Quickstart (Kubernetes)
 
+> **Historical / unsupported for current service revisions.** The independent chart below does not implement the current account-bootstrap, TLS, model and database contracts. Its build/install entrypoints now fail before external operations. Do not override this guard or pair it with current images. Use the maintained online chart for connected Kubernetes or `offline-install-compose` for a single offline Docker host. Kubernetes offline support requires a separately validated package that reuses the maintained chart; no current support claim is made.
+
+
 End-to-end guide: build the offline bundle on an **internet-connected machine**,
 transfer it to the **offline machine**, and install OpenAN onto an existing
 Kubernetes cluster. Nothing at install time touches the internet.

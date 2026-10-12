@@ -65,10 +65,15 @@ registry:
   extraEnv: {}  # Non-secret REGISTRY_* provider policies; secrets belong in runtimeSecret
   modelsConfigMap: ""  # Existing ConfigMap with models.yaml; otherwise llm entries below
   enabled: true
-  replicas: 2
+  # Runtime event listeners/dispatchers are not coordinated across replicas.
+  replicas: 1
+  persistence:
+    existingClaim: ""  # Otherwise create registry-center-runtime (retained on uninstall).
+    size: 5Gi
+    storageClassName: ""  # Empty: default StorageClass; "-": explicitly no class.
   image:
     repository: ghcr.io/project-openan/registry-center
-    tag: v1.0.0
+    tag: ""  # REQUIRED: tag/digest-built revision compatible with this chart; see deployment contract.
     pullPolicy: Always
   port: 5000
   # LLM configuration for registry-center
@@ -131,7 +136,7 @@ registry:
 # =============================================================================
 orchestration:
   ingressClientSecret: ""
-  runtimeSecret: ""  # ENV: OC_ADMIN_INITIAL_PASSWORD, ORCH_API_TOKEN, REGISTRY_ACCESS_TOKEN
+  runtimeSecret: ""  # ENV: OC_ADMIN_INITIAL_PASSWORD, REGISTRY_ACCESS_TOKEN, model secrets
   extraEnv: {}  # Non-secret ORCH_* settings
   publicScheme: ""  # Derived from ingress TLS unless explicitly http/https
   clientVerifyServer: true
@@ -145,9 +150,13 @@ orchestration:
   # Set to false to skip orchestration-center deployment
   enabled: true
   replicas: 1
+  persistence:
+    existingClaim: ""  # Otherwise create orchestration-center-runtime (retained).
+    size: 10Gi
+    storageClassName: ""
   image:
     repository: ghcr.io/project-openan/orchestration-center
-    tag: v1.0.0
+    tag: ""  # REQUIRED: tag/digest-built revision compatible with this chart; see deployment contract.
     pullPolicy: Always
   port: 5001
   # Registry Center URL (auto-discovered if registry.enabled=true)
@@ -204,7 +213,7 @@ frontend:
   replicas: 2
   image:
     repository: ghcr.io/project-openan/workflow-designer
-    tag: v1.0.0
+    tag: ""  # REQUIRED: tag/digest-built revision compatible with this chart; see deployment contract.
     pullPolicy: Always
   port: 80
   nodePort: 30191
@@ -262,7 +271,7 @@ ingress:
 database:
   type: postgresql
   host: ""  # Required for mysql; PostgreSQL falls back to postgresql.externalHost
-  port: 3306
+  port: null  # External SQL only: null selects PostgreSQL 5432 / MySQL 3306; integer 1..65535.
   registry:
     name: registry_center
     username: registry

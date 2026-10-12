@@ -326,5 +326,5 @@ docker buildx imagetools inspect ghcr.io/project-openan/registry-center:v1.0.0
 
 - [Quick Start](../online-install/QUICKSTART.md) (Build + Deploy one-stop guide)
 - [Helm Chart Deployment](../online-install/openan-chart/README.md)
-- [K8S Deployment Guide](../../k8s-deployment-guide.md)
+- [K8S Deployment Guide](../online-install/QUICKSTART.md)
 - [Docker Official Documentation](https://docs.docker.com/)

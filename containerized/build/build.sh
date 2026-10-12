@@ -285,14 +285,14 @@ CURRENT=0
 if [ "$BUILD_REGISTRY" = true ] && [ -n "$RC_SRC" ]; then
     CURRENT=$((CURRENT + 1))
     log_step "[$CURRENT/$TOTAL] Building Registry Center..."
-    "${BUILD_CMD[@]}" --label "org.opencontainers.image.source=$REGISTRY_RELEASE" -t "$REGISTRY_IMAGE" "$RC_SRC"
+    "${BUILD_CMD[@]}" --label "org.opencontainers.image.source=https://github.com/project-openan/registry-center" --label "org.opencontainers.image.revision=$(git -C "$RC_SRC" rev-parse HEAD 2>/dev/null || printf unknown)" -t "$REGISTRY_IMAGE" "$RC_SRC"
     log_info "Done: $REGISTRY_IMAGE"
 fi
 
 if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ]; then
     CURRENT=$((CURRENT + 1))
     log_step "[$CURRENT/$TOTAL] Building Orchestration Center..."
-    "${BUILD_CMD[@]}" --label "org.opencontainers.image.source=$ORCHESTRATION_RELEASE" -t "$ORCHESTRATION_IMAGE" "$OC_SRC"
+    "${BUILD_CMD[@]}" --label "org.opencontainers.image.source=https://github.com/project-openan/orchestration-center" --label "org.opencontainers.image.revision=$(git -C "$OC_SRC" rev-parse HEAD 2>/dev/null || printf unknown)" -t "$ORCHESTRATION_IMAGE" "$OC_SRC"
     log_info "Done: $ORCHESTRATION_IMAGE"
 fi
 
@@ -304,7 +304,7 @@ if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ]; then
     if [ -n "$WD_SRC" ]; then
         CURRENT=$((CURRENT + 1))
         log_step "[$CURRENT/$TOTAL] Building Workflow Designer..."
-        "${BUILD_CMD[@]}" --label "org.opencontainers.image.source=$ORCHESTRATION_RELEASE" -t "$FRONTEND_IMAGE" "$WD_SRC"
+        "${BUILD_CMD[@]}" --label "org.opencontainers.image.source=https://github.com/project-openan/orchestration-center" --label "org.opencontainers.image.revision=$(git -C "$OC_SRC" rev-parse HEAD 2>/dev/null || printf unknown)" -t "$FRONTEND_IMAGE" "$WD_SRC"
         log_info "Done: $FRONTEND_IMAGE"
     else
         log_warn "Workflow Designer Dockerfile not found, skipping"

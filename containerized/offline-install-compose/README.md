@@ -9,7 +9,7 @@ for a self-contained single-host stack.
 ## Build on an internet-connected Linux host
 
 Use matching service revisions that contain the transport/authentication
-contract in registry-center #78 and orchestration-center #156. Old v1.0.0
+contract in registry-center #80 and orchestration-center #158. Old v1.0.0
 images are not certified. Build from the accepted revisions or the explicitly
 reviewed PR source trees when those changes are not yet merged:
 
@@ -71,9 +71,12 @@ There is no interactive secret collection and no unsafe --skip-check switch.
   can instead be configured through REGISTRY_AUTH_MODE and canonical service
   environment overrides. Browser callers still need their own authorized
   registry token; the proxy never injects a privileged token for them.
-- OC_ADMIN_INITIAL_PASSWORD initializes the SQL user on first startup;
-  ORCH_API_TOKEN (at least 32 bytes) authenticates machine APIs independently
-  of browser cookies and transport. Existing SQL passwords are not reset.
+- OC_ADMIN_INITIAL_PASSWORD initializes the SQL user on first startup.
+  Public OC APIs use the same account as web login: POST /api/v1/auth/token
+  with JSON username/password, then send Authorization: Bearer <access_token>.
+  Cookies alone do not authorize public APIs; TLS remains independent.
+  Existing SQL passwords are not reset. Initial password changes revoke all
+  sessions, so log in again before issuing API tokens.
 - Registry signing remains independent of HTTPS. Default enabled signing
   requires sign.cer, sign_key.pem, cert_pwd. Explicitly disabling signing is
   possible, but signed-card consumers must be considered separately.
@@ -124,6 +127,15 @@ read-only; install validates it, verifies checksums, loads local images,
 recreates the app/proxy containers and waits for health. Inspect deployment
 readiness plus real public login, authorization, signatures and model/worker
 calls before declaring production acceptance.
+
+The container smoke matrix covers ten profiles, including public HTTPS with
+plain backends and each RC/OC mixed protocol direction. It checks returned card
+and workflow content, update read-back and deletion, not just status codes.
+Replacement must change backend IPs without recreating the proxy, and retain
+SQL records, PreFlow, sandbox reports/templates, solution packages and existing
+audit bytes. File fixtures use real storage components, not model execution.
+These are acceptance gates: only a successful run for the exact revisions
+being released establishes coverage; render/unit tests are not Docker evidence.
 
 ```bash
 sudo docker compose -f runtime/compose.json logs -f
