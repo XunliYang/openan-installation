@@ -144,17 +144,20 @@ registry:
     host: ""
     port: 19530
   # TLS certificate configuration
-  # mode: auto (Helm generates self-signed cert, stored in Secret) / secret (user-provided Secret) / off (entrypoint generates per-pod)
+  # mode: auto (Helm generates self-signed cert, stored in Secret) / secret (user-provided Secret) / off (no certs mounted)
   # "auto" is recommended: generates once, persists in Secret, consistent across replicas and upgrades.
   tls:
     mode: auto
     existingSecret: ""  # Used when mode=secret. Secret containing server.cer, server_key.pem, trust.cer, cert_pwd
   # JWS signing certificate configuration
-  # mode: auto (Helm generates self-signed cert, stored in Secret) / secret (user-provided Secret) / off (entrypoint generates per-pod)
+  # mode: auto (Helm generates self-signed cert, stored in Secret) / secret (user-provided Secret) / off (no certs mounted)
   # "auto" is recommended: generates once, persists in Secret, consistent across replicas and upgrades.
+  # NOTE: the entrypoint does NOT generate signing material — with mode=off you
+  # must mount etc/sign_cert/{sign.cer,sign_key.pem,cert_pwd} yourself.
   signing:
     mode: auto
-    existingSecret: ""  # Used when mode=secret. Secret containing server.cer, server_key.pem, cert_pwd
+    existingSecret: ""  # Used when mode=secret. Secret containing sign.cer, sign_key.pem, cert_pwd
+                        # (generate with: python -m generate_selfsign_cert ./sign_cert dataSigning)
   # Resource limits
   resources:
     requests:
