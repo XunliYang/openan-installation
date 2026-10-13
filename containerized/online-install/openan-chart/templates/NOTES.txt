@@ -3,7 +3,7 @@ OpenAN Platform has been deployed!
 {{- if .Values.registry.enabled }}
 
 Registry Center:
-  Internal URL: http://registry-center:{{ .Values.registry.port }}
+  Internal URL: http{{ if .Values.registry.tls.enabled }}s{{ end }}://registry-center:{{ .Values.registry.port }}
   {{- if .Values.ingress.enabled }}
   External URL: http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}/registry
   {{- end }}
@@ -12,7 +12,7 @@ Registry Center:
 {{- if .Values.orchestration.enabled }}
 
 Orchestration Center:
-  Internal URL: http://orchestration-center:{{ .Values.orchestration.port }}
+  Internal URL: http{{ if .Values.orchestration.tls.enabled }}s{{ end }}://orchestration-center:{{ .Values.orchestration.port }}
 {{- end }}
 
 {{- if .Values.frontend.enabled }}

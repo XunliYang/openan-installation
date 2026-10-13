@@ -1,0 +1,54 @@
+name: Deployment contract
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  render-and-build-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: azure/setup-helm@v4.3.0
+        with:
+          version: v3.19.0
+      - run: pip install pytest pyyaml
+      - run: python -m pytest tests/ -q
+      - name: Shell syntax
+        run: |
+          bash -n containerized/online-install/one_click_install.sh
+          bash -n containerized/build/build.sh
+          find containerized/offline-install-compose -name '*.sh' -exec bash -n {} \;
+  offline-compose-container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      # Pin accepted organization source revisions; fork/unmerged heads are not release evidence.
+      # Update these pins when adopting a newer accepted service revision.
+      - uses: actions/checkout@v4
+        with:
+          repository: project-openan/registry-center
+          ref: 49d9c2463c2d4d3a369db295b6d0b87ef244a27e
+          path: service-sources/registry
+      - uses: actions/checkout@v4
+        with:
+          repository: project-openan/orchestration-center
+          ref: 77ee99e485c4b1d3de76bef975cb6f0ef7a517a1
+          path: service-sources/orchestration
+      - name: Build real offline release from matching source images
+        run: |
+          bash containerized/offline-install-compose/build/build-offline.sh \
+            --tag compose-contract --app-source build --platforms linux/amd64 \
+            --registry-src "$GITHUB_WORKSPACE/service-sources/registry" \
+            --orchestration-src "$GITHUB_WORKSPACE/service-sources/orchestration" \
+            --out "$RUNNER_TEMP/offline-build"
+      - name: Install real Compose SQL HTTP HTTPS mTLS and test public APIs
+        run: |
+          sudo python3 tests/offline_compose_container_smoke.py \
+            --bundle "$RUNNER_TEMP/offline-build/openan-offline-compose-compose-contract"

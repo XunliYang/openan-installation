@@ -26,6 +26,11 @@
 #   --out <dir>                 output directory (default ./dist)
 #   --keep-images               do not delete pulled images afterwards
 
+# The independent legacy chart cannot safely deploy current account/DB/model contracts.
+# Fail before touching Kubernetes, Docker, files, environment or credentials.
+echo "Legacy offline Kubernetes installer is unsupported for current service revisions. Use offline-install-compose or the maintained online chart; see containerized/TRANSPORT_DEPLOYMENT.md." >&2
+exit 2
+
 set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

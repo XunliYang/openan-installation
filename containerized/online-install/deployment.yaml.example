@@ -1,0 +1,64 @@
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+# Non-secret external MySQL + HTTPS-no-mTLS; create all references first.
+namespace: openan
+postgresql:
+  enabled: false
+database:
+  type: mysql
+  host: mysql.example.internal
+  port: 3306
+  registry:
+    name: registry_center
+    username: registry
+    existingSecret: rc-db
+  orchestration:
+    name: orchestration_center
+    username: orchestration
+    existingSecret: oc-db
+registry:
+  image:
+    tag: tested-source-build
+  runtimeSecret: rc-runtime
+  credentialSecret: rc-credentials
+  modelsConfigMap: rc-models
+  signing:
+    mode: secret
+    existingSecret: rc-signing
+  tls:
+    enabled: true
+    verifyClient: false
+    mode: secret
+    existingSecret: rc-tls
+  ingressClientSecret: rc-ingress-trust
+  extraEnv:
+    # Pod-local probe DNS alias; do not reuse a remote dependency hostname.
+    REGISTRY_HEALTHCHECK_HOST: registry-center # SAN in server.cer, resolves to this Pod
+orchestration:
+  image:
+    tag: tested-source-build
+  runtimeSecret: oc-runtime
+  modelsConfigMap: oc-models
+  registryClientSecret: oc-registry-trust
+  clientVerifyServer: true
+  tls:
+    enabled: true
+    verifyClient: false
+    mode: secret
+    existingSecret: oc-tls
+  ingressClientSecret: oc-ingress-trust
+  extraEnv:
+    # Resolves to this Pod, not a Service with unavailable readiness endpoints.
+    ORCH_HEALTHCHECK_HOST: orchestration-center
+frontend:
+  image:
+    tag: tested-source-build
+  backendTls:
+    verifyServer: true
+    existingSecret: frontend-trust
+ingress:
+  host: openan.example.internal
+  tls:
+    enabled: true
+    secretName: public-tls

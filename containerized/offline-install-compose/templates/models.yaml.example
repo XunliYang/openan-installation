@@ -1,0 +1,10 @@
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# SPDX-License-Identifier: Apache-2.0
+# Copy separately for each service; all SDK-supported capabilities/providers
+# belong here. Secrets live in that service's private runtime env file.
+models:
+  chat:
+    provider: openai_compatible
+    model: replace-with-model-id
+    url: https://model.example.invalid/v1/chat/completions
+    api_key_env: LLM_CHAT_API_KEY

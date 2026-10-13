@@ -111,7 +111,7 @@ Registry Center URL
 {{- if .Values.orchestration.agentRegistryUrl }}
 {{- .Values.orchestration.agentRegistryUrl }}
 {{- else if .Values.registry.enabled }}
-{{- printf "http://registry-center:%v" .Values.registry.port }}
+{{- printf "%s://registry-center:%v" (ternary "https" "http" .Values.registry.tls.enabled) .Values.registry.port }}
 {{- else }}
 {{- "" }}
 {{- end }}
@@ -127,3 +127,30 @@ PostgreSQL host
 {{- .Values.postgresql.externalHost }}
 {{- end }}
 {{- end }}
+{{- define "openan.databaseHost" -}}
+{{- if and (eq .Values.database.type "mysql") .Values.postgresql.enabled -}}{{ fail "mysql requires postgresql.enabled=false" }}{{- end -}}
+{{- if and (eq .Values.database.type "postgresql") .Values.postgresql.enabled -}}openan-postgres
+{{- else -}}{{ required "external SQL requires a host" (default .Values.postgresql.externalHost .Values.database.host) }}
+{{- end -}}
+{{- end -}}
+{{- define "openan.databasePort" -}}
+{{- if and (eq .Values.database.type "postgresql") .Values.postgresql.enabled -}}
+{{- .Values.postgresql.port -}}
+{{- else -}}
+{{- if eq .Values.database.port nil -}}{{- ternary 5432 3306 (eq .Values.database.type "postgresql") -}}{{- else -}}{{- .Values.database.port -}}{{- end -}}
+{{- end -}}
+{{- end -}}
+{{/* Probe DNS names must resolve inside the probed Pod, not through a Service
+whose endpoints are withheld until readiness succeeds. IP literals need no alias. */}}
+{{- define "openan.probeHostAliases" -}}
+{{- $key := ternary "REGISTRY_HEALTHCHECK_HOST" "ORCH_HEALTHCHECK_HOST" (eq .component "registry") -}}
+{{- $host := toString (default "127.0.0.1" (index .config.extraEnv $key)) -}}
+{{- if and (not (regexMatch "^[0-9.]+$" $host)) (not (contains ":" $host)) -}}
+hostAliases:
+- ip: "127.0.0.1"
+  hostnames: [{{ $host | quote }}]
+{{- end -}}
+{{- end -}}
+{{- define "openan.publicScheme" -}}
+{{- default (ternary "https" "http" (and .Values.ingress.enabled .Values.ingress.tls.enabled)) .Values.orchestration.publicScheme -}}
+{{- end -}}

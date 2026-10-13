@@ -1,8 +1,8 @@
-# Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0
-
+{{/* Copyright (c) 2026 Huawei Technologies Co., Ltd.
+All Rights Reserved.
+SPDX-License-Identifier: Apache-2.0 */}}
 {{- if .Values.orchestration.enabled }}
+{{- $c := .Values.orchestration }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -11,66 +11,129 @@ metadata:
   labels:
     {{- include "openan.orchestration.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.orchestration.replicas }}
+  replicas: {{ $c.replicas }}
+  # A single replica must also remain single during upgrades; shared RWO files
+  # and process-local sessions cannot safely use the default surge strategy.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
-      {{- include "openan.orchestration.selectorLabels" . | nindent 6 }}
+      app: orchestration-center
   template:
     metadata:
       labels:
-        {{- include "openan.orchestration.selectorLabels" . | nindent 8 }}
+        app: orchestration-center
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/orchestration-center/configmap.yaml") . | sha256sum }}
+        checksum/models: {{ include (print $.Template.BasePath "/orchestration-center/models.yaml") . | sha256sum }}
     spec:
+      {{- include "openan.probeHostAliases" (dict "component" "orchestration" "config" $c) | nindent 6 }}
       terminationGracePeriodSeconds: 120
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchLabels:
-                  {{- include "openan.orchestration.selectorLabels" . | nindent 18 }}
-              topologyKey: kubernetes.io/hostname
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      initContainers:
+      - name: prepare-runtime
+        image: "{{ $c.image.repository }}:{{ $c.image.tag }}"
+        imagePullPolicy: {{ $c.image.pullPolicy }}
+        command: ["python", "-c", "from pathlib import Path; [Path('/runtime', p).mkdir(mode=0o770, exist_ok=True) for p in ('data', 'log')]"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: runtime
+          mountPath: /runtime
       containers:
       - name: orchestration-center
-        image: "{{ .Values.orchestration.image.repository }}:{{ .Values.orchestration.image.tag }}"
-        imagePullPolicy: {{ .Values.orchestration.image.pullPolicy }}
+        image: "{{ $c.image.repository }}:{{ $c.image.tag }}"
+        imagePullPolicy: {{ $c.image.pullPolicy }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
         ports:
-        - containerPort: {{ .Values.orchestration.port }}
+        - containerPort: {{ $c.port }}
         envFrom:
         - configMapRef:
             name: orchestration-center-config
+        - secretRef:
+            name: {{ $c.runtimeSecret }}
         env:
         - name: DB_PASSWORD
-          {{- if .Values.postgresql.existingSecret }}
           valueFrom:
             secretKeyRef:
+              {{- if (index .Values.database "orchestration").existingSecret }}
+              name: {{ (index .Values.database "orchestration").existingSecret }}
+              key: {{ (index .Values.database "orchestration").passwordKey }}
+              {{- else if .Values.postgresql.existingSecret }}
               name: {{ .Values.postgresql.existingSecret }}
               key: postgres-password
-          {{- else }}
-          valueFrom:
-            secretKeyRef:
+              {{- else }}
               name: orchestration-center-secret
               key: db-password
-          {{- end }}
-        {{- if .Values.orchestration.llm.chat.apiKey }}
-        - name: LLM_CHAT_API_KEY
+              {{- end }}
+        {{- range $cap, $model := $c.llm }}
+        {{- if or $model.existingSecret $model.apiKey }}
+        - name: LLM_{{ upper $cap }}_API_KEY
           valueFrom:
             secretKeyRef:
-              name: orchestration-center-secret
-              key: llm-chat-api-key
-        {{- else if .Values.orchestration.llm.chat.existingSecret }}
-        - name: LLM_CHAT_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Values.orchestration.llm.chat.existingSecret }}
-              key: {{ .Values.orchestration.llm.chat.existingSecretKey }}
+              name: {{ default "orchestration-center-secret" $model.existingSecret }}
+              key: {{ ternary $model.existingSecretKey (printf "llm-%s-api-key" $cap) (not (empty $model.existingSecret)) }}
+        {{- end }}
         {{- end }}
         startupProbe:
-          {{- toYaml .Values.orchestration.startupProbe | nindent 10 }}
+          {{- toYaml $c.startupProbe | nindent 10 }}
         livenessProbe:
-          {{- toYaml .Values.orchestration.livenessProbe | nindent 10 }}
+          {{- toYaml $c.livenessProbe | nindent 10 }}
         readinessProbe:
-          {{- toYaml .Values.orchestration.readinessProbe | nindent 10 }}
+          {{- toYaml $c.readinessProbe | nindent 10 }}
         resources:
-          {{- toYaml .Values.orchestration.resources | nindent 10 }}
+          {{- toYaml $c.resources | nindent 10 }}
+        volumeMounts:
+        - name: runtime
+          mountPath: /opt/orchestration-center/data
+          subPath: data
+        - name: runtime
+          mountPath: /opt/orchestration-center/log
+          subPath: log
+        - name: models
+          mountPath: /opt/orchestration-center/etc/config/models.yaml
+          subPath: models.yaml
+          readOnly: true
+        {{- if $c.tls.enabled }}
+        {{- $keys := list "server.cer" "server_key.pem" "cert_pwd" "trust.cer" }}
+        {{- if $c.tls.verifyClient }}{{ $keys = concat $keys (list "probe-client.cer" "probe-client.key") }}{{ end }}
+        {{- range $key := $keys }}
+        - name: tls
+          mountPath: /opt/orchestration-center/etc/ssl/{{ $key }}
+          subPath: {{ $key }}
+          readOnly: true
+        {{- end }}
+        {{- end }}
+        {{- if $c.registryClientSecret }}
+        - name: registry-client
+          mountPath: /opt/orchestration-center/etc/registry_tls
+          readOnly: true
+        {{- end }}
+      volumes:
+      - name: runtime
+        persistentVolumeClaim:
+          claimName: {{ default "orchestration-center-runtime" $c.persistence.existingClaim }}
+      - name: models
+        configMap:
+          name: {{ default "orchestration-center-models" $c.modelsConfigMap }}
+      {{- if $c.tls.enabled }}
+      - name: tls
+        secret:
+          secretName: {{ $c.tls.existingSecret }}
+          defaultMode: 0440
+      {{- end }}
+      {{- if $c.registryClientSecret }}
+      - name: registry-client
+        secret:
+          secretName: {{ $c.registryClientSecret }}
+          defaultMode: 0440
+      {{- end }}
 {{- end }}

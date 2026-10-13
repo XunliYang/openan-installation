@@ -42,6 +42,7 @@ spec:
       containers:
       - name: postgres
         image: postgres:15-alpine
+        args: ["-p", {{ .Values.postgresql.port | quote }}]
         ports:
         - containerPort: {{ .Values.postgresql.port }}
         env:
@@ -64,6 +65,8 @@ spec:
             - pg_isready
             - -U
             - postgres
+            - -p
+            - {{ .Values.postgresql.port | quote }}
           initialDelaySeconds: 5
           periodSeconds: 10
         livenessProbe:
@@ -72,6 +75,8 @@ spec:
             - pg_isready
             - -U
             - postgres
+            - -p
+            - {{ .Values.postgresql.port | quote }}
           initialDelaySeconds: 15
           periodSeconds: 30
         resources:
@@ -111,10 +116,11 @@ data:
     #!/bin/bash
     set -e
     {{ range .Values.postgresql.databases }}
-    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<EOSQL
-    CREATE USER {{ .user }} WITH PASSWORD '${POSTGRES_PASSWORD}';
-    CREATE DATABASE {{ .name }} OWNER {{ .user }};
-    GRANT ALL PRIVILEGES ON DATABASE {{ .name }} TO {{ .user }};
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" \
+      -v password="$POSTGRES_PASSWORD" -v dbuser="{{ .user }}" -v dbname="{{ .name }}" <<'EOSQL'
+    CREATE USER :"dbuser" WITH PASSWORD :'password';
+    CREATE DATABASE :"dbname" OWNER :"dbuser";
+    GRANT ALL PRIVILEGES ON DATABASE :"dbname" TO :"dbuser";
     EOSQL
     {{ end }}
 {{- end }}

@@ -1,0 +1,22 @@
+# Local review/design notes and deployment secrets are not release inputs.
+reviews/
+.env
+.env.*
+*.env
+!*.example
+*.local.yaml
+*.local.yml
+__pycache__/
+.pytest_cache/
+*.pem
+*.key
+cert_pwd
+containerized/offline-install-compose/config.env
+containerized/offline-install-compose/runtime/
+containerized/offline-install-compose/build/dist/
+containerized/offline-install-compose/images/
+containerized/offline-install-compose/web/
+containerized/offline-install-compose/compose/data/
+containerized/offline-install-compose/pki/
+containerized/offline-install-compose/integration_credentials.conf
+containerized/offline-install-compose/*models.yaml

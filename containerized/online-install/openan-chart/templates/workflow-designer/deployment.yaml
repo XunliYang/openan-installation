@@ -13,6 +13,8 @@ spec:
       {{- include "openan.frontend.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      annotations:
+        checksum/nginx: {{ include (print $.Template.BasePath "/workflow-designer/configmap.yaml") . | sha256sum }}
       labels:
         {{- include "openan.frontend.selectorLabels" . | nindent 8 }}
     spec:
@@ -33,8 +35,19 @@ spec:
             - name: nginx-config
               mountPath: /etc/nginx/conf.d
               readOnly: true
+            {{- if .Values.frontend.backendTls.existingSecret }}
+            - name: backend-tls
+              mountPath: /etc/nginx/backend-tls
+              readOnly: true
+            {{- end }}
       volumes:
         - name: nginx-config
           configMap:
             name: workflow-designer-nginx-config
+        {{- if .Values.frontend.backendTls.existingSecret }}
+        - name: backend-tls
+          secret:
+            secretName: {{ .Values.frontend.backendTls.existingSecret }}
+            defaultMode: 0400
+        {{- end }}
 {{- end }}
