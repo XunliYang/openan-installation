@@ -97,9 +97,15 @@ spec:
               key: {{ .Values.registry.llm.rerank.existingSecretKey }}
         {{- end }}
         livenessProbe:
-          {{- toYaml .Values.registry.livenessProbe | nindent 10 }}
+          httpGet:
+            scheme: {{ ternary "HTTPS" "HTTP" .Values.https.enabled }}
+            {{- toYaml (omit .Values.registry.livenessProbe.httpGet "scheme") | nindent 12 }}
+          {{- toYaml (omit .Values.registry.livenessProbe "httpGet") | nindent 10 }}
         readinessProbe:
-          {{- toYaml .Values.registry.readinessProbe | nindent 10 }}
+          httpGet:
+            scheme: {{ ternary "HTTPS" "HTTP" .Values.https.enabled }}
+            {{- toYaml (omit .Values.registry.readinessProbe.httpGet "scheme") | nindent 12 }}
+          {{- toYaml (omit .Values.registry.readinessProbe "httpGet") | nindent 10 }}
         resources:
           {{- toYaml .Values.registry.resources | nindent 10 }}
         {{- if or (ne .Values.registry.tls.mode "off") (ne .Values.registry.signing.mode "off") }}

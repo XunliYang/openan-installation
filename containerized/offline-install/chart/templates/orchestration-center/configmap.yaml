@@ -15,8 +15,8 @@ data:
   # entrypoint expects the rendered file to exist; provide it via ConfigMap.
   db_config.json: |
     {
-      "host": "{{ include "openan.postgresHost" . }}",
-      "port": "{{ .Values.postgresql.port }}",
+      "host": "{{ include "openan.dbHost" . }}",
+      "port": "{{ include "openan.dbPort" . }}",
       "database": "orchestration_center",
       "user": "opena2a_t",
       "password": ""
@@ -24,7 +24,7 @@ data:
   # Server
   ORCH_IP: "0.0.0.0"
   ORCH_PORT: {{ .Values.orchestration.port | quote }}
-  ORCH_ENABLE_HTTPS: "false"
+  ORCH_ENABLE_HTTPS: {{ .Values.https.enabled | quote }}
   ORCH_FORWARDED_ALLOW_IPS: "*"
 
   # Persistence

@@ -102,7 +102,21 @@ spec:
         volumeMounts:
         - name: etc-dir
           mountPath: /opt/orchestration-center/etc
+        {{- if and .Values.https.enabled (ne .Values.orchestration.tls.mode "off") }}
+        - name: tls-certs
+          mountPath: /opt/orchestration-center/etc/ssl
+          readOnly: true
+        {{- end }}
       volumes:
       - name: etc-dir
         emptyDir: {}
+      {{- if and .Values.https.enabled (ne .Values.orchestration.tls.mode "off") }}
+      - name: tls-certs
+        secret:
+          {{- if eq .Values.orchestration.tls.mode "auto" }}
+          secretName: orchestration-center-tls
+          {{- else }}
+          secretName: {{ .Values.orchestration.tls.existingSecret }}
+          {{- end }}
+      {{- end }}
 {{- end }}

@@ -182,6 +182,16 @@ The installer prints the access URL at the end — either the MetalLB
 LoadBalancer IP (`http://<LB_IP>/`) or a NodePort fallback
 (`http://<node-ip>:<nodePort>/`).
 
+## In-cluster HTTPS (optional)
+
+Set `HTTPS_ENABLED="true"` in `config.env` to serve registry-center and
+orchestration-center over TLS inside the cluster (self-signed certificates
+are generated per component; override with `orchestration.tls.existingSecret`
+/ `registry.tls.existingSecret` for CA-issued material). Probes, the
+workflow-designer upstream and the ingress backend protocol switch
+automatically. `HTTPS_VERIFY_CLIENT="true"` additionally requires client
+certificates (mTLS) on the registry listener.
+
 ## Uninstall
 
 ```bash

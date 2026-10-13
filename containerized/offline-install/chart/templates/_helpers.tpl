@@ -128,7 +128,7 @@ Registry Center URL
 {{- if .Values.orchestration.agentRegistryUrl }}
 {{- .Values.orchestration.agentRegistryUrl }}
 {{- else if .Values.registry.enabled }}
-{{- printf "http://registry-center:%v" .Values.registry.port }}
+{{- printf "%s://registry-center:%v" (include "openan.httpScheme" .) .Values.registry.port }}
 {{- else }}
 {{- "" }}
 {{- end }}
@@ -143,6 +143,13 @@ PostgreSQL host
 {{- else }}
 {{- .Values.postgresql.externalHost }}
 {{- end }}
+{{- end }}
+
+{{/*
+HTTP scheme for in-cluster upstreams, honouring the https switch
+*/}}
+{{- define "openan.httpScheme" -}}
+{{- if .Values.https.enabled }}https{{ else }}http{{ end }}
 {{- end }}
 
 {{/*
