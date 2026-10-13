@@ -15,9 +15,18 @@ data:
   REGISTRY_IP: "0.0.0.0"
   REGISTRY_PORT: {{ .Values.registry.port | quote }}
   REGISTRY_ENABLE_HTTPS: "false"
+  # Trusted reverse-proxy addresses for X-Forwarded-* headers. "*" is only
+  # acceptable because traffic arrives via ingress-nginx; tighten to the
+  # ingress controller's pod CIDR on internet-facing deployments.
   REGISTRY_FORWARDED_ALLOW_IPS: "*"
-  REGISTRY_OWNER__VALIDATION__MODE: "relaxed"
+  REGISTRY_OWNER_VALIDATION_MODE: "relaxed"
   REGISTRY_SIGNATURE_VALIDATION_ENABLED: {{ .Values.registry.signatureValidationEnabled | quote }}
+  {{- if eq .Values.registry.signing.mode "auto" }}
+  # The Helm-generated signing key is unencrypted: empty password path means
+  # password=None (an empty cert_pwd FILE would read as b'' and crash the
+  # signer with "Password was given but private key is not encrypted").
+  REGISTRY_JWK_PRIVATE_KEY_PASSWORD: ""
+  {{- end }}
   REGISTRY_VERIFY_CLIENT: "false"
   REGISTRY_OWNER_ISOLATION_ENABLED: "false"
   # HTTP listener cannot verify client certs; do not hard-fail startup on it.
