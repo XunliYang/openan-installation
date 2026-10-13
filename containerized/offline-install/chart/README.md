@@ -129,6 +129,8 @@ kubectl -n openan port-forward svc/workflow-designer 8080:80
 | `namespace` | Kubernetes namespace | `openan` |
 | `createNamespace` | Helm creates the namespace | `true` |
 | `database.type` | Database backend: `postgresql` or `mysql` | `postgresql` |
+| `https.enabled` | Serve registry/orchestration over HTTPS in-cluster | `false` |
+| `https.verifyClient` | Require client certificates (mTLS) on registry | `false` |
 
 ### PostgreSQL
 

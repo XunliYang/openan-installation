@@ -6,4 +6,4 @@ metadata:
     app: workflow-designer
 data:
   default.conf: |
-{{ .Values.frontend.nginxConfig | indent 4 }}
+{{ tpl .Values.frontend.nginxConfig . | indent 4 }}

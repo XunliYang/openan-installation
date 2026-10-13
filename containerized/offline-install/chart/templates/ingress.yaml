@@ -14,7 +14,7 @@ metadata:
   annotations:
     {{- toYaml .Values.ingress.annotations | nindent 4 }}
 spec:
-  ingressClassName: openan-nginx
+  ingressClassName: {{ .Values.ingress.className }}
   {{- if and .Values.ingress.tls.enabled .Values.ingress.host }}
   tls:
   - hosts:
@@ -53,8 +53,11 @@ metadata:
     {{- toYaml .Values.ingress.annotations | nindent 4 }}
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /$2
+    {{- if .Values.https.enabled }}
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    {{- end }}
 spec:
-  ingressClassName: openan-nginx
+  ingressClassName: {{ .Values.ingress.className }}
   {{- if and .Values.ingress.tls.enabled .Values.ingress.host }}
   tls:
   - hosts:
@@ -93,8 +96,11 @@ metadata:
     {{- toYaml .Values.ingress.annotations | nindent 4 }}
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /$2
+    {{- if .Values.https.enabled }}
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    {{- end }}
 spec:
-  ingressClassName: openan-nginx
+  ingressClassName: {{ .Values.ingress.className }}
   {{- if and .Values.ingress.tls.enabled .Values.ingress.host }}
   tls:
   - hosts:

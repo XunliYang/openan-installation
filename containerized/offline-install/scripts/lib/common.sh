@@ -158,6 +158,8 @@ save_config() {
         echo "INSTALL_METALLB=\"${INSTALL_METALLB}\""
         echo "METALLB_POOL=\"${METALLB_POOL}\""
         echo "INGRESS_HOST=\"${INGRESS_HOST}\""
+        echo "HTTPS_ENABLED=\"${HTTPS_ENABLED}\""
+        echo "HTTPS_VERIFY_CLIENT=\"${HTTPS_VERIFY_CLIENT}\""
         echo "DB_TYPE=\"${DB_TYPE}\""
         echo "DB_PASSWORD=\"${DB_PASSWORD}\""
         echo "STORAGE_MODE=\"${STORAGE_MODE}\""

@@ -105,6 +105,17 @@ mysql:
       user: opena2a_t
 
 # =============================================================================
+# Transport security
+# =============================================================================
+# Serve registry-center and orchestration-center over HTTPS inside the
+# cluster. Default false keeps the plain-HTTP offline topology unchanged.
+# verifyClient additionally requires client certificates (mTLS) on the
+# registry listener; keep false when clients authenticate by other means.
+https:
+  enabled: false
+  verifyClient: false
+
+# =============================================================================
 # Registry Center Configuration (Required)
 # =============================================================================
 registry:
@@ -194,6 +205,11 @@ orchestration:
   port: 5001
   # Registry Center URL (auto-discovered if registry.enabled=true)
   agentRegistryUrl: ""
+  # TLS certificate configuration (mounted at etc/ssl when https.enabled=true)
+  # mode: auto (Helm generates self-signed cert, stored in Secret) / secret (user-provided Secret) / off (no certs mounted)
+  tls:
+    mode: auto
+    existingSecret: ""  # Used when mode=secret. Secret containing server.cer, server_key.pem, trust.cer, cert_pwd
   # LLM configuration for orchestration-center
   llm:
     chat:
@@ -271,7 +287,7 @@ frontend:
         # API proxy to orchestration-center (nginx gateway)
         location ~ ^/api/orchestrate(/|$)(.*)$ {
             rewrite ^/api/orchestrate(/|$)(.*)$ /$2 break;
-            proxy_pass http://orchestration-center:5001;
+            proxy_pass {{ include "openan.httpScheme" . }}://orchestration-center:5001;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection 'upgrade';
@@ -288,7 +304,7 @@ frontend:
 
         # API proxy to orchestration-center (direct)
         location /rest/v1/orchestrate/ {
-            proxy_pass http://orchestration-center:5001;
+            proxy_pass {{ include "openan.httpScheme" . }}://orchestration-center:5001;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection 'upgrade';
