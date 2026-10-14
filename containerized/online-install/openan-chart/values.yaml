@@ -125,11 +125,13 @@ registry:
       command: ["python", "-m", "agent_registry.healthcheck"]
     initialDelaySeconds: 30
     periodSeconds: 30
+    timeoutSeconds: 10
   readinessProbe:
     exec:
       command: ["python", "-m", "agent_registry.healthcheck"]
     initialDelaySeconds: 10
     periodSeconds: 10
+    timeoutSeconds: 10
 
 # =============================================================================
 # Orchestration Center Configuration (Optional)
@@ -190,11 +192,13 @@ orchestration:
       command: ["python", "-m", "orchestrate.server.healthcheck"]
     initialDelaySeconds: 40
     periodSeconds: 30
+    timeoutSeconds: 10
   readinessProbe:
     exec:
       command: ["python", "-m", "orchestrate.server.healthcheck"]
     initialDelaySeconds: 10
     periodSeconds: 10
+    timeoutSeconds: 10
   startupProbe:
     exec:
       command: ["python", "-m", "orchestrate.server.healthcheck"]
