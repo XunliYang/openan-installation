@@ -102,12 +102,16 @@ def probe_llm(model, url, api_key):
 
 
 def models_yaml(model, url):
-    """chat-only models.yaml; the API key is referenced by env name, never inlined."""
+    """chat-only models.yaml; the API key is referenced by env name, never inlined.
+
+    json.dumps emits a YAML-compatible double-quoted scalar, so ids like
+    `123` or `true` stay strings.
+    """
     return ("models:\n"
             "  chat:\n"
             "    provider: openai_compatible\n"
-            f"    model: {model}\n"
-            f"    url: {url}\n"
+            f"    model: {json.dumps(model)}\n"
+            f"    url: {json.dumps(url)}\n"
             "    api_key_env: LLM_CHAT_API_KEY\n")
 
 
@@ -132,7 +136,7 @@ def choose_components():
     return {"registry": False, "orchestration": True}
 
 
-def configure(namespace, release, output):
+def configure(namespace, release, output, tag=None):
     if not output.parent.is_dir():
         raise ValueError("Output parent directory must already exist")
     if output.exists():
@@ -140,7 +144,8 @@ def configure(namespace, release, output):
 
     components = choose_components()
     enabled = [component for component in COMPONENTS if components[component]]
-    tag = ask("Compatible application image tag (already pushed)")
+    if not tag:
+        tag = ask("Compatible application image tag (already pushed)")
     prefix = release + "-"
 
     # --- non-secret configuration + reference checks -------------------------
@@ -297,11 +302,12 @@ if __name__ == "__main__":
     parser.add_argument("--namespace", required=True)
     parser.add_argument("--release", required=True)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--tag", help="Application image tag; skips the interactive tag question")
     args = parser.parse_args()
     for name in (args.namespace, args.release):
         if not re.fullmatch(r"[a-z0-9](?:[-a-z0-9]*[a-z0-9])?", name) or len(name) > 53:
             parser.error("Invalid namespace/release")
     try:
-        configure(args.namespace, args.release, args.output)
+        configure(args.namespace, args.release, args.output, tag=args.tag)
     except (ValueError, RuntimeError, OSError, subprocess.SubprocessError):
         parser.exit(2, "Configuration failed without exposing secret values; existing Secrets are not overwritten.\n")

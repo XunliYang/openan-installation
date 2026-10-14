@@ -9,6 +9,10 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Interactive prompts (and configure.py's secret collection) need a terminal;
+# automation should use one_click_install.sh --values instead.
+[ -t 0 ] || { echo "install.sh is interactive and requires a terminal; use one_click_install.sh --values for automation" >&2; exit 2; }
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -135,20 +139,27 @@ fi
 # [3/6] Images
 # ---------------------------------------------------------------------------
 log_step "[3/6] Images"
+# The tag has no default on purpose: the deployment contract states old v1.0.0
+# images are not compatible with the current chart, so it must be explicit.
+APP_TAG=""
+for _ in 1 2 3; do
+    APP_TAG="$(ask_input "Application image tag (no default; see the deployment contract)" "")"
+    [ -n "$APP_TAG" ] && break
+    log_warn "The image tag is required"
+done
+[ -n "$APP_TAG" ] || { log_error "No image tag given"; exit 2; }
 if ask_yes_no "Build images from source now?" "no"; then
-    APP_TAG="$(ask_input "Image tag")"
     RC_SOURCE_URL="$(ask_input "registry-center source archive URL")"
     OC_SOURCE_URL="$(ask_input "orchestration-center source archive URL")"
-    if [ -z "$APP_TAG" ] || [ -z "$RC_SOURCE_URL" ] || [ -z "$OC_SOURCE_URL" ]; then
-        log_error "Building requires a tag and both source archive URLs at accepted revisions"
+    if [ -z "$RC_SOURCE_URL" ] || [ -z "$OC_SOURCE_URL" ]; then
+        log_error "Building requires both source archive URLs at accepted revisions"
         exit 2
     fi
     bash "$SCRIPT_DIR/../build/build.sh" --tag "$APP_TAG" \
         --registry-release "$RC_SOURCE_URL" --orchestration-release "$OC_SOURCE_URL"
 else
-    APP_TAG="$(ask_input "Image tag (already pushed)" "v1.0.0")"
+    log_info "Using already-pushed tag: $APP_TAG"
 fi
-export APP_TAG
 log_info "Application image tag: $APP_TAG"
 
 # ---------------------------------------------------------------------------
@@ -184,7 +195,16 @@ else
             log_error "MetalLB CRDs (ipaddresspools.metallb.io) not available after 60s"
             exit 1
         fi
-        METALLB_POOL="$(ask_input "MetalLB IP pool (e.g. 192.168.1.200-192.168.1.250, leave empty to skip)" "")"
+        METALLB_POOL=""
+        for _ in 1 2 3; do
+            METALLB_POOL="$(ask_input "MetalLB IP pool (e.g. 192.168.1.200-192.168.1.250 or a CIDR, leave empty to skip)" "")"
+            [ -z "$METALLB_POOL" ] && break
+            if printf '%s' "$METALLB_POOL" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}(-([0-9]{1,3}\.){3}[0-9]{1,3}|/[0-9]{1,2})?$'; then
+                break
+            fi
+            log_warn "Pool must be an IP range (a.b.c.d-a.b.c.d) or a CIDR (a.b.c.d/n)"
+            METALLB_POOL=""
+        done
         if [ -n "$METALLB_POOL" ]; then
             log_info "Configuring MetalLB pool: $METALLB_POOL"
             kubectl apply -f - <<EOF
@@ -228,7 +248,7 @@ if [ -e "$VALUES" ]; then
         exit 0
     fi
 fi
-python3 "$SCRIPT_DIR/configure.py" --namespace "$NAMESPACE" --release "$RELEASE" --output "$VALUES"
+python3 "$SCRIPT_DIR/configure.py" --namespace "$NAMESPACE" --release "$RELEASE" --tag "$APP_TAG" --output "$VALUES"
 log_info "Linting the chart against the generated values"
 helm lint "$SCRIPT_DIR/openan-chart" --namespace "$NAMESPACE" --values "$VALUES"
 

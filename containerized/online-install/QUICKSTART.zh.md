@@ -20,9 +20,9 @@ cd containerized/online-install
 
 - **[1/6] 预检** —— 检查 kubectl、helm、python3，确认集群可达，并打印 kubectl 客户端版本。
 - **[2/6] 目标** —— 询问 Helm release 名称与命名空间（默认均为 `openan`）。
-- **[3/6] 镜像** —— 从源码构建需要两个组织源码归档 URL（registry-center 与 orchestration-center，须为已验收版本）及镜像 tag；回答 no 则复用已推送的 tag（默认 `v1.0.0`）。
+- **[3/6] 镜像** —— 镜像 tag 必填且无默认值（旧 `v1.0.0` 镜像与当前 chart 不兼容，见部署契约）。从源码构建需要两个组织源码归档 URL（registry-center 与 orchestration-center，须为已验收版本）并会推送镜像——先 `docker login` 目标仓库；回答 no 则复用已推送的 tag。
 - **[4/6] 基础设施** —— 同时检测到 MetalLB 与 ingress-nginx 时跳过；否则可安装固定版本的 MetalLB v0.16.1 与 ingress-nginx controller-v1.15.1 清单，随后在裸金属上提示输入 MetalLB IP 池（如 `192.168.1.200-192.168.1.250`，留空跳过）。
-- **[5/6] 应用** —— 向导（configure.py）依次询问组件、SQL 托管（默认集群内 PostgreSQL 评估模式 / 外部 SQL）、模型（按对话式 LLM 答案生成并做连通性探测 / 已有 ConfigMap）、签名（自动演示 / 已有 Secret）以及必填的初始管理员密码（12+ 字符，含大小写/数字/特殊字符）。秘密仅经 kubectl stdin 写入 Kubernetes Secret；向导只生成非秘密的 `deployment.generated.json`，不覆盖已有文件或 Secret。
+- **[5/6] 应用** —— 向导（configure.py）依次询问组件、SQL 托管（默认集群内 PostgreSQL 评估模式 / 外部 SQL）、模型（按对话式 LLM 答案生成并做连通性探测 / 已有 ConfigMap）、签名（自动演示 / 已有 Secret）以及初始管理员密码（12+ 字符，含大小写/数字/特殊字符；选择部署 orchestration 时询问）。秘密仅经 kubectl stdin 写入 Kubernetes Secret；向导只生成非秘密的 `deployment.generated.json`，不覆盖已有文件或 Secret。若中途失败，请核对待已创建的 Secret/ConfigMap，升级时改用 `--values` 继续。
 - **[6/6] 部署** —— 用生成的 values 对 Chart 做 lint，执行 `helm upgrade --install --wait` 并打印访问 URL。使用向导中配置的管理员账户登录。
 
 ## 第 2 步：验证部署
@@ -66,7 +66,7 @@ echo "http://${NODE_IP}:${NODE_PORT}/"
 3. **创建证书 Secret**：
 
    ```bash
-   python3 tool/gen_certs.py --host openan.example.com --install-secret openan-tls -n openan
+   python3 tool/gen_certs.py --host openan.example.com --install-secret openan-tls --namespace openan
    # 或：kubectl create secret tls openan-tls -n openan --cert=tls.crt --key=tls.key
    ```
 

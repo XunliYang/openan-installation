@@ -20,9 +20,9 @@ The installer orchestrates six phases (`./install.sh --help` shows the short flo
 
 - **[1/6] Preflight** — checks kubectl, helm and python3, verifies the cluster is reachable and prints the kubectl client version.
 - **[2/6] Targets** — asks for the Helm release name and namespace (both default to `openan`).
-- **[3/6] Images** — building from source needs the two organization source archive URLs at accepted revisions (registry-center and orchestration-center) plus an image tag; answer no to reuse an already-pushed tag (default `v1.0.0`).
+- **[3/6] Images** — the image tag is required and has no default (old `v1.0.0` images are not compatible with the current chart; see the deployment contract). Building from source needs the two organization source archive URLs at accepted revisions (registry-center and orchestration-center) and pushes images — `docker login` to the target registry first; answer no to reuse an already-pushed tag.
 - **[4/6] Infrastructure** — when MetalLB and ingress-nginx are both detected, the phase is skipped; otherwise it can install the pinned MetalLB v0.16.1 and ingress-nginx controller-v1.15.1 manifests, then prompt for a MetalLB IP pool on bare metal (e.g. `192.168.1.200-192.168.1.250`, leave empty to skip).
-- **[5/6] Application** — the guided wizard (configure.py) asks for components, SQL hosting (in-cluster PostgreSQL evaluation default / external SQL), models (generated from chat LLM answers with a connectivity probe / existing ConfigMaps), signing (auto demo / existing Secret) and the required initial admin password (12+ characters with lower/upper/digit/special classes). Secrets go only to Kubernetes Secrets via kubectl stdin; the wizard writes just the non-secret `deployment.generated.json` and never overwrites existing files or Secrets.
+- **[5/6] Application** — the guided wizard (configure.py) asks for components, SQL hosting (in-cluster PostgreSQL evaluation default / external SQL), models (generated from chat LLM answers with a connectivity probe / existing ConfigMaps), signing (auto demo / existing Secret) and the initial admin password (12+ characters with lower/upper/digit/special classes; asked when orchestration is selected). Secrets go only to Kubernetes Secrets via kubectl stdin; the wizard writes just the non-secret `deployment.generated.json` and never overwrites existing files or Secrets. If a run fails halfway, reconcile the created Secrets/ConfigMaps and continue with `--values` for upgrades.
 - **[6/6] Deploy** — lints the chart against the generated values, runs `helm upgrade --install --wait` and prints the access URL. Log in with the admin account configured in the wizard.
 
 ## Step 2: Verify deployment
@@ -66,7 +66,7 @@ Log in with the admin account configured in the wizard and change the password i
 3. **Certificate Secret**:
 
    ```bash
-   python3 tool/gen_certs.py --host openan.example.com --install-secret openan-tls -n openan
+   python3 tool/gen_certs.py --host openan.example.com --install-secret openan-tls --namespace openan
    # or: kubectl create secret tls openan-tls -n openan --cert=tls.crt --key=tls.key
    ```
 
