@@ -448,3 +448,24 @@ def test_offline_compose_build_remote_source_downloads_archive(tmp_path):
     calls = log.read_text() if log.exists() else ""
     assert "registry-center/archive/main.tar.gz" in calls, \
         result.stdout + result.stderr + "\nCURL CALLS:\n" + calls
+
+
+def test_offline_install_source_ref_derives_dated_tag(tmp_path):
+    # The legacy k8s offline builder is no longer gated at entry (BUG-fix:
+    # it was marked deprecated); verify it runs and derives main-YYYYMMDD.
+    if not BASH:
+        pytest.skip("Bash unavailable")
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    curl = shim / "curl"
+    curl.write_text("#!/usr/bin/env bash\nexit 1\n")
+    curl.chmod(0o755)
+    docker = shim / "docker"
+    docker.write_text("#!/usr/bin/env bash\nexit 0\n")
+    docker.chmod(0o755)
+    result = _run_build_with_shim(
+        ROOT / "containerized/offline-install/build/build-offline.sh",
+        ["--source-ref", "main", "--out", str(tmp_path / "dist")],
+        shim, timeout=90)
+    assert re.search(r"openan-offline-main-\d{8}", result.stdout), \
+        result.stdout + result.stderr
