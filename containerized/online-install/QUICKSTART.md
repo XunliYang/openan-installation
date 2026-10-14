@@ -31,8 +31,8 @@ The installer orchestrates six phases (`./install.sh --help` shows the short flo
 kubectl -n openan get pods,svc,ingress
 ```
 
-- Pods: `registry-center-*`, `orchestration-center-*`, `workflow-designer-*` (plus `openan-postgres-0` for in-cluster SQL) should reach `Running`.
-- Services: `workflow-designer` (NodePort), `registry-center`, `orchestration-center`, `openan-postgres`.
+- Pods: `registry-center-*`, `orchestration-center-*`, `openan-frontend-*` (plus `openan-postgres-0` for in-cluster SQL) should reach `Running`.
+- Services: `openan-frontend` (NodePort), `registry-center`, `orchestration-center`, `openan-postgres`.
 - Ingresses: `openan-frontend-ingress`, `openan-orchestration-ingress`, `openan-registry-ingress` with the LoadBalancer address in `ADDRESS`.
 
 ## Step 3: Access the platform
@@ -46,7 +46,7 @@ kubectl -n ingress-nginx get svc ingress-nginx-controller   # EXTERNAL-IP
 Open `http://<EXTERNAL-IP>/` (the installer also prints the wizard hostname — point DNS or an `/etc/hosts` entry for it at that IP). Without a LoadBalancer IP the installer prints the NodePort fallback:
 
 ```bash
-NODE_PORT=$(kubectl -n openan get svc workflow-designer -o jsonpath='{.spec.ports[0].nodePort}')
+NODE_PORT=$(kubectl -n openan get svc openan-frontend -o jsonpath='{.spec.ports[0].nodePort}')
 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
 echo "http://${NODE_IP}:${NODE_PORT}/"
 ```

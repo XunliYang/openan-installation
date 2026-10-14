@@ -31,8 +31,8 @@ cd containerized/online-install
 kubectl -n openan get pods,svc,ingress
 ```
 
-- Pod：`registry-center-*`、`orchestration-center-*`、`workflow-designer-*`（集群内 SQL 另有 `openan-postgres-0`）应达到 `Running`。
-- Service：`workflow-designer`（NodePort）、`registry-center`、`orchestration-center`、`openan-postgres`。
+- Pod：`registry-center-*`、`orchestration-center-*`、`openan-frontend-*`（集群内 SQL 另有 `openan-postgres-0`）应达到 `Running`。
+- Service：`openan-frontend`（NodePort）、`registry-center`、`orchestration-center`、`openan-postgres`。
 - Ingress：`openan-frontend-ingress`、`openan-orchestration-ingress`、`openan-registry-ingress`，`ADDRESS` 列显示负载均衡地址。
 
 ## 第 3 步：访问平台
@@ -46,7 +46,7 @@ kubectl -n ingress-nginx get svc ingress-nginx-controller   # EXTERNAL-IP
 访问 `http://<EXTERNAL-IP>/`（安装器同时打印向导中填写的主机名——把 DNS 或 `/etc/hosts` 记录指向该 IP）。没有负载均衡 IP 时，安装器打印 NodePort 回退地址：
 
 ```bash
-NODE_PORT=$(kubectl -n openan get svc workflow-designer -o jsonpath='{.spec.ports[0].nodePort}')
+NODE_PORT=$(kubectl -n openan get svc openan-frontend -o jsonpath='{.spec.ports[0].nodePort}')
 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
 echo "http://${NODE_IP}:${NODE_PORT}/"
 ```
