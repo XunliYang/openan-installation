@@ -135,9 +135,11 @@ def test_wizard_never_overwrites_an_existing_secret(monkeypatch):
 
 def test_wizard_generated_values_contain_references_not_credentials(tmp_path, monkeypatch):
     module = wizard()
-    answers = iter(["tested", "mysql", "sql.example", "3306", "registry_db", "orch_db",
-                    "registry_user", "orch_user", "rc-models", "oc-models", "signing", "openan.example"])
+    answers = iter(["all", "tested", "external", "mysql", "sql.example", "3306", "registry_db", "orch_db",
+                    "registry_user", "orch_user", "existing", "rc-models", "oc-models", "secret",
+                    "signing", "openan.example"])
     monkeypatch.setattr(module, "ask", lambda _: next(answers))
+    monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
     monkeypatch.setattr(module, "secret_input", lambda _: "SyntheticSecret9!")
     saved = {}
     monkeypatch.setattr(module, "create_secret", lambda ns, name, data: saved.update({name: data}))
@@ -209,9 +211,11 @@ bash "$@"
 
 def test_wizard_rejects_missing_public_dependencies_before_secrets(tmp_path, monkeypatch):
     module = wizard()
-    answers = iter(["tested", "mysql", "sql.example", "3306", "registry_db", "orch_db",
-                    "registry_user", "orch_user", "rc-models", "oc-models", "signing", "openan.example"])
+    answers = iter(["all", "tested", "external", "mysql", "sql.example", "3306", "registry_db", "orch_db",
+                    "registry_user", "orch_user", "existing", "rc-models", "oc-models", "secret",
+                    "signing", "openan.example"])
     monkeypatch.setattr(module, "ask", lambda _: next(answers))
+    monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
     monkeypatch.setattr(module.subprocess, "run", lambda command, **kw: subprocess.CompletedProcess(command, 1, "", ""))
     monkeypatch.setattr(module, "secret_input", lambda _: pytest.fail("Must not collect secrets yet"))
     monkeypatch.setattr(module, "create_secret", lambda *args: pytest.fail("Must not create secrets yet"))
