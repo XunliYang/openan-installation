@@ -15,11 +15,6 @@
 #   scripts/install.sh --config config.env   # non-interactive
 #   scripts/install.sh --config config.env --yes --skip-check
 
-# The independent legacy chart cannot safely deploy current account/DB/model contracts.
-# Fail before touching Kubernetes, Docker, files, environment or credentials.
-echo "Legacy offline Kubernetes installer is unsupported for current service revisions. Use offline-install-compose or the maintained online chart; see containerized/TRANSPORT_DEPLOYMENT.md." >&2
-exit 2
-
 set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -63,6 +58,9 @@ DB_PASSWORD="openan-db-password"
 REGISTRY_CENTER_IMAGE="project-openan/registry-center:v1.0.0"
 ORCHESTRATION_CENTER_IMAGE="project-openan/orchestration-center:v1.0.0"
 WORKFLOW_DESIGNER_IMAGE="project-openan/workflow-designer:v1.0.0"
+FRONTEND_TYPE="portal"
+PORTAL_IMAGE="project-openan/openan-portal:v1.0.0"
+OC_ADMIN_PASSWORD=""
 POSTGRES_IMAGE="library/postgres:15-alpine"
 MYSQL_IMAGE="library/mysql:8.4.3"
 REGISTRY_CHAT_MODEL=""
@@ -136,8 +134,16 @@ if [ "$ASSUME_YES" != "true" ] && [ -z "$CONFIG_FILE" ]; then
     fi
     LLM_VALIDATE_ANS="$(ask_input "  Validate LLM connectivity now? (true/false)" "$LLM_VALIDATE")"
     LLM_VALIDATE="$LLM_VALIDATE_ANS"
+    FRONTEND_TYPE="$(ask_choice "  Frontend:" "portal" "workflow-designer")"
+    OC_ADMIN_PASSWORD="$(ask_input_secret "  OC admin password (portal login)" "$OC_ADMIN_PASSWORD")"
     START_AGENTS_ANS="$(ask_input "  Start the sample agents server in orchestration-center? (true/false)" "$START_AGENTS_SERVER")"
     START_AGENTS_SERVER="$START_AGENTS_ANS"
+fi
+
+if [ -z "$OC_ADMIN_PASSWORD" ]; then
+    log_error "OC_ADMIN_PASSWORD is required: OC seeds its 'admin' account (portal login) from it and refuses to start over HTTP without a credential."
+    log_error "Set OC_ADMIN_PASSWORD in config.env (or answer the interactive prompt) and re-run."
+    exit 2
 fi
 
 if [ -z "$REGISTRY_NODE" ]; then
@@ -161,7 +167,7 @@ if [ "$SKIP_CHECK" != "true" ]; then
     export K8S_NAMESPACE INSTALL_REGISTRY REGISTRY_NODE REGISTRY_NODE_IP \
         REGISTRY_NODEPORT INSTALL_METALLB METALLB_POOL INGRESS_HOST \
         STORAGE_MODE STORAGE_CLASS STORAGE_SIZE HOSTPATH STORAGE_NODE \
-        DB_TYPE REGISTRY_CHAT_URL LLM_VALIDATE
+        DB_TYPE FRONTEND_TYPE OC_ADMIN_PASSWORD REGISTRY_CHAT_URL LLM_VALIDATE
     check_args=()
     [ -n "$CONFIG_FILE" ] && check_args+=(--config "$CONFIG_FILE")
     if ! "$SCRIPT_DIR/check-env.sh" "${check_args[@]}"; then
@@ -189,11 +195,16 @@ echo "  Registry:         $REG_HOST (node: $REGISTRY_NODE)"
 echo "  MetalLB:          $INSTALL_METALLB ${METALLB_POOL:+($METALLB_POOL)}"
 echo "  Storage mode:     $STORAGE_MODE (node: $STORAGE_NODE, size: $STORAGE_SIZE)"
 echo "  Database:         $DB_TYPE"
+echo "  Frontend:         $FRONTEND_TYPE"
 echo "  Ingress host:     ${INGRESS_HOST:-<none, IP access>}"
 echo "  HTTPS (services): $HTTPS_ENABLED (verifyClient: $HTTPS_VERIFY_CLIENT)"
 echo "  Registry center:  $REGISTRY_CENTER_IMAGE"
 echo "  Orchestration:    $ORCHESTRATION_CENTER_IMAGE"
-echo "  Workflow designer:$WORKFLOW_DESIGNER_IMAGE"
+if [ "$FRONTEND_TYPE" = "portal" ]; then
+    echo "  Frontend image:   $PORTAL_IMAGE"
+else
+    echo "  Frontend image:   $WORKFLOW_DESIGNER_IMAGE"
+fi
 echo "  Sample agents:    $START_AGENTS_SERVER"
 echo "=========================================="
 echo ""
@@ -473,6 +484,8 @@ emit_db_storage() {
     echo "    repository: ${REG_HOST}/$(REF_REPO "$ORCHESTRATION_CENTER_IMAGE")"
     echo "    tag: $(REF_TAG "$ORCHESTRATION_CENTER_IMAGE")"
     echo "    pullPolicy: IfNotPresent"
+    echo "  admin:"
+    echo "    initialPassword: \"${OC_ADMIN_PASSWORD}\""
     if [ -n "$ORCH_CHAT_MODEL" ]; then
         echo "  llm:"
         echo "    chat:"
@@ -482,10 +495,16 @@ emit_db_storage() {
     fi
     echo "frontend:"
     echo "  enabled: true"
+    echo "  type: ${FRONTEND_TYPE}"
     echo "  replicas: 2"
     echo "  image:"
-    echo "    repository: ${REG_HOST}/$(REF_REPO "$WORKFLOW_DESIGNER_IMAGE")"
-    echo "    tag: $(REF_TAG "$WORKFLOW_DESIGNER_IMAGE")"
+    if [ "$FRONTEND_TYPE" = "portal" ]; then
+        echo "    repository: ${REG_HOST}/$(REF_REPO "$PORTAL_IMAGE")"
+        echo "    tag: $(REF_TAG "$PORTAL_IMAGE")"
+    else
+        echo "    repository: ${REG_HOST}/$(REF_REPO "$WORKFLOW_DESIGNER_IMAGE")"
+        echo "    tag: $(REF_TAG "$WORKFLOW_DESIGNER_IMAGE")"
+    fi
     echo "    pullPolicy: IfNotPresent"
     echo "ingress:"
     echo "  enabled: true"
@@ -559,8 +578,9 @@ if [ -n "$INGRESS_IP" ]; then
     echo "  Access URL:  http://${INGRESS_IP}/"
     smoke "http://${INGRESS_IP}/registry/rest/v1/registry-center/agent-cards" "registry"
     smoke "http://${INGRESS_IP}/api/orchestrate/rest/v1/orchestrate/agent-cards" "orchestration"
+    smoke "http://${INGRESS_IP}/api/registry/rest/v1/registry-center/agent-cards" "registry-via-gateway"
 else
-    NODE_PORT="$("$KUBECTL" -n "$K8S_NAMESPACE" get svc workflow-designer -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null)"
+    NODE_PORT="$("$KUBECTL" -n "$K8S_NAMESPACE" get svc openan-frontend -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null)"
     NODE_IP="$("$KUBECTL" get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null)"
     echo "  Access URL (NodePort): http://${NODE_IP}:${NODE_PORT}/"
 fi

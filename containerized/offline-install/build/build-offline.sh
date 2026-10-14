@@ -21,15 +21,11 @@
 #   --app-source pull|build|tars
 #   --registry-src <dir>        registry-center source (with Dockerfile) for --app-source build
 #   --orchestration-src <dir>   orchestration-center source for --app-source build
+#   --portal-src <dir>          openan-portal source (with Dockerfile) for --app-source build
 #   --app-tars-dir <dir>        directory of pre-built <base>-<arch>.tar for --app-source tars
 #   --platforms a,b             target architectures (default linux/amd64,linux/arm64)
 #   --out <dir>                 output directory (default ./dist)
 #   --keep-images               do not delete pulled images afterwards
-
-# The independent legacy chart cannot safely deploy current account/DB/model contracts.
-# Fail before touching Kubernetes, Docker, files, environment or credentials.
-echo "Legacy offline Kubernetes installer is unsupported for current service revisions. Use offline-install-compose or the maintained online chart; see containerized/TRANSPORT_DEPLOYMENT.md." >&2
-exit 2
 
 set -o pipefail
 
@@ -69,6 +65,7 @@ APP_REGISTRY="ghcr.io/project-openan"
 APP_SOURCE="pull"
 REGISTRY_SRC=""
 ORCHESTRATION_SRC=""
+PORTAL_SRC=""
 APP_TARS_DIR=""
 PLATFORMS="linux/amd64,linux/arm64"
 OUT_DIR="$SCRIPT_DIR/dist"
@@ -81,6 +78,7 @@ while [ $# -gt 0 ]; do
         --app-source)        APP_SOURCE="$2"; shift 2 ;;
         --registry-src)      REGISTRY_SRC="$2"; shift 2 ;;
         --orchestration-src) ORCHESTRATION_SRC="$2"; shift 2 ;;
+        --portal-src)         PORTAL_SRC="$2"; shift 2 ;;
         --app-tars-dir)      APP_TARS_DIR="$2"; shift 2 ;;
         --platforms)         PLATFORMS="$2"; shift 2 ;;
         --out)               OUT_DIR="$2"; shift 2 ;;
@@ -99,6 +97,7 @@ docker buildx version >/dev/null 2>&1 || { log_error "docker buildx is required"
 APP_REGISTRY_CENTER_REF="$APP_REGISTRY/registry-center:$TAG"
 APP_ORCHESTRATION_CENTER_REF="$APP_REGISTRY/orchestration-center:$TAG"
 APP_WORKFLOW_DESIGNER_REF="$APP_REGISTRY/workflow-designer:$TAG"
+APP_PORTAL_REF="$APP_REGISTRY/openan-portal:$TAG"
 
 mkdir -p "$OUT_DIR"
 BUNDLE="$(cd "$OUT_DIR" && pwd)/openan-offline-$TAG"
@@ -198,6 +197,7 @@ case "$APP_SOURCE" in
         save_image "$APP_REGISTRY_CENTER_REF" "registry-center"
         save_image "$APP_ORCHESTRATION_CENTER_REF" "orchestration-center"
         save_image "$APP_WORKFLOW_DESIGNER_REF" "workflow-designer"
+        save_image "$APP_PORTAL_REF" "portal"
         ;;
     build)
         [ -n "$REGISTRY_SRC" ] || { log_error "--registry-src is required for --app-source build"; exit 1; }
@@ -206,6 +206,10 @@ case "$APP_SOURCE" in
         REGISTRY_SRC="$_path"
         _path="$(resolve_abs "$ORCHESTRATION_SRC")" || { log_error "--orchestration-src path not found: $ORCHESTRATION_SRC"; exit 1; }
         ORCHESTRATION_SRC="$_path"
+        if [ -n "$PORTAL_SRC" ]; then
+            _path="$(resolve_abs "$PORTAL_SRC")" || { log_error "--portal-src path not found: $PORTAL_SRC"; exit 1; }
+            PORTAL_SRC="$_path"
+        fi
         for a in "${ARCHS[@]}"; do
             log_info "  build registry-center ($a)"
             docker buildx build --platform "linux/${a}" --load -t "$APP_REGISTRY_CENTER_REF" "$REGISTRY_SRC" || exit 1
@@ -220,6 +224,13 @@ case "$APP_SOURCE" in
             else
                 log_warn "  no workflow-designer/Dockerfile — skipping"
             fi
+            if [ -n "$PORTAL_SRC" ]; then
+                log_info "  build portal ($a)"
+                docker buildx build --platform "linux/${a}" --load -t "$APP_PORTAL_REF" "$PORTAL_SRC" || exit 1
+                docker save -o "$BUNDLE/images/portal-${a}.tar" "$APP_PORTAL_REF"
+            else
+                log_warn "  --portal-src not given - portal image not built; bundle only supports FRONTEND_TYPE=workflow-designer"
+            fi
         done
         ;;
     tars)
@@ -231,6 +242,13 @@ case "$APP_SOURCE" in
                 cp "$APP_TARS_DIR/${base}-${a}.tar" "$BUNDLE/images/"
             done
         done
+        for a in "${ARCHS[@]}"; do
+            if [ -r "$APP_TARS_DIR/portal-${a}.tar" ]; then
+                cp "$APP_TARS_DIR/portal-${a}.tar" "$BUNDLE/images/"
+            else
+                log_warn "missing optional $APP_TARS_DIR/portal-${a}.tar - bundle only supports FRONTEND_TYPE=workflow-designer"
+            fi
+        done
         ;;
     *)
         log_error "invalid --app-source: $APP_SOURCE (use pull|build|tars)"; exit 2 ;;
@@ -241,6 +259,7 @@ esac
     echo "APP_REGISTRY_CENTER_TAG=$APP_REGISTRY_CENTER_REF"
     echo "APP_ORCHESTRATION_CENTER_TAG=$APP_ORCHESTRATION_CENTER_REF"
     echo "APP_WORKFLOW_DESIGNER_TAG=$APP_WORKFLOW_DESIGNER_REF"
+    echo "APP_PORTAL_TAG=$APP_PORTAL_REF"
 } >"$BUNDLE/deps/image-tags.env"
 
 # --- Checksums ----------------------------------------------------------------
