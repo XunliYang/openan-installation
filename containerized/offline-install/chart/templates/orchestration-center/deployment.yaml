@@ -78,6 +78,15 @@ spec:
               name: orchestration-center-secret
               key: db-password
           {{- end }}
+        {{- if or .Values.orchestration.admin.existingSecret .Values.orchestration.admin.initialPassword }}
+        - name: OC_ADMIN_INITIAL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.orchestration.admin.existingSecret | default "orchestration-center-admin" }}
+              key: admin-password
+        {{- end }}
+        - name: LLM_CONFIG_FILE
+          value: /opt/orchestration-center/etc/config/models.yaml
         {{- if .Values.orchestration.llm.chat.apiKey }}
         - name: LLM_CHAT_API_KEY
           valueFrom:
@@ -102,6 +111,10 @@ spec:
         volumeMounts:
         - name: etc-dir
           mountPath: /opt/orchestration-center/etc
+        - name: models-config
+          mountPath: /opt/orchestration-center/etc/config/models.yaml
+          subPath: models.yaml
+          readOnly: true
         {{- if and .Values.https.enabled (ne .Values.orchestration.tls.mode "off") }}
         - name: tls-certs
           mountPath: /opt/orchestration-center/etc/ssl
@@ -110,6 +123,9 @@ spec:
       volumes:
       - name: etc-dir
         emptyDir: {}
+      - name: models-config
+        configMap:
+          name: orchestration-center-models
       {{- if and .Values.https.enabled (ne .Values.orchestration.tls.mode "off") }}
       - name: tls-certs
         secret:

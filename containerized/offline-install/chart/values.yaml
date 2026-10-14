@@ -124,7 +124,7 @@ registry:
   image:
     repository: ghcr.io/project-openan/registry-center
     tag: v1.0.0
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   port: 5000
   # Validate JWS signatures on AgentCards (server.conf signature_validation_enabled).
   # Offline installs serve plain HTTP; keep false unless agents sign their cards.
@@ -201,10 +201,17 @@ orchestration:
   image:
     repository: ghcr.io/project-openan/orchestration-center
     tag: v1.0.0
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   port: 5001
   # Registry Center URL (auto-discovered if registry.enabled=true)
   agentRegistryUrl: ""
+  # Initial admin password for the portal login (OC seeds the 'admin' user on
+  # first boot and refuses to start over HTTP without a credential). Required
+  # by the installer (config.env OC_ADMIN_PASSWORD); alternatively reference an
+  # existing Secret.
+  admin:
+    initialPassword: ""
+    existingSecret: ""   # key: admin-password
   # TLS certificate configuration (mounted at etc/ssl when https.enabled=true)
   # mode: auto (Helm generates self-signed cert, stored in Secret) / secret (user-provided Secret) / off (no certs mounted)
   tls:
@@ -253,19 +260,28 @@ orchestration:
     periodSeconds: 10
 
 # =============================================================================
-# Workflow Designer Configuration (Frontend)
+# Frontend Configuration (unified entry: portal or workflow-designer)
 # =============================================================================
 frontend:
-  # Set to false to skip workflow-designer deployment
+  # Set to false to skip the frontend deployment
   enabled: true
   replicas: 2
+  # Which frontend serves the unified entry:
+  #   portal            - openan-portal (default; container listens on 8080,
+  #                       proxies /api/orchestrate and /api/registry itself)
+  #   workflow-designer - legacy frontend (container listens on 80, chart
+  #                       manages its nginx config)
+  type: portal
   image:
-    repository: ghcr.io/project-openan/workflow-designer
+    # Empty repository -> derived from frontend.type
+    # (ghcr.io/project-openan/openan-portal or .../workflow-designer)
+    repository: ""
     tag: v1.0.0
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
+  # External Service port (stable); the container port switches by type.
   port: 80
   nodePort: 30191
-  # Nginx configuration (mounted as ConfigMap to /etc/nginx/conf.d/default.conf)
+  # Nginx configuration for workflow-designer (only used when frontend.type=workflow-designer; mounted as ConfigMap to /etc/nginx/conf.d/default.conf)
   nginxConfig: |
     server {
         listen 80;

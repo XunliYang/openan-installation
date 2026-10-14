@@ -1,0 +1,36 @@
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{- if .Values.registry.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-center-models
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "openan.registry.labels" . | nindent 4 }}
+data:
+  models.yaml: |
+    # Generated from chart values; secrets are referenced by env var, never inlined.
+    models:
+      chat:
+        provider: openai_compatible
+        model: {{ .Values.registry.llm.chat.model }}
+        url: {{ .Values.registry.llm.chat.url }}
+        api_key_env: LLM_CHAT_API_KEY
+    {{- with .Values.registry.llm.embed.model }}
+      embed:
+        provider: openai_compatible
+        model: {{ $.Values.registry.llm.embed.model }}
+        url: {{ $.Values.registry.llm.embed.url }}
+        api_key_env: LLM_EMBED_API_KEY
+    {{- end }}
+    {{- with .Values.registry.llm.rerank.model }}
+      rerank:
+        provider: openai_compatible
+        model: {{ $.Values.registry.llm.rerank.model }}
+        url: {{ $.Values.registry.llm.rerank.url }}
+        api_key_env: LLM_RERANK_API_KEY
+    {{- end }}
+{{- end }}
