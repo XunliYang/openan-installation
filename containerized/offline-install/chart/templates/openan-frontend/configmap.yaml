@@ -1,0 +1,11 @@
+{{- if and .Values.frontend.enabled (eq (include "openan.frontendType" .) "workflow-designer") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openan-frontend-nginx-config
+  labels:
+    {{- include "openan.frontend.labels" . | nindent 4 }}
+data:
+  default.conf: |
+{{ tpl .Values.frontend.nginxConfig . | indent 4 }}
+{{- end }}

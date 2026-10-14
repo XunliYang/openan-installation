@@ -5,7 +5,7 @@ OpenAN Platform has been deployed!
 Registry Center:
   Internal URL: http://registry-center:{{ .Values.registry.port }}
   {{- if .Values.ingress.enabled }}
-  External URL: http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}/registry
+  External URL: http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}/registry (or /api/registry)
   {{- end }}
 {{- end }}
 
@@ -17,8 +17,8 @@ Orchestration Center:
 
 {{- if .Values.frontend.enabled }}
 
-Workflow Designer (Frontend):
-  Internal URL: http://workflow-designer:{{ .Values.frontend.port }}
+Frontend (portal / workflow-designer):
+  Internal URL: http://openan-frontend:{{ .Values.frontend.port }}
   {{- if .Values.ingress.enabled }}
   External URL: http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}/
   {{- end }}
@@ -51,5 +51,5 @@ View logs:
   kubectl -n {{ .Values.namespace }} logs -l app=orchestration-center -f
 {{- end }}
 {{- if .Values.frontend.enabled }}
-  kubectl -n {{ .Values.namespace }} logs -l app=workflow-designer -f
+  kubectl -n {{ .Values.namespace }} logs -l app=openan-frontend -f
 {{- end }}

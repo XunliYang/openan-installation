@@ -2,7 +2,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: workflow-designer
+  name: openan-frontend
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "openan.frontend.labels" . | nindent 4 }}
@@ -16,6 +16,7 @@ spec:
       labels:
         {{- include "openan.frontend.selectorLabels" . | nindent 8 }}
     spec:
+      {{- if eq (include "openan.frontendType" .) "workflow-designer" }}
       initContainers:
         # The stock nginx entrypoint renders /etc/nginx/templates/*.template
         # into /etc/nginx/conf.d/, which fails when a ConfigMap is mounted
@@ -23,11 +24,11 @@ spec:
         # nginx; fall back to the chart's own config when the image ships no
         # template directory.
         - name: render-nginx-config
-          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          image: "{{ include "openan.frontendImageRepository" . }}:{{ .Values.frontend.image.tag }}"
           imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
           env:
             - name: BACKEND_SCHEME
-              value: "http"
+              value: {{ include "openan.httpScheme" . | quote }}
             - name: BACKEND_HOST
               value: "orchestration-center"
             - name: BACKEND_PORT
@@ -61,26 +62,46 @@ spec:
               mountPath: /rendered
             - name: nginx-config-cm
               mountPath: /cm
+      {{- end }}
       containers:
-        - name: workflow-designer
-          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+        - name: openan-frontend
+          image: "{{ include "openan.frontendImageRepository" . }}:{{ .Values.frontend.image.tag }}"
           imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          {{- if eq (include "openan.frontendType" .) "portal" }}
+          # The portal image renders its nginx config itself (envsubst template
+          # shipped in the image); the chart only provides the upstream URLs.
+          env:
+            - name: BACKEND_URL
+              value: {{ include "openan.httpScheme" . }}://orchestration-center:{{ .Values.orchestration.port }}
+            - name: REGISTRY_URL
+              value: {{ include "openan.httpScheme" . }}://registry-center:{{ .Values.registry.port }}
+          {{- end }}
           ports:
-            - containerPort: {{ .Values.frontend.port }}
+            - containerPort: {{ include "openan.frontendContainerPort" . }}
               protocol: TCP
           livenessProbe:
-            {{- toYaml .Values.frontend.livenessProbe | nindent 12 }}
+            httpGet:
+              path: {{ dig "path" "/" .Values.frontend.livenessProbe.httpGet }}
+              port: {{ include "openan.frontendContainerPort" . }}
+            {{- toYaml (omit .Values.frontend.livenessProbe "httpGet") | nindent 12 }}
           readinessProbe:
-            {{- toYaml .Values.frontend.readinessProbe | nindent 12 }}
+            httpGet:
+              path: {{ dig "path" "/" .Values.frontend.readinessProbe.httpGet }}
+              port: {{ include "openan.frontendContainerPort" . }}
+            {{- toYaml (omit .Values.frontend.readinessProbe "httpGet") | nindent 12 }}
           resources:
             {{- toYaml .Values.frontend.resources | nindent 12 }}
+          {{- if eq (include "openan.frontendType" .) "workflow-designer" }}
           volumeMounts:
             - name: nginx-conf-rendered
               mountPath: /etc/nginx/conf.d
+          {{- end }}
+      {{- if eq (include "openan.frontendType" .) "workflow-designer" }}
       volumes:
         - name: nginx-conf-rendered
           emptyDir: {}
         - name: nginx-config-cm
           configMap:
-            name: workflow-designer-nginx-config
+            name: openan-frontend-nginx-config
+      {{- end }}
 {{- end }}
