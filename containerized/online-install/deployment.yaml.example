@@ -52,6 +52,7 @@ orchestration:
     # Resolves to this Pod, not a Service with unavailable readiness endpoints.
     ORCH_HEALTHCHECK_HOST: orchestration-center
 frontend:
+  type: portal # backendTls below applies only when type: workflow-designer
   image:
     tag: tested-source-build
   backendTls:

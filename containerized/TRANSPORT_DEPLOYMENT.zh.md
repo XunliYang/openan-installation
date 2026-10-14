@@ -17,6 +17,7 @@ English: [Deployment contract](TRANSPORT_DEPLOYMENT.md).
 - 认证与 TLS 独立。RC 的 token 身份复用已有 static_bearer/oauth2_jwt/oauth2_introspection/custom provider；主端口实例与第三方接入端口实例不共用异步客户端。OC 公开接口使用与网页登录相同的账号：POST /api/v1/auth/token 获取 Token，业务请求显式携带账号 Bearer，Cookie 单独携带不授权公开 API。
 - registry.signing 独立控制 AgentCard 标准 JWS 签名。off 是明确禁用，非“自动生成”。auto 仅用于演示；生产使用 secret。
 - 模型定义通过完整 models.yaml ConfigMap 注入，秘密通过 runtimeSecret 或各能力 existingSecret 注入。自定义 provider/auth 字段请使用 modelsConfigMap，内置 llm 快捷配置仅用于 OpenAI-compatible。
+- frontend.type 选择统一网页入口：portal（默认）或 workflow-designer；workflow-designer 回退时通过 frontend.backendTls 校验 OC 后端。
 
 `database.port` 仅作用于外部 SQL，null/省略时按类型选择 PostgreSQL 5432 或 MySQL 3306；内置 PostgreSQL 使用 `postgresql.port`。端口须为 1..65535 整数，两服务启用时拒绝同外部库名。`namespace` 必须与 Helm `--namespace` 一致；应用镜像 tag 必填，不再默认旧 v1.0.0。
 
@@ -184,6 +185,8 @@ CI 分别验证 Helm 矩阵、错误配置和构建失败退出；RC 已有 Linu
 在线 Chart 与 Compose 显式设置 `ORCH_EXTERNAL_AUTH_MODE=user`，包括后端开启 mTLS 的场景；无需固定 ORCH_API_TOKEN。Ingress 证书只证明代理，不能代替原始账号 Token。改密、删除账号撤销该账号所有会话，重启后需重新登录；SQL 初始化账号必须先在网页完成强制改密。配套镜像必须包含 /api/v1/auth/token 和 user 认证模式；旧镜像需先升级，不能只升级安装模板。
 
 使用 `offline-install-compose/build/build-offline.sh` 将匹配服务源码构建的镜像、前端静态文件与公共模板打成白名单发布包；不会复制本地 config.env、runtime、PKI 或业务数据。离线端不拉镜像，校验失败阻止安装，配置按字面解析而不执行 shell。
+
+前端由 `FRONTEND_TYPE` 选择（portal 默认）；portal 镜像待 openan-portal#11 发布，未包含该镜像的发布包仅携带 workflow-designer 前端。
 
 数据库可选外部/内置 MySQL 或 PostgreSQL，两个服务使用独立业务库和凭据。应用各单实例，Nginx 是唯一公开入口，公共协议、两个后端协议与客户端证书校验分别配置。TLS、签名和 Token 身份保持独立。全量 models.yaml 只读挂载，密钥由私有 runtime env 注入。生成的 runtime/compose.json 含敏感值，不应提交或上传。
 

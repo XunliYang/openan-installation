@@ -221,7 +221,7 @@ def test_wizard_rejects_missing_public_dependencies_before_secrets(tmp_path, mon
 
 def test_compose_and_helm_static_asset_policy_agree():
     from test_offline_compose_contract import configure
-    config = configure.nginx_config(False, [], Path("unused"))
+    config = configure.nginx_config(False, [], Path("unused"), portal=False)
     assert "gzip on;" in config and "^/assets/" in config
     assert "immutable" in config and "no-store" in config
     assert 'add_header X-XSS-Protection' not in config

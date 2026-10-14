@@ -326,6 +326,9 @@ def run(bundle):
             (case / "oc.env").write_text(f"OC_ADMIN_INITIAL_PASSWORD='{ADMIN}'\nREGISTRY_ACCESS_TOKEN={TOKEN}\nEXTRA_LITERAL='price $5 ${{NOT_EXPANDED}} # text'\n")
             settings = {"PROJECT_NAME": f"openan-smoke-{os.getpid()}-{index}", "PUBLIC_BIND": "127.0.0.1", "PUBLIC_PORT": str(port),
                         "PUBLIC_ENABLE_HTTPS": str(public_tls).lower(), "PUBLIC_TLS_DIR": str(server),
+                        # Portal image is not published yet (openan-portal#11);
+                        # the bundle built here carries only workflow-designer.
+                        "FRONTEND_TYPE": "workflow-designer",
                         "DATABASE_TYPE": db, "DATABASE_INTERNAL": "true", "REGISTRY_DB_PASSWORD": "Registry'$\\Smoke9!",
                         "ORCH_DB_PASSWORD": "Orch'$\\Smoke9!", "POSTGRES_PASSWORD": "RootSmoke9!", "MYSQL_ROOT_PASSWORD": "RootSmoke9!",
                         "REGISTRY_ENABLE_HTTPS": str(registry_tls).lower(), "ORCH_ENABLE_HTTPS": str(orchestration_tls).lower(),

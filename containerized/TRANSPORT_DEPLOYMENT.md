@@ -5,6 +5,8 @@
 ## Supported scope and source baseline
 
 This contract covers the maintained online Helm chart, shared image builder and single-host offline Compose.
+The offline Compose line selects its frontend with `FRONTEND_TYPE` (portal default); the portal image is
+pending publication (openan-portal#11), and bundles built without it carry only the workflow-designer frontend.
 The offline Kubernetes chart and installer are maintained on the offline-install line: they carry their own
 templates and now implement the account (OC admin seeding), model (full models.yaml mount) and frontend
 (openan-portal) contracts for offline deployments. See offline-install/QUICKSTART.md.
@@ -33,6 +35,8 @@ with a Git revision when available (otherwise unknown).
 - `modelsConfigMap`: complete models.yaml; secret environment variables come from runtime/per-capability Secrets.
   The `llm` shortcut supports OpenAI-compatible profiles only; other provider/auth profiles need complete ConfigMaps.
 - `namespace` must equal Helm `--namespace`. Release is selectable, but resource names are fixed: one stack per namespace.
+- `frontend.type` selects the unified web entry: portal (default) or workflow-designer; the workflow-designer
+  fallback verifies the OC backend through `frontend.backendTls`.
 
 ## Authentication is independent of TLS
 

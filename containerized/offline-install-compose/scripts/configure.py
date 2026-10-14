@@ -16,7 +16,7 @@ import sys
 DEFAULTS = {
     "PROJECT_NAME": "openan", "PUBLIC_PORT": "8080", "PUBLIC_BIND": "0.0.0.0",
     "PUBLIC_ENABLE_HTTPS": "false", "PUBLIC_TLS_DIR": "",
-    "FRONTEND_TYPE": "portal", "PORTAL_IMAGE": "project-openan/openan-portal:v1.0.0",
+    "FRONTEND_TYPE": "portal",
     "DATABASE_TYPE": "mysql", "DATABASE_INTERNAL": "false", "DB_HOST": "", "DB_PORT": "",
     "REGISTRY_DB_NAME": "registry_center", "REGISTRY_DB_USERNAME": "registry",
     "REGISTRY_DB_PASSWORD": "", "ORCH_DB_NAME": "orchestration_center",
