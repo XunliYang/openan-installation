@@ -157,7 +157,7 @@ def test_dns_replacement_fixture_uses_automatic_ipam_and_checks_changes(tmp_path
 def deployment(tmp_path):
     bundle = tmp_path / "bundle"
     (bundle / "deps").mkdir(parents=True)
-    images = {name: f"contract/{name}:test" for name in ("registry-center", "orchestration-center", "workflow-designer", "nginx", "postgres", "mysql")}
+    images = {name: f"contract/{name}:test" for name in ("registry-center", "orchestration-center", "workflow-designer", "nginx", "postgres", "mysql", "portal")}
     (bundle / "deps/image-tags.json").write_text(json.dumps({"architectures": ["amd64"], "images": images}))
     (bundle / "web").mkdir()
     (bundle / "web/index.html").write_text("synthetic frontend")
@@ -191,15 +191,20 @@ def deployment(tmp_path):
     return tmp_path, bundle, config_file, generate
 
 
+@pytest.mark.parametrize("frontend", ["portal", "workflow-designer"])
 @pytest.mark.parametrize("db", ["mysql", "postgresql"])
 @pytest.mark.parametrize("public_https", ["false", "true"])
 @pytest.mark.parametrize("rc_https,oc_https", [("false", "false"), ("true", "true"), ("false", "true"), ("true", "false")])
-def test_compose_database_and_three_protocol_matrix(deployment, db, public_https, rc_https, oc_https):
+def test_compose_database_and_three_protocol_matrix(deployment, db, public_https, rc_https, oc_https, frontend):
     _, _, _, generate = deployment
     compose, nginx = generate({"DATABASE_TYPE": db, "PUBLIC_ENABLE_HTTPS": public_https,
-                               "REGISTRY_ENABLE_HTTPS": rc_https, "ORCH_ENABLE_HTTPS": oc_https})
+                               "REGISTRY_ENABLE_HTTPS": rc_https, "ORCH_ENABLE_HTTPS": oc_https,
+                               "FRONTEND_TYPE": frontend})
     services = compose["services"]
-    assert set(services) == {"registry-center", "orchestration-center", "openan-nginx"}
+    expected = {"registry-center", "orchestration-center", "openan-nginx"}
+    if frontend == "portal":
+        expected.add("openan-portal")
+    assert set(services) == expected
     for role, name, secure in [("REGISTRY", "registry-center", rc_https), ("ORCH", "orchestration-center", oc_https)]:
         service = services[name]
         assert service["pull_policy"] == "never"
@@ -222,8 +227,29 @@ def test_compose_database_and_three_protocol_matrix(deployment, db, public_https
     assert f"proxy_pass {'https' if oc_https == 'true' else 'http'}://orchestration_center;" in nginx
     assert 'proxy_set_header Connection "";' in nginx
     assert "location ^~ /api/orchestrate/api/ { return 404; }" not in nginx
-    assert nginx.count('proxy_set_header X-OpenAN-Browser-Gateway "1";') == 2
+    assert nginx.count('proxy_set_header X-OpenAN-Browser-Gateway "1";') == (3 if frontend == "portal" else 2)
     assert "ip_hash" not in nginx and "$request " not in nginx
+    nginx_volumes = services["openan-nginx"]["volumes"]
+    if frontend == "portal":
+        portal = services["openan-portal"]
+        assert portal["image"] == "contract/portal:test"
+        assert portal["pull_policy"] == "never"
+        assert "ports" not in portal
+        assert portal["environment"]["BACKEND_URL"] == f"{'https' if oc_https == 'true' else 'http'}://orchestration-center:5001"
+        assert portal["environment"]["REGISTRY_URL"] == f"{'https' if rc_https == 'true' else 'http'}://registry-center:5000"
+        assert portal["healthcheck"]["test"] == ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/"]
+        assert services["openan-nginx"]["depends_on"]["openan-portal"] == {"condition": "service_healthy"}
+        assert "server openan-portal:8080 resolve;" in nginx
+        assert "proxy_pass http://portal/;" in nginx
+        assert "location ^~ /api/registry/ {" in nginx
+        assert 'proxy_set_header X-OpenAN-Browser-Gateway "1";' in nginx.split("location ^~ /api/registry/ {")[1].split("}")[0]
+        assert "try_files" not in nginx and "location = /index.html" not in nginx
+        assert not any(volume.get("target") == "/usr/share/nginx/html" for volume in nginx_volumes)
+    else:
+        assert "openan-portal" not in services and "openan-portal" not in services["openan-nginx"]["depends_on"]
+        assert "location / { try_files $uri $uri/ /index.html; }" in nginx
+        assert "location ^~ /api/registry/" not in nginx and "proxy_pass http://portal/;" not in nginx
+        assert any(volume.get("target") == "/usr/share/nginx/html" for volume in nginx_volumes)
 
 
 def test_mtls_stays_authenticated_when_upstream_verification_is_off(deployment):
@@ -242,6 +268,7 @@ def test_mtls_stays_authenticated_when_upstream_verification_is_off(deployment):
 
 @pytest.mark.parametrize("invalid,message", [
     ({"DATABASE_TYPE": "sqlite"}, "supports mysql/postgresql"),
+    ({"FRONTEND_TYPE": "legacy"}, "supports portal/workflow-designer"),
     ({"REGISTRY_VERIFY_CLIENT": "true"}, "requires HTTPS"),
     ({"ORCH_ENABLE_HTTPS": "yes"}, "true or false"),
     ({"REGISTRY_DB_NAME": "orchestration_center"}, "distinct databases"),
@@ -254,6 +281,19 @@ def test_mtls_stays_authenticated_when_upstream_verification_is_off(deployment):
 def test_invalid_configs_fail_closed(deployment, invalid, message):
     with pytest.raises(ValueError, match=message):
         deployment[3](invalid)
+
+
+def test_portal_frontend_requires_bundle_portal_image(deployment):
+    _, bundle, _, generate = deployment
+    manifest = json.loads((bundle / "deps/image-tags.json").read_text(encoding="utf-8"))
+    del manifest["images"]["portal"]
+    (bundle / "deps/image-tags.json").write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="requires a portal image"):
+        generate({"FRONTEND_TYPE": "portal"})
+    compose, nginx = generate({"FRONTEND_TYPE": "workflow-designer"})
+    assert set(compose["services"]) == {"registry-center", "orchestration-center", "openan-nginx"}
+    assert "proxy_pass http://portal/;" not in nginx
+    assert "location ^~ /api/registry/" not in nginx
 
 
 def test_internal_postgres_and_quoted_credentials(deployment):

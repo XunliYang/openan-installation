@@ -7,8 +7,9 @@ umask 077
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE="$(cd "$SCRIPT_DIR/.." && pwd)"
 TAG=""; APP_REGISTRY="ghcr.io/project-openan"; APP_SOURCE="pull"
-REGISTRY_SRC=""; ORCHESTRATION_SRC=""; APP_TARS_DIR=""
+REGISTRY_SRC=""; ORCHESTRATION_SRC=""; APP_TARS_DIR=""; PORTAL_SRC=""
 PLATFORMS="linux/amd64"; OUT_DIR="$SCRIPT_DIR/dist"
+log_warn() { echo "[WARN] $1"; }
 while [ $# -gt 0 ]; do
     if [[ "$1" == --* && "$1" != --help ]] && { [ $# -lt 2 ] || [[ "$2" == --* ]] || [ -z "$2" ]; }; then
         echo "$1 requires a value" >&2; exit 2
@@ -20,6 +21,7 @@ while [ $# -gt 0 ]; do
         --registry-src) REGISTRY_SRC="$2"; shift 2 ;;
         --orchestration-src) ORCHESTRATION_SRC="$2"; shift 2 ;;
         --app-tars-dir) APP_TARS_DIR="$2"; shift 2 ;;
+        --portal-src) PORTAL_SRC="$2"; shift 2 ;;
         --platforms) PLATFORMS="$2"; shift 2 ;;
         --out) OUT_DIR="$2"; shift 2 ;;
         --help|-h) echo 'Use --tag <release> --app-source pull|build|tars [--platforms linux/amd64,linux/arm64] [--out <dir>]'; exit 0 ;;
@@ -43,6 +45,10 @@ if [ "$APP_SOURCE" == build ]; then
     ORCHESTRATION_SRC="$(cd "$ORCHESTRATION_SRC" && pwd)"
     [ -f "$REGISTRY_SRC/Dockerfile" ] && [ -f "$ORCHESTRATION_SRC/Dockerfile" ] && [ -f "$ORCHESTRATION_SRC/workflow-designer/Dockerfile" ] || { echo 'Complete service/frontend sources required' >&2; exit 1; }
 fi
+if [ -n "$PORTAL_SRC" ]; then
+    PORTAL_SRC="$(cd "$PORTAL_SRC" && pwd)"
+    [ -f "$PORTAL_SRC/Dockerfile" ] || { echo 'Portal source requires a Dockerfile' >&2; exit 1; }
+fi
 if [ "$APP_SOURCE" == tars ]; then [ -d "$APP_TARS_DIR" ] || { echo '--app-tars-dir required' >&2; exit 2; }; fi
 mkdir -p "$OUT_DIR"
 BUNDLE="$(cd "$OUT_DIR" && pwd)/openan-offline-compose-$TAG"
@@ -63,7 +69,7 @@ mkdir -p "$BUNDLE/docs"; cp "$SOURCE/docs/DEPENDENCIES.md" "$BUNDLE/docs/"
 # With umask077, cp produces0600. +x would produce0711, unreadable to the
 # unprivileged MySQL/PostgreSQL entrypoint user that runs these public scripts.
 chmod 0755 "$BUNDLE/scripts/"*.sh "$BUNDLE/compose/init/"*.sh
-RC="$APP_REGISTRY/registry-center:$TAG"; OC="$APP_REGISTRY/orchestration-center:$TAG"; UI="$APP_REGISTRY/workflow-designer:$TAG"
+RC="$APP_REGISTRY/registry-center:$TAG"; OC="$APP_REGISTRY/orchestration-center:$TAG"; UI="$APP_REGISTRY/workflow-designer:$TAG"; PORTAL="$APP_REGISTRY/openan-portal:$TAG"
 declare -A REFS=([registry-center]="$RC" [orchestration-center]="$OC" [workflow-designer]="$UI" [postgres]="postgres:15-alpine" [mysql]="mysql:8.4" [nginx]="nginx:1.27.5-alpine")
 for arch in "${ARCHS[@]}"; do
     for component in registry-center orchestration-center workflow-designer postgres mysql nginx; do
@@ -85,6 +91,29 @@ for arch in "${ARCHS[@]}"; do
         [ -s "$BUNDLE/images/$component-$arch.tar" ] || { echo 'Empty saved image' >&2; exit 1; }
     done
 done
+# Optional portal frontend. The image is not published yet: a failed pull only
+# downgrades the bundle to FRONTEND_TYPE=workflow-designer instead of failing
+# the release, so deps/image-tags.json records portal only when every requested
+# architecture produced a tar.
+PORTAL_ARCHES=0
+for arch in "${ARCHS[@]}"; do
+    echo "Preparing portal ($arch)"
+    if [ -n "$PORTAL_SRC" ]; then
+        docker buildx build --platform "linux/$arch" --load -t "$PORTAL" "$PORTAL_SRC"
+    elif [ "$APP_SOURCE" == tars ] && [ -s "$APP_TARS_DIR/portal-$arch.tar" ]; then
+        docker load -i "$APP_TARS_DIR/portal-$arch.tar"
+    elif ! docker pull --platform "linux/$arch" "$PORTAL"; then
+        log_warn "portal image unavailable for $arch; bundle supports only FRONTEND_TYPE=workflow-designer"
+        continue
+    fi
+    actual="$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$PORTAL")"
+    [ "$actual" == "linux/$arch" ] || { echo "Wrong image architecture: portal ($arch)" >&2; exit 1; }
+    docker save -o "$BUNDLE/images/portal-$arch.tar" "$PORTAL"
+    [ -s "$BUNDLE/images/portal-$arch.tar" ] || { echo 'Empty saved image' >&2; exit 1; }
+    PORTAL_ARCHES=$((PORTAL_ARCHES + 1))
+done
+PORTAL_TAG=""
+if [ "$PORTAL_ARCHES" -eq "${#ARCHS[@]}" ]; then PORTAL_TAG="$PORTAL"; fi
 # Extract files without running the foreign-architecture frontend process.
 docker load -i "$BUNDLE/images/workflow-designer-${ARCHS[0]}.tar"
 cid="$(docker create --platform "linux/${ARCHS[0]}" "$UI")"
@@ -95,12 +124,15 @@ docker cp "$cid:/usr/share/nginx/html/." "$BUNDLE/web/"
 find "$BUNDLE/web" -type d -exec chmod 0755 {} +
 find "$BUNDLE/web" -type f -exec chmod 0644 {} +
 docker rm -f "$cid" >/dev/null; trap - EXIT
-python3 - "$BUNDLE/deps/image-tags.json" "$PLATFORMS" "$RC" "$OC" "$UI" <<'PY'
+python3 - "$BUNDLE/deps/image-tags.json" "$PLATFORMS" "$RC" "$OC" "$UI" "$PORTAL_TAG" <<'PY'
 import json, sys
+images = dict(zip(['registry-center','orchestration-center','workflow-designer','postgres','nginx','mysql'],
+                  [*sys.argv[3:6], 'postgres:15-alpine','nginx:1.27.5-alpine','mysql:8.4']))
+if sys.argv[6]:
+    images['portal'] = sys.argv[6]
 with open(sys.argv[1], 'w', encoding='utf-8') as stream:
     json.dump({'architectures': [p.removeprefix('linux/') for p in sys.argv[2].split(',')],
-               'images': dict(zip(['registry-center','orchestration-center','workflow-designer','postgres','nginx','mysql'],
-                                  [*sys.argv[3:], 'postgres:15-alpine','nginx:1.27.5-alpine','mysql:8.4']))}, stream, indent=2)
+               'images': images}, stream, indent=2)
 PY
 (cd "$BUNDLE" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum >SHA256SUMS)
 tar -C "$(dirname "$BUNDLE")" -czf "$BUNDLE.tar.gz" "$(basename "$BUNDLE")"

@@ -17,6 +17,10 @@ ARCH="$(detect_arch)"
 for image in registry-center orchestration-center workflow-designer postgres mysql nginx; do
     docker load -i "$BUNDLE_DIR/images/$image-$ARCH.tar"
 done
+# Optional portal frontend tar; check-env.sh enforces it when FRONTEND_TYPE=portal.
+if [ -s "$BUNDLE_DIR/images/portal-$ARCH.tar" ]; then
+    docker load -i "$BUNDLE_DIR/images/portal-$ARCH.tar"
+fi
 python3 "$SCRIPT_DIR/configure.py" --config "$CONFIG_FILE" --bundle "$BUNDLE_DIR" --arch "$ARCH" --write
 # Do not print resolved config: it includes private runtime credentials.
 run_compose config --quiet
