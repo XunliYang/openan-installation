@@ -97,6 +97,17 @@ def test_mtls_material_and_probes_are_wired():
     assert "proxy_ssl_certificate_key" in docs["workflow-designer-nginx-config"]["data"]["default.conf"]
 
 
+@pytest.mark.parametrize("name", ["registry-center", "orchestration-center"])
+def test_probe_timeout_seconds_default_is_10(name):
+    # BUG-5: the exec healthchecks (Python startup + RSA3072 handshake) take
+    # ~2.3s, beyond K8s's 1s default probe timeout; liveness killed the pod
+    # before it ever became Ready. timeouts must default to 10, not 1.
+    docs = render()
+    container = docs[name]["spec"]["template"]["spec"]["containers"][0]
+    for probe in ("livenessProbe", "readinessProbe"):
+        assert container[probe]["timeoutSeconds"] == 10
+
+
 @pytest.mark.parametrize("invalid,message", [
     ({"database.type": "mysql"}, "postgresql.enabled=false"),
     ({"registry.tls.verifyClient": True}, "requires HTTPS"),
