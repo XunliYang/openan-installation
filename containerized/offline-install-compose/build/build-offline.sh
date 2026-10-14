@@ -7,7 +7,7 @@ umask 077
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE="$(cd "$SCRIPT_DIR/.." && pwd)"
 TAG=""; SOURCE_REF=""; APP_REGISTRY="ghcr.io/project-openan"; APP_SOURCE="pull"
-REGISTRY_SRC=""; ORCHESTRATION_SRC=""; APP_TARS_DIR=""; PORTAL_SRC=""
+REGISTRY_SRC=""; ORCHESTRATION_SRC=""; REGISTRY_RELEASE=""; ORCHESTRATION_RELEASE=""; APP_TARS_DIR=""; PORTAL_SRC=""
 PLATFORMS="linux/amd64"; OUT_DIR="$SCRIPT_DIR/dist"
 log_warn() { echo "[WARN] $1"; }
 while [ $# -gt 0 ]; do
@@ -21,11 +21,13 @@ while [ $# -gt 0 ]; do
         --app-source) APP_SOURCE="$2"; shift 2 ;;
         --registry-src) REGISTRY_SRC="$2"; shift 2 ;;
         --orchestration-src) ORCHESTRATION_SRC="$2"; shift 2 ;;
+        --registry-release) REGISTRY_RELEASE="$2"; shift 2 ;;
+        --orchestration-release) ORCHESTRATION_RELEASE="$2"; shift 2 ;;
         --app-tars-dir) APP_TARS_DIR="$2"; shift 2 ;;
         --portal-src) PORTAL_SRC="$2"; shift 2 ;;
         --platforms) PLATFORMS="$2"; shift 2 ;;
         --out) OUT_DIR="$2"; shift 2 ;;
-        --help|-h) echo 'Use --source-ref <main|tag> [or --tag <tag>] --app-source pull|build|tars [--platforms linux/amd64,linux/arm64] [--out <dir>]'; exit 0 ;;
+        --help|-h) echo 'Use --source-ref <main|tag> [or --tag <tag>] --app-source pull|build|tars [--registry-src/--orchestration-src <dir> | --registry-release/--orchestration-release <url>] [--platforms linux/amd64,linux/arm64] [--out <dir>]'; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -49,11 +51,37 @@ for platform in ${PLATFORMS//,/ }; do
 done
 [ "${#ARCHS[@]}" -gt 0 ] || exit 2
 for tool in docker python3 tar sha256sum; do command -v "$tool" >/dev/null || { echo "$tool required" >&2; exit 1; }; done
+BUILD_TMP=""
 if [ "$APP_SOURCE" == build ]; then
-    [ -n "$REGISTRY_SRC" ] && [ -n "$ORCHESTRATION_SRC" ] || { echo 'Both source paths required' >&2; exit 2; }
-    REGISTRY_SRC="$(cd "$REGISTRY_SRC" && pwd)"
-    ORCHESTRATION_SRC="$(cd "$ORCHESTRATION_SRC" && pwd)"
-    [ -f "$REGISTRY_SRC/Dockerfile" ] && [ -f "$ORCHESTRATION_SRC/Dockerfile" ] && [ -f "$ORCHESTRATION_SRC/workflow-designer/Dockerfile" ] || { echo 'Complete service/frontend sources required' >&2; exit 1; }
+    # A component's build context is a local --*-src directory when given,
+    # otherwise a remote tarball (explicit --*-release URL, or the GitHub
+    # archive for --source-ref) is downloaded and extracted.
+    resolve_src() {
+        local local_dir="$1" url="$2" name="$3"
+        if [ -n "$local_dir" ]; then
+            local abs; abs="$(cd "$local_dir" 2>/dev/null && pwd)" || { echo "$name: source not found: $local_dir" >&2; return 1; }
+            [ -f "$abs/Dockerfile" ] || { echo "$name: no Dockerfile in $abs" >&2; return 1; }
+            printf '%s\n' "$abs"; return 0
+        fi
+        [ -n "$url" ] || { echo "$name: give --${name%-center}-src, --${name%-center}-release or --source-ref" >&2; return 1; }
+        command -v curl >/dev/null || { echo "curl required for remote $name source" >&2; return 1; }
+        mkdir -p "$BUILD_TMP/$name"
+        curl -fSL -o "$BUILD_TMP/${name}.tar.gz" "$url" || { echo "$name download failed: $url" >&2; return 1; }
+        tar -xzf "$BUILD_TMP/${name}.tar.gz" -C "$BUILD_TMP/$name"
+        [ -f "$BUILD_TMP/$name/Dockerfile" ] && { printf '%s\n' "$BUILD_TMP/$name"; return 0; }
+        for d in "$BUILD_TMP/$name"/*/; do [ -f "$d/Dockerfile" ] && { printf '%s\n' "$d"; return 0; }; done
+        echo "$name: no Dockerfile after extracting $url" >&2; return 1
+    }
+    BUILD_TMP="$(mktemp -d -t openan-src.XXXXXXXX)"
+    trap 'rm -rf "$BUILD_TMP" 2>/dev/null || true' EXIT
+    RC_URL=""; OC_URL=""
+    if [ -n "$SOURCE_REF" ]; then
+        RC_URL="https://github.com/project-openan/registry-center/archive/${SOURCE_REF}.tar.gz"
+        OC_URL="https://github.com/project-openan/orchestration-center/archive/${SOURCE_REF}.tar.gz"
+    fi
+    REGISTRY_SRC="$(resolve_src "$REGISTRY_SRC" "${REGISTRY_RELEASE:-$RC_URL}" "registry-center")" || exit 1
+    ORCHESTRATION_SRC="$(resolve_src "$ORCHESTRATION_SRC" "${ORCHESTRATION_RELEASE:-$OC_URL}" "orchestration-center")" || exit 1
+    [ -f "$ORCHESTRATION_SRC/workflow-designer/Dockerfile" ] || { echo 'orchestration-center source lacks workflow-designer/Dockerfile' >&2; exit 1; }
 fi
 if [ -n "$PORTAL_SRC" ]; then
     PORTAL_SRC="$(cd "$PORTAL_SRC" && pwd)"
@@ -124,6 +152,7 @@ for arch in "${ARCHS[@]}"; do
 done
 PORTAL_TAG=""
 if [ "$PORTAL_ARCHES" -eq "${#ARCHS[@]}" ]; then PORTAL_TAG="$PORTAL"; fi
+[ -n "$BUILD_TMP" ] && rm -rf "$BUILD_TMP"
 # Extract files without running the foreign-architecture frontend process.
 docker load -i "$BUNDLE/images/workflow-designer-${ARCHS[0]}.tar"
 cid="$(docker create --platform "linux/${ARCHS[0]}" "$UI")"

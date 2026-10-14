@@ -403,3 +403,48 @@ def test_offline_compose_source_ref_derives_dated_tag(tmp_path):
     calls = log.read_text() if log.exists() else ""
     assert re.search(r"registry-center:main-\d{8}", calls), \
         result.stdout + result.stderr + "\nDOCKER CALLS:\n" + calls
+
+
+def test_build_local_source_skips_remote_download(tmp_path):
+    if not BASH:
+        pytest.skip("Bash unavailable")
+    src = tmp_path / "registry-src"
+    src.mkdir()
+    (src / "Dockerfile").write_text("FROM scratch\n")
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    marker = tmp_path / "curl-called"
+    curl = shim / "curl"
+    curl.write_text(f'#!/usr/bin/env bash\ntouch "{marker}"\nexit 1\n')
+    curl.chmod(0o755)
+    docker = shim / "docker"
+    docker.write_text("#!/usr/bin/env bash\nexit 0\n")
+    docker.chmod(0o755)
+    result = _run_build_with_shim(
+        ROOT / "containerized/build/build.sh",
+        ["registry", "--registry-src", str(src), "--no-push", "--platforms", "linux/amd64"],
+        shim)
+    assert not marker.exists(), result.stdout + result.stderr
+    assert "Build completed" in result.stdout, result.stdout + result.stderr
+
+
+def test_offline_compose_build_remote_source_downloads_archive(tmp_path):
+    if not BASH:
+        pytest.skip("Bash unavailable")
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    log = tmp_path / "curl-urls.txt"
+    curl = shim / "curl"
+    curl.write_text(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "{log}"\nexit 1\n')
+    curl.chmod(0o755)
+    docker = shim / "docker"
+    docker.write_text("#!/usr/bin/env bash\nexit 0\n")
+    docker.chmod(0o755)
+    result = _run_build_with_shim(
+        ROOT / "containerized/offline-install-compose/build/build-offline.sh",
+        ["--source-ref", "main", "--app-source", "build",
+         "--platforms", "linux/amd64", "--out", str(tmp_path / "dist")],
+        shim)
+    calls = log.read_text() if log.exists() else ""
+    assert "registry-center/archive/main.tar.gz" in calls, \
+        result.stdout + result.stderr + "\nCURL CALLS:\n" + calls

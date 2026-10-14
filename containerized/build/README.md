@@ -69,6 +69,8 @@ If no components specified, all components are built. Specify one or both to bui
 | `--source-ref <ref>` | Source Git ref (branch/tag/SHA); when `--tag` is unset, `main` derives `main-YYYYMMDD`, other refs become the tag | `v1.0.0` |
 | `--registry-release <url>` | Registry Center release tarball URL | GitHub release v1.0.0 |
 | `--orchestration-release <url>` | Orchestration Center release tarball URL | GitHub release v1.0.0 |
+| `--registry-src <dir>` | Local registry-center source dir (overrides remote download) | - |
+| `--orchestration-src <dir>` | Local orchestration-center source dir (overrides remote download) | - |
 | `--platforms <platforms>` | Target platform architectures | `linux/amd64,linux/arm64` |
 | `--no-push` | Build locally only (single-arch) | - |
 | `--help` | Show help information | - |
