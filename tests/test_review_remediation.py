@@ -239,7 +239,7 @@ def test_guided_skip_phases_preserve_selected_release_namespace_and_fail_fast(tm
     from test_offline_compose_contract import shell_path
     values = tmp_path / "deployment.yaml"
     values.write_text("namespace: team-a\n", encoding="utf-8")
-    script = ROOT / "containerized/online-install/one_click_install.sh"
+    script = ROOT / "containerized/online-install/install.sh"
     # Exported functions are test-owned substitutes, never real cluster/build calls.
     shim = """
 kubectl() { echo "KUBECTL:$*" >&2; }

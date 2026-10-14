@@ -12,7 +12,7 @@ openan-installation/
 │   ├── QUICKSTART.md                # Historical binary installation guide
 └── containerized/                   # Containerized installation
     ├── online-install/              # Internet-connected installation
-    │   ├── one_click_install.sh     # Guided, skippable phases or prepared values
+    │   ├── install.sh               # Interactive guided install or --values automation
     │   ├── uninstall.sh             # One-click uninstall script
     │   ├── openan-chart/            # Helm chart
     │   └── QUICKSTART.md            # Installation guide
@@ -30,7 +30,7 @@ Helm deployment with explicit database, protocol, credentials and certificate se
 ```bash
 git clone https://github.com/project-openan/openan-installation.git
 cd openan-installation/containerized/online-install
-bash one_click_install.sh --skip-build --skip-infra --values /path/to/deployment.yaml
+bash install.sh --skip-build --skip-infra --values /path/to/deployment.yaml
 ```
 
 **Features:**
@@ -93,7 +93,7 @@ The single-host [offline Compose installer](containerized/offline-install-compos
 
 ## Upgrade
 
-> Container upgrades use the same explicit values file via one_click_install.sh --skip-build --skip-infra (or native helm upgrade --install). Back up data, pin image tags/source refs, and restart Pods when subPath Secrets change. Binary installer compatibility is outside this container remediation.
+> Container upgrades use the same explicit values file via install.sh --skip-build --skip-infra (or native helm upgrade --install). Back up data, pin image tags/source refs, and restart Pods when subPath Secrets change. Binary installer compatibility is outside this container remediation.
 
 ## Documentation
 

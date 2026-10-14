@@ -2,16 +2,13 @@
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
-# Interactive front door for the online install: preflight, targets, images,
-# infrastructure, guided application configuration and deploy. Configuration
-# and every secret stay in configure.py (kubectl stdin); this script only
-# orchestrates and never echoes credentials.
+# Single entry point for the online install:
+#   ./install.sh               interactive guided install (requires a terminal)
+#   ./install.sh --values ...  non-interactive deploy for prepared environments/CI
+# Configuration and every secret stay in configure.py (kubectl stdin); this
+# script only orchestrates and never echoes credentials.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Interactive prompts (and configure.py's secret collection) need a terminal;
-# automation should use one_click_install.sh --values instead.
-[ -t 0 ] || { echo "install.sh is interactive and requires a terminal; use one_click_install.sh --values for automation" >&2; exit 2; }
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -28,9 +25,10 @@ log_prompt(){ echo -e "${BLUE}[?]${NC} $1"; }
 
 usage() {
     cat <<'EOF'
-Usage: ./install.sh
+Usage: ./install.sh [OPTIONS]
 
-Interactive OpenAN online install in six phases:
+Without --values the installer is interactive and runs six guided phases
+(requires a terminal):
   [1/6] preflight       kubectl / helm / python3 and cluster reachability
   [2/6] targets         Helm release name and namespace
   [3/6] images          build from source or reuse an already-pushed tag
@@ -38,8 +36,23 @@ Interactive OpenAN online install in six phases:
   [5/6] application     guided configuration (components, SQL, models, signing, admin)
   [6/6] deploy          helm upgrade --install and access summary
 
+With --values the installer is non-interactive (CI / prepared environments);
+secrets must already exist as Kubernetes Secrets:
+
+  --values FILE          deploy with a reviewed values file (skips every prompt)
+  --release NAME         Helm release name (default: openan)
+  --namespace NAME       target namespace (default: openan)
+  --skip-build           skip the image build phase
+  --tag TAG              image tag for the build phase
+  --registry-release URL registry-center source archive (build phase)
+  --orchestration-release URL orchestration-center source archive (build phase)
+  --skip-infra           skip the infrastructure phase
+  --metallb-chart TGZ    reviewed local MetalLB chart package (infra phase)
+  --metallb-values FILE  values for the MetalLB chart
+  --ingress-chart TGZ    reviewed local ingress-nginx chart package (infra phase)
+  --ingress-values FILE  values for the ingress-nginx chart
+
 Secrets are collected only by configure.py and reach Kubernetes via kubectl stdin.
-For prepared environments use the flag-driven variant: one_click_install.sh --help
 EOF
 }
 
@@ -93,11 +106,97 @@ ask_name() {
     return 1
 }
 
-case "${1:-}" in
-    --help|-h) usage; exit 0 ;;
-    "") ;;
-    *) echo "install.sh is interactive and takes no options: $1 (see --help)" >&2; exit 2 ;;
-esac
+# ---------------------------------------------------------------------------
+# Argument parsing (both modes)
+# ---------------------------------------------------------------------------
+VALUES=""
+RELEASE="openan"
+NAMESPACE="openan"
+SKIP_BUILD=false
+SKIP_INFRA=false
+BUILD_TAG=""
+RC_SOURCE=""
+OC_SOURCE=""
+METALLB_CHART=""
+METALLB_VALUES=""
+INGRESS_CHART=""
+INGRESS_VALUES=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --help|-h) usage; exit 0 ;;
+        --skip-build) SKIP_BUILD=true; shift ;;
+        --skip-infra) SKIP_INFRA=true; shift ;;
+        --values|--release|--namespace|--tag|--registry-release|--orchestration-release|--metallb-chart|--metallb-values|--ingress-chart|--ingress-values)
+            [ $# -ge 2 ] && [ -n "$2" ] || { usage >&2; exit 2; }
+            case "$1" in
+                --values) VALUES="$2" ;;
+                --release) RELEASE="$2" ;;
+                --namespace) NAMESPACE="$2" ;;
+                --tag) BUILD_TAG="$2" ;;
+                --registry-release) RC_SOURCE="$2" ;;
+                --orchestration-release) OC_SOURCE="$2" ;;
+                --metallb-chart) METALLB_CHART="$2" ;;
+                --metallb-values) METALLB_VALUES="$2" ;;
+                --ingress-chart) INGRESS_CHART="$2" ;;
+                --ingress-values) INGRESS_VALUES="$2" ;;
+            esac
+            shift 2 ;;
+        *) echo "Unknown option: $1 (see --help)" >&2; exit 2 ;;
+    esac
+done
+
+for name in "$RELEASE" "$NAMESPACE"; do
+    if ! [[ "$name" =~ $NAME_RE && ${#name} -le 53 ]]; then
+        echo "Invalid release/namespace: $name (see --help)" >&2
+        exit 2
+    fi
+done
+
+# ---------------------------------------------------------------------------
+# Non-interactive mode: --values with prepared images, infrastructure and Secrets
+# ---------------------------------------------------------------------------
+if [ -n "$VALUES" ]; then
+    [ -f "$VALUES" ] || { echo "Values file missing: $VALUES" >&2; exit 2; }
+    if [ "$SKIP_BUILD" = false ]; then
+        # Fail before any tool call: build requires explicit accepted sources.
+        if [ -z "$RC_SOURCE" ] || [ -z "$OC_SOURCE" ] || [ -z "$BUILD_TAG" ]; then
+            echo "Build requires --tag with --registry-release and --orchestration-release, or --skip-build." >&2
+            exit 2
+        fi
+    fi
+    if [ "$SKIP_INFRA" = false ]; then
+        for file in "$METALLB_CHART" "$METALLB_VALUES" "$INGRESS_CHART" "$INGRESS_VALUES"; do
+            [ -f "$file" ] || { echo "Provide reviewed local infrastructure chart packages and values, or --skip-infra." >&2; exit 2; }
+        done
+    fi
+    for tool in kubectl helm python3; do
+        command -v "$tool" >/dev/null 2>&1 || { echo "Missing tool: $tool" >&2; exit 2; }
+    done
+    kubectl cluster-info >/dev/null
+    if [ "$SKIP_BUILD" = false ]; then
+        bash "$SCRIPT_DIR/../build/build.sh" --tag "$BUILD_TAG" \
+            --registry-release "$RC_SOURCE" --orchestration-release "$OC_SOURCE"
+    fi
+    if [ "$SKIP_INFRA" = false ]; then
+        # Explicit operator-approved packages; no guessed IP pools, latest
+        # downloads or cluster reconfiguration.
+        helm upgrade --install metallb "$METALLB_CHART" --namespace metallb-system \
+            --create-namespace --values "$METALLB_VALUES" --wait --timeout 5m
+        helm upgrade --install ingress-nginx "$INGRESS_CHART" --namespace ingress-nginx \
+            --create-namespace --values "$INGRESS_VALUES" --wait --timeout 5m
+    fi
+    # Validate before creating/upgrading application resources; namespace must match values.
+    helm lint "$SCRIPT_DIR/openan-chart" --namespace "$NAMESPACE" --values "$VALUES"
+    helm upgrade --install "$RELEASE" "$SCRIPT_DIR/openan-chart" --namespace "$NAMESPACE" \
+        --create-namespace --values "$VALUES" --wait --timeout 10m
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Interactive mode (requires a terminal; configure.py collects secrets via TTY)
+# ---------------------------------------------------------------------------
+[ -t 0 ] || { echo "install.sh without --values is interactive and requires a terminal; add --values FILE for automation" >&2; exit 2; }
 
 echo ""
 echo "=========================================="
@@ -126,11 +225,11 @@ log_info "kubectl client version: ${KUBECTL_CLIENT:-unknown}"
 # [2/6] Targets
 # ---------------------------------------------------------------------------
 log_step "[2/6] Targets"
-if ! RELEASE="$(ask_name "Release name" "openan")"; then
+if ! RELEASE="$(ask_name "Release name" "$RELEASE")"; then
     log_error "No valid release name after 3 attempts"
     exit 2
 fi
-if ! NAMESPACE="$(ask_name "Namespace" "openan")"; then
+if ! NAMESPACE="$(ask_name "Namespace" "$NAMESPACE")"; then
     log_error "No valid namespace after 3 attempts"
     exit 2
 fi
@@ -141,16 +240,18 @@ fi
 log_step "[3/6] Images"
 # The tag has no default on purpose: the deployment contract states old v1.0.0
 # images are not compatible with the current chart, so it must be explicit.
-APP_TAG=""
+APP_TAG="$BUILD_TAG"
 for _ in 1 2 3; do
-    APP_TAG="$(ask_input "Application image tag (no default; see the deployment contract)" "")"
     [ -n "$APP_TAG" ] && break
-    log_warn "The image tag is required"
+    APP_TAG="$(ask_input "Application image tag (no default; see the deployment contract)" "")"
+    [ -n "$APP_TAG" ] || log_warn "The image tag is required"
 done
 [ -n "$APP_TAG" ] || { log_error "No image tag given"; exit 2; }
 if ask_yes_no "Build images from source now?" "no"; then
-    RC_SOURCE_URL="$(ask_input "registry-center source archive URL")"
-    OC_SOURCE_URL="$(ask_input "orchestration-center source archive URL")"
+    RC_SOURCE_URL="$RC_SOURCE"
+    OC_SOURCE_URL="$OC_SOURCE"
+    [ -n "$RC_SOURCE_URL" ] || RC_SOURCE_URL="$(ask_input "registry-center source archive URL")"
+    [ -n "$OC_SOURCE_URL" ] || OC_SOURCE_URL="$(ask_input "orchestration-center source archive URL")"
     if [ -z "$RC_SOURCE_URL" ] || [ -z "$OC_SOURCE_URL" ]; then
         log_error "Building requires both source archive URLs at accepted revisions"
         exit 2
@@ -244,7 +345,7 @@ if [ -e "$VALUES" ]; then
     if ask_yes_no "Regenerate the configuration from scratch (removes this file and re-runs the wizard)?" "no"; then
         rm "$VALUES"
     else
-        log_info "Keeping $VALUES; deploy it with one_click_install.sh --values or helm directly"
+        log_info "Keeping $VALUES; redeploy it with: ./install.sh --values $VALUES --release $RELEASE --namespace $NAMESPACE --skip-build --skip-infra"
         exit 0
     fi
 fi

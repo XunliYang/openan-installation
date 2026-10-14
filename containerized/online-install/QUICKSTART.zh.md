@@ -94,7 +94,7 @@ helm upgrade --install openan openan-chart --namespace openan --create-namespace
 
 namespace 必须与 values 一致。不要把秘密写入 values/--set；若刻意使用遗留内联字段，渲染输出可能包含秘密，须妥善保护。在真实公网入口验收 API，而非仅探测。
 
-`one_click_install.sh` 仍是面向已准备环境的参数化变体
+`install.sh --values` 是面向已准备环境与 CI 的非交互变体
 （`--skip-build` / `--skip-infra` / `--values ...` / `--release` / `--namespace`）；其基础设施阶段要求运维审核的本地 MetalLB/ingress-nginx Chart 包与 values，而非在线固定版本清单。
 
 ## 验证与故障排查

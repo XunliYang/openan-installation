@@ -95,7 +95,7 @@ helm upgrade --install openan openan-chart --namespace openan --create-namespace
 Namespace must match values. Never put secrets in values/--set; if legacy inline fields were intentionally used,
 rendered output may contain them, so protect it. Verify APIs at the actual public entrance, not only probes.
 
-`one_click_install.sh` remains the flag-driven variant for prepared environments
+`install.sh --values` is the non-interactive variant for prepared environments and CI
 (`--skip-build` / `--skip-infra` / `--values ...` / `--release` / `--namespace`); for infrastructure it requires
 reviewed local MetalLB/ingress-nginx chart packages and values instead of the online pinned manifests.
 
