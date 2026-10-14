@@ -31,7 +31,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: workflow-designer
+                name: openan-frontend
                 port:
                   number: {{ .Values.frontend.port }}
 {{- end }}
@@ -126,6 +126,13 @@ spec:
       http:
         paths:
           - path: /registry(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: registry-center
+                port:
+                  number: {{ .Values.registry.port }}
+          - path: /api/registry(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:

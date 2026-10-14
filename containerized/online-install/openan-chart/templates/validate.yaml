@@ -50,8 +50,12 @@ SPDX-License-Identifier: Apache-2.0 */}}
 {{- $c := index $.Values $name }}
 {{- if and $c.enabled (not $c.persistence.existingClaim) (not $c.persistence.size) }}{{ fail (printf "%s.persistence.size is required when creating a runtime PVC" $name) }}{{ end }}
 {{- end }}
+{{- if and .Values.frontend.enabled (not (has (default "portal" .Values.frontend.type) (list "portal" "workflow-designer"))) }}{{ fail "frontend.type must be portal or workflow-designer" }}{{ end }}
 {{- if and .Values.frontend.enabled (not .Values.orchestration.enabled) }}{{ fail "frontend requires orchestration.enabled=true" }}{{ end }}
-{{- if and .Values.frontend.enabled .Values.orchestration.tls.enabled }}
+{{- /* Limitation: the portal image cannot verify upstream TLS. With
+     frontend.type=portal the OC HTTPS upstream is reached unverified, so the
+     backendTls requirement only applies to the nginx-based workflow-designer. */}}
+{{- if and .Values.frontend.enabled (eq (include "openan.frontendType" .) "workflow-designer") .Values.orchestration.tls.enabled }}
 {{- if and (or .Values.frontend.backendTls.verifyServer .Values.orchestration.tls.verifyClient) (not .Values.frontend.backendTls.existingSecret) }}{{ fail "frontend HTTPS verification/mTLS requires frontend.backendTls.existingSecret" }}{{ end }}
 {{- end }}
 {{- if and .Values.ingress.enabled .Values.ingress.tls.enabled (not .Values.ingress.host) }}{{ fail "ingress TLS requires ingress.host matching the certificate" }}{{ end }}

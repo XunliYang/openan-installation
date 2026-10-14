@@ -170,7 +170,7 @@ def test_ci_uses_accepted_org_revisions():
 
 
 def test_frontend_cache_is_static_only():
-    config = render()["workflow-designer-nginx-config"]["data"]["default.conf"]
+    config = render()["openan-frontend-nginx-config"]["data"]["default.conf"]
     assert "gzip on;" in config and "gzip off;" in config
     assert 'location = /index.html' in config and '"no-store"' in config
     assert "^/assets/" in config and "immutable" in config

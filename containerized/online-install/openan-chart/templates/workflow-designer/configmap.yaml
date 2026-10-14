@@ -1,11 +1,11 @@
 {{/* Copyright (c) 2026 Huawei Technologies Co., Ltd.
 All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0 */}}
-{{- if .Values.frontend.enabled }}
+{{- if and .Values.frontend.enabled (eq (include "openan.frontendType" .) "workflow-designer") }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: workflow-designer-nginx-config
+  name: openan-frontend-nginx-config
   namespace: {{ .Values.namespace }}
 data:
   default.conf: |
