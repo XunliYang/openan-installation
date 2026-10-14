@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Helm render contracts and controlled build failures; not a cluster smoke test."""
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -356,3 +357,49 @@ def test_build_failure_is_nonzero_and_does_not_report_success(tmp_path):
     result = subprocess.run(command, text=True, capture_output=True, timeout=30)
     assert result.returncode == 17, result.stdout + result.stderr
     assert "Build completed" not in result.stdout and "Done:" not in result.stdout
+
+
+def _run_build_with_shim(script, args, shim_dir, timeout=60):
+    # Prepend a stub dir to PATH so `curl`/`docker` can be faked; real python3/
+    # tar/sha256sum remain available from the ambient PATH.
+    command = [BASH, "-c", 'export PATH="$1:$PATH"; shift; exec bash "$@"', "test",
+               str(shim_dir), str(script), *args]
+    return subprocess.run(command, text=True, capture_output=True, timeout=timeout)
+
+
+@pytest.mark.parametrize("args,expected", [
+    (["--source-ref", "main"], r"main-\d{8}"),
+    (["--source-ref", "v1.1.0"], r"v1\.1\.0"),
+    (["--source-ref", "main", "--tag", "custom"], r"custom"),
+])
+def test_build_source_ref_derives_image_tag(args, expected, tmp_path):
+    if not BASH:
+        pytest.skip("Bash unavailable")
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    curl = shim / "curl"
+    curl.write_text("#!/usr/bin/env bash\nexit 1\n")
+    curl.chmod(0o755)
+    result = _run_build_with_shim(ROOT / "containerized/build/build.sh", args, shim)
+    match = re.search(r"Image tag:\s+(\S+)", result.stdout)
+    assert match, result.stdout + result.stderr
+    assert re.fullmatch(expected, match.group(1)), result.stdout
+
+
+def test_offline_compose_source_ref_derives_dated_tag(tmp_path):
+    if not BASH:
+        pytest.skip("Bash unavailable")
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    log = tmp_path / "docker-args.txt"
+    docker = shim / "docker"
+    docker.write_text(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "{log}"\nexit 1\n')
+    docker.chmod(0o755)
+    result = _run_build_with_shim(
+        ROOT / "containerized/offline-install-compose/build/build-offline.sh",
+        ["--source-ref", "main", "--app-source", "pull",
+         "--platforms", "linux/amd64", "--out", str(tmp_path / "dist")],
+        shim)
+    calls = log.read_text() if log.exists() else ""
+    assert re.search(r"registry-center:main-\d{8}", calls), \
+        result.stdout + result.stderr + "\nDOCKER CALLS:\n" + calls

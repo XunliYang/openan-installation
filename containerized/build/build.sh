@@ -31,8 +31,9 @@
 #   --orchestration-release <url> Orchestration Center release URL
 #   --image-registry <url>     Image registry (default: ghcr.io)
 #   --namespace <ns>           Image namespace (default: project-openan)
-#   --tag <tag>                Image tag (default: v1.0.0)
-#   --source-ref <ref>         Source Git ref, independent of the image tag
+#   --tag <tag>                Image tag (overrides the tag derived from --source-ref)
+#   --source-ref <ref>         Source Git ref (branch/tag/commit); when --tag is unset,
+#                              'main' derives tag main-YYYYMMDD, other refs become the tag
 #   --platforms <platforms>    Target platforms (default: linux/amd64,linux/arm64)
 #   --no-push                  Build local only (single-arch only)
 #   --help                     Show help
@@ -49,6 +50,7 @@ NC='\033[0m'
 IMAGE_REGISTRY="ghcr.io"
 NAMESPACE="project-openan"
 TAG="v1.0.0"
+TAG_EXPLICIT=false
 SOURCE_REF="v1.0.0"
 REGISTRY_RELEASE=""
 ORCHESTRATION_RELEASE=""
@@ -87,8 +89,9 @@ Components (positional, specify any):
 Options:
   --image-registry <url>     Image registry (default: ghcr.io)
   --namespace <ns>           Image namespace (default: project-openan)
-  --tag <tag>                Image tag (default: v1.0.0)
-  --source-ref <ref>         Source Git tag/commit (default: v1.0.0), independent of image tag
+  --tag <tag>                Image tag (overrides the tag derived from --source-ref)
+  --source-ref <ref>         Source Git ref (default: v1.0.0); when --tag is unset, 'main'
+                             derives tag main-YYYYMMDD and other refs become the tag
   --registry-release <url>   Registry Center release tarball URL
   --orchestration-release <url>  Orchestration Center release tarball URL
   --platforms <platforms>    Target platforms (default: linux/amd64,linux/arm64)
@@ -103,6 +106,7 @@ Examples:
   ./build.sh --tag v1.1.0                                             # Custom tag, build all
   ./build.sh registry --image-registry harbor.example.com             # Private registry, registry only
   ./build.sh orchestration --platforms linux/amd64 --no-push          # Local single-arch, orchestration only
+  ./build.sh --source-ref main                                        # Build main, tagged main-YYYYMMDD
 EOF
     exit 0
 }
@@ -120,7 +124,7 @@ while [[ $# -gt 0 ]]; do
         orchestration)           BUILD_ORCHESTRATION=true; COMPONENTS_SPECIFIED=true; shift ;;
         --image-registry)        IMAGE_REGISTRY="$2"; shift 2 ;;
         --namespace)             NAMESPACE="$2"; shift 2 ;;
-        --tag)                   TAG="$2"; shift 2 ;;
+        --tag)                   TAG="$2"; TAG_EXPLICIT=true; shift 2 ;;
         --source-ref)            SOURCE_REF="$2"; shift 2 ;;
         --registry-release)      REGISTRY_RELEASE="$2"; shift 2 ;;
         --orchestration-release) ORCHESTRATION_RELEASE="$2"; shift 2 ;;
@@ -143,6 +147,17 @@ if [ -z "$REGISTRY_RELEASE" ]; then
 fi
 if [ -z "$ORCHESTRATION_RELEASE" ]; then
     ORCHESTRATION_RELEASE="https://github.com/project-openan/orchestration-center/archive/${SOURCE_REF}.tar.gz"
+fi
+
+# Derive the image tag from the source ref when --tag was not given explicitly.
+# 'main' becomes a dated snapshot (main-YYYYMMDD); any other ref (release tag
+# or commit) becomes the tag itself, keeping image tag and source in sync.
+if [ "$TAG_EXPLICIT" = false ]; then
+    if [ "$SOURCE_REF" = "main" ]; then
+        TAG="main-$(date +%Y%m%d)"
+    else
+        TAG="$SOURCE_REF"
+    fi
 fi
 
 # Multi-arch requires push

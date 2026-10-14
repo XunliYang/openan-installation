@@ -6,7 +6,7 @@ set -euo pipefail
 umask 077
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE="$(cd "$SCRIPT_DIR/.." && pwd)"
-TAG=""; APP_REGISTRY="ghcr.io/project-openan"; APP_SOURCE="pull"
+TAG=""; SOURCE_REF=""; APP_REGISTRY="ghcr.io/project-openan"; APP_SOURCE="pull"
 REGISTRY_SRC=""; ORCHESTRATION_SRC=""; APP_TARS_DIR=""; PORTAL_SRC=""
 PLATFORMS="linux/amd64"; OUT_DIR="$SCRIPT_DIR/dist"
 log_warn() { echo "[WARN] $1"; }
@@ -16,6 +16,7 @@ while [ $# -gt 0 ]; do
     fi
     case "$1" in
         --tag) TAG="$2"; shift 2 ;;
+        --source-ref) SOURCE_REF="$2"; shift 2 ;;
         --app-registry) APP_REGISTRY="$2"; shift 2 ;;
         --app-source) APP_SOURCE="$2"; shift 2 ;;
         --registry-src) REGISTRY_SRC="$2"; shift 2 ;;
@@ -24,11 +25,20 @@ while [ $# -gt 0 ]; do
         --portal-src) PORTAL_SRC="$2"; shift 2 ;;
         --platforms) PLATFORMS="$2"; shift 2 ;;
         --out) OUT_DIR="$2"; shift 2 ;;
-        --help|-h) echo 'Use --tag <release> --app-source pull|build|tars [--platforms linux/amd64,linux/arm64] [--out <dir>]'; exit 0 ;;
+        --help|-h) echo 'Use --source-ref <main|tag> [or --tag <tag>] --app-source pull|build|tars [--platforms linux/amd64,linux/arm64] [--out <dir>]'; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; exit 2 ;;
     esac
 done
-[[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo 'Explicit valid --tag required' >&2; exit 2; }
+# Derive the image tag from --source-ref when --tag was not given: 'main'
+# becomes a dated snapshot (main-YYYYMMDD); any other ref becomes the tag.
+if [ -z "$TAG" ] && [ -n "$SOURCE_REF" ]; then
+    if [ "$SOURCE_REF" = "main" ]; then
+        TAG="main-$(date +%Y%m%d)"
+    else
+        TAG="$SOURCE_REF"
+    fi
+fi
+[[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo 'Explicit --tag or --source-ref <main|tag> required' >&2; exit 2; }
 [[ "$APP_REGISTRY" =~ ^[A-Za-z0-9][A-Za-z0-9./:_-]*$ ]] || { echo 'Invalid app registry' >&2; exit 2; }
 [[ "$APP_SOURCE" == pull || "$APP_SOURCE" == build || "$APP_SOURCE" == tars ]] || { echo 'Invalid app source' >&2; exit 2; }
 ARCHS=()
