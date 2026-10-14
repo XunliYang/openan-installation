@@ -1,6 +1,6 @@
 # OpenAN Offline Installation Quickstart (Kubernetes)
 
-> **Historical / unsupported for current service revisions.** The independent chart below does not implement the current account-bootstrap, TLS, model and database contracts. Its build/install entrypoints now fail before external operations. Do not override this guard or pair it with current images. Use the maintained online chart for connected Kubernetes or `offline-install-compose` for a single offline Docker host. Kubernetes offline support requires a separately validated package that reuses the maintained chart; no current support claim is made.
+> **Offline-install line.** The offline Kubernetes chart and installer are maintained on this line: they carry their own templates and implement the account (OC admin seeding), model (full models.yaml mount) and frontend (openan-portal) contracts for offline deployments. See the [deployment contract](../TRANSPORT_DEPLOYMENT.md).
 
 
 End-to-end guide: build the offline bundle on an **internet-connected machine**,
@@ -98,8 +98,8 @@ Application image sources (`--app-source`):
 
 | value | meaning |
 |---|---|
-| `pull` (default) | pull the three app images from `--app-registry` (default `ghcr.io/project-openan`) |
-| `build` | build from local source: `--registry-src <dir> --orchestration-src <dir>` |
+| `pull` (default) | pull the app images (registry-center, orchestration-center, workflow-designer, openan-portal) from `--app-registry` (default `ghcr.io/project-openan`) |
+| `build` | build from local source: `--registry-src <dir> --orchestration-src <dir> [--portal-src <dir>]` |
 | `tars` | reuse pre-built `<base>-<arch>.tar` from `--app-tars-dir <dir>` |
 
 Useful options: `--platforms linux/amd64,linux/arm64` (default both),
@@ -147,7 +147,7 @@ cd openan-offline-v1.0.0
 
 # 1. Configure — every option is documented inline
 cp config.env.example config.env
-vi config.env          # at minimum: METALLB_POOL, DB_PASSWORD, LLM endpoints
+vi config.env          # at minimum: METALLB_POOL, DB_PASSWORD, OC_ADMIN_PASSWORD, LLM endpoints
 
 # 2. Verify the environment (never changes anything)
 scripts/check-env.sh --config config.env
@@ -188,9 +188,16 @@ Set `HTTPS_ENABLED="true"` in `config.env` to serve registry-center and
 orchestration-center over TLS inside the cluster (self-signed certificates
 are generated per component; override with `orchestration.tls.existingSecret`
 / `registry.tls.existingSecret` for CA-issued material). Probes, the
-workflow-designer upstream and the ingress backend protocol switch
+frontend upstream and the ingress backend protocol switch
 automatically. `HTTPS_VERIFY_CLIENT="true"` additionally requires client
 certificates (mTLS) on the registry listener.
+
+## Frontend selection
+
+`FRONTEND_TYPE` selects the unified web entry: `portal` (openan-portal,
+default — log in with the OC admin account (`OC_ADMIN_PASSWORD` in
+`config.env`, required)) or `workflow-designer` (legacy).
+The bundle ships both frontend images, so the choice is install-time.
 
 ## Uninstall
 

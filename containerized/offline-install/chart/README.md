@@ -1,6 +1,6 @@
 # OpenAN Platform Helm Chart
 
-> **Historical / unsupported for current service revisions.** The independent chart below does not implement the current account-bootstrap, TLS, model and database contracts. Its build/install entrypoints now fail before external operations. Do not override this guard or pair it with current images. Use the maintained online chart for connected Kubernetes or `offline-install-compose` for a single offline Docker host. Kubernetes offline support requires a separately validated package that reuses the maintained chart; no current support claim is made.
+> **Offline-install line.** This chart is maintained on the offline-install line with its own templates and implements the account (OC admin seeding), model (full models.yaml mount) and frontend (openan-portal) contracts for offline deployments. For connected clusters use the maintained online chart; for a single offline Docker host use `offline-install-compose`. See [QUICKSTART.md](../QUICKSTART.md).
 
 
 Helm Chart for deploying the OpenAN platform on Kubernetes.
@@ -11,7 +11,7 @@ Helm Chart for deploying the OpenAN platform on Kubernetes.
 |-----------|-------------|------|
 | **Registry Center** | Agent Card registration, discovery, and semantic search | 5000 |
 | **Orchestration Center** | PSOP generation and workflow execution | 5001 |
-| **Workflow Designer** | Visual workflow editing frontend (Nginx) | 80 |
+| **Frontend** | Unified web entry (openan-portal by default, or workflow-designer) | 80 |
 | **PostgreSQL** | Shared database (default, `database.type=postgresql`) | 5432 |
 | **MySQL** | Shared database (optional, `database.type=mysql`) | 3306 |
 
@@ -40,17 +40,21 @@ openan-chart/
     ├── registry-center/
     │   ├── configmap.yaml
     │   ├── deployment.yaml
+    │   ├── models.yaml
     │   ├── secret.yaml
     │   ├── service.yaml
     │   ├── tls-secret.yaml
     │   └── signing-secret.yaml
     ├── orchestration-center/
+    │   ├── admin-secret.yaml
     │   ├── configmap.yaml
     │   ├── deployment.yaml
+    │   ├── models.yaml
     │   ├── secret.yaml
     │   ├── service.yaml
+    │   ├── tls-secret.yaml
     │   └── hpa.yaml
-    └── workflow-designer/
+    └── openan-frontend/
         ├── configmap.yaml
         ├── deployment.yaml
         ├── service.yaml
@@ -78,7 +82,7 @@ helm install openan ./openan-chart -n openan --create-namespace \
 helm install openan ./openan-chart -n openan --create-namespace \
   --set registry.image.repository=harbor.example.com/openan/registry-center \
   --set orchestration.image.repository=harbor.example.com/openan/orchestration-center \
-  --set frontend.image.repository=harbor.example.com/openan/workflow-designer
+  --set frontend.image.repository=harbor.example.com/openan/openan-portal
 ```
 
 ### Verify
@@ -100,14 +104,14 @@ echo "http://$INGRESS_IP/"
 
 | Service | URL |
 |---------|-----|
-| Workflow Designer | `http://<INGRESS_IP>/` |
-| Registry API | `http://<INGRESS_IP>/registry/rest/v1/registry-center/agent-cards` |
+| Frontend | `http://<INGRESS_IP>/` |
+| Registry API | `http://<INGRESS_IP>/registry/rest/v1/registry-center/agent-cards` (also `/api/registry/...`) |
 | Orchestration API | `http://<INGRESS_IP>/api/orchestrate/rest/v1/orchestrate/agent-cards` |
 
 #### NodePort (Frontend Only)
 
 ```bash
-NODE_PORT=$(kubectl get svc -n openan workflow-designer -o jsonpath='{.spec.ports[0].nodePort}')
+NODE_PORT=$(kubectl get svc -n openan openan-frontend -o jsonpath='{.spec.ports[0].nodePort}')
 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
 echo "http://$NODE_IP:$NODE_PORT/"
 ```
@@ -117,7 +121,7 @@ echo "http://$NODE_IP:$NODE_PORT/"
 ```bash
 kubectl -n openan port-forward svc/registry-center 5000:5000
 kubectl -n openan port-forward svc/orchestration-center 5001:5001
-kubectl -n openan port-forward svc/workflow-designer 8080:80
+kubectl -n openan port-forward svc/openan-frontend 8080:80
 ```
 
 ## Configuration Parameters
@@ -181,7 +185,7 @@ kubectl -n openan port-forward svc/workflow-designer 8080:80
 | `registry.replicas` | Replica count | `2` |
 | `registry.image.repository` | Image repository | `ghcr.io/project-openan/registry-center` |
 | `registry.image.tag` | Image tag | `v1.0.0` |
-| `registry.image.pullPolicy` | Image pull policy | `Always` |
+| `registry.image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `registry.port` | Service port | `5000` |
 | `registry.signatureValidationEnabled` | Validate JWS signatures on AgentCards (`REGISTRY_SIGNATURE_VALIDATION_ENABLED`) | `false` |
 | `registry.llm.chat.model` | Chat model | `your-chat-model` |
@@ -212,9 +216,11 @@ kubectl -n openan port-forward svc/workflow-designer 8080:80
 | `orchestration.replicas` | Replica count | `1` |
 | `orchestration.image.repository` | Image repository | `ghcr.io/project-openan/orchestration-center` |
 | `orchestration.image.tag` | Image tag | `v1.0.0` |
-| `orchestration.image.pullPolicy` | Image pull policy | `Always` |
+| `orchestration.image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `orchestration.port` | Service port | `5001` |
 | `orchestration.agentRegistryUrl` | Registry Center URL | `""` (auto-discovered) |
+| `orchestration.admin.initialPassword` | Initial admin password for portal login (empty = not injected) | `""` |
+| `orchestration.admin.existingSecret` | Existing Secret (key admin-password) | `""` |
 | `orchestration.llm.chat.model` | Chat model | `your-chat-model` |
 | `orchestration.llm.chat.url` | Chat API URL | `https://your-llm-provider.com/v1/chat/completions` |
 | `orchestration.llm.chat.apiKey` | Chat API Key | `your-api-key` |
@@ -225,18 +231,19 @@ kubectl -n openan port-forward svc/workflow-designer 8080:80
 | `orchestration.resources.requests` | Resource requests | `cpu: 250m, memory: 512Mi` |
 | `orchestration.resources.limits` | Resource limits | `cpu: 1000m, memory: 1Gi` |
 
-### Workflow Designer
+### Frontend
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `frontend.enabled` | Enable Workflow Designer | `true` |
+| `frontend.enabled` | Enable the unified web entry | `true` |
+| `frontend.type` | Unified entry: portal / workflow-designer | `portal` |
 | `frontend.replicas` | Replica count | `2` |
-| `frontend.image.repository` | Image repository | `ghcr.io/project-openan/workflow-designer` |
+| `frontend.image.repository` | Image repository (empty = derived from `frontend.type`) | `ghcr.io/project-openan/openan-portal` |
 | `frontend.image.tag` | Image tag | `v1.0.0` |
-| `frontend.image.pullPolicy` | Image pull policy | `Always` |
-| `frontend.port` | Service port | `80` |
+| `frontend.image.pullPolicy` | Image pull policy | `IfNotPresent` |
+| `frontend.port` | Service port (the portal container listens on 8080) | `80` |
 | `frontend.nodePort` | NodePort | `30191` |
-| `frontend.nginxConfig` | Nginx configuration (ConfigMap) | See values.yaml |
+| `frontend.nginxConfig` | Nginx configuration (workflow-designer type only) | See values.yaml |
 | `frontend.hpa.enabled` | Enable HPA | `true` |
 | `frontend.hpa.minReplicas` | Minimum replicas | `2` |
 | `frontend.hpa.maxReplicas` | Maximum replicas | `10` |
@@ -318,13 +325,16 @@ kubectl logs -n openan -l app=orchestration-center -f
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────────┐      ┌───────────────────────────────────┐   │
-│  │   Ingress    │─────▶│  Workflow Designer (Frontend)     │   │
+│  │   Ingress    │─────▶│  Frontend (openan-portal)         │   │
 │  │  (Nginx)     │      │  - Deployment (2 pods)            │   │
 │  │  / → :80     │      │  - Service :80 (NodePort: 30191)  │   │
 │  │  /api/       │      │  - HPA                            │   │
 │  │  orchestrate │      └───────────────────────────────────┘   │
 │  │  → :5001     │                      │                       │
-│  │  /registry   │                      │ (nginx proxy)         │
+│  │  /registry   │                      │ (portal proxy)        │
+│  │  → :5000     │                      │                       │
+│  │  /api/       │                      │                       │
+│  │  registry    │                      │                       │
 │  │  → :5000     │                      ▼                       │
 │  └──────────────┘      ┌───────────────────────────────────┐  │
 │                        │  Orchestration Center              │  │
@@ -356,9 +366,10 @@ kubectl logs -n openan -l app=orchestration-center -f
 
 | External Path | Backend | Rewrite |
 |---------------|---------|---------|
-| `/` | `workflow-designer:80` | None |
+| `/` | `openan-frontend:80` | None |
 | `/api/orchestrate/rest/v1/orchestrate/...` | `orchestration-center:5001/rest/v1/orchestrate/...` | Strip `/api/orchestrate` |
 | `/registry/rest/v1/registry-center/...` | `registry-center:5000/rest/v1/registry-center/...` | Strip `/registry` |
+| `/api/registry/rest/v1/registry-center/...` | `registry-center:5000/rest/v1/registry-center/...` | Strip `/api/registry` |
 
 ## Certificate Management
 
@@ -408,6 +419,16 @@ registry:
 | Database connection | `kubectl -n openan logs -l app=openan-postgres` (or `app=openan-mysql`) |
 | Ingress not accessible | `kubectl -n openan describe ingress` |
 | Certificate issues | `kubectl -n openan get secret registry-center-tls registry-center-signing` |
+
+## Upgrade notes
+
+- The frontend Service/Deployment is renamed `workflow-designer` → `openan-frontend`
+  and defaults to the openan-portal image (`frontend.type=portal`). Set
+  `FRONTEND_TYPE=workflow-designer` to keep the legacy frontend.
+- A new `/api/registry` ingress route exposes the registry API directly.
+- The chart now generates and mounts a full `models.yaml` (chat + embed/rerank
+  for registry) from the `*.llm.*` values; secrets stay in env vars.
+- `orchestration.admin.initialPassword` seeds the portal login account.
 
 ## Related Documentation
 

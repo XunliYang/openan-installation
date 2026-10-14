@@ -5,9 +5,9 @@
 ## Supported scope and source baseline
 
 This contract covers the maintained online Helm chart, shared image builder and single-host offline Compose.
-The independent legacy offline Kubernetes chart and binary installer are not validated against current revisions.
-Legacy Kubernetes build/install entrypoints now refuse execution. Future offline Kubernetes packaging must reuse
-the maintained chart, not fork its templates again.
+The offline Kubernetes chart and installer are maintained on the offline-install line: they carry their own
+templates and now implement the account (OC admin seeding), model (full models.yaml mount) and frontend
+(openan-portal) contracts for offline deployments. See offline-install/QUICKSTART.md.
 
 CI builds accepted organization revisions, not personal forks:
 

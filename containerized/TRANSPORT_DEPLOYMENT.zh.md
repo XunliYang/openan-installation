@@ -2,9 +2,9 @@
 
 English: [Deployment contract](TRANSPORT_DEPLOYMENT.md).
 
-旧离线 Kubernetes 的构建与安装入口已在外部操作前拒绝执行，避免新镜像使用过期独立 Chart。恢复支持须复用并实际验收现行 Chart。二进制入口同样未验收，不能宣称支持。
+离线 Kubernetes Chart 与安装器在 `offline-install` 线上持续维护：它们使用独立模板，现已为离线部署实现账号（OC 管理员初始化）、模型（完整 models.yaml 挂载）与前端（openan-portal）契约。参见 [offline-install/QUICKSTART.md](offline-install/QUICKSTART.md)。
 
-本次范围为 `online-install` 在线 Chart、共享镜像构建脚本，以及新增整改的单机 `offline-install-compose`。`offline-install` 离线 Kubernetes 与二进制安装器未纳入本轮验证，不能假定它们已经具有相同契约。下文 Helm 字段针对在线 Chart；Compose 使用独立的 [部署指南](offline-install-compose/README.md) 和配置模板。
+本次范围为 `online-install` 在线 Chart、共享镜像构建脚本，以及新增整改的单机 `offline-install-compose`；`offline-install` 离线 Kubernetes 线按上段所述另行维护。下文 Helm 字段针对在线 Chart；Compose 使用独立的 [部署指南](offline-install-compose/README.md) 和配置模板。
 
 本版本 Chart 必须配合包含本次部署整改的 RC/OC 镜像。不能将旧 v1.0.0 镜像视作已包含新功能。先构建并明确指定镜像 tag，再部署；源码 Git ref 与镜像 tag 分开。
 

@@ -1,6 +1,6 @@
 # OpenAN Offline Installation (Kubernetes)
 
-> **Historical / unsupported for current service revisions.** The independent chart below does not implement the current account-bootstrap, TLS, model and database contracts. Its build/install entrypoints now fail before external operations. Do not override this guard or pair it with current images. Use the maintained online chart for connected Kubernetes or `offline-install-compose` for a single offline Docker host. Kubernetes offline support requires a separately validated package that reuses the maintained chart; no current support claim is made.
+> **Offline-install line.** The offline Kubernetes chart and installer are maintained on this line: they carry their own templates and implement the account (OC admin seeding), model (full models.yaml mount) and frontend (openan-portal) contracts for offline deployments. See [QUICKSTART.md](QUICKSTART.md) and the [deployment contract](../TRANSPORT_DEPLOYMENT.md).
 
 
 Containerized, fully offline installation of the OpenAN platform on
@@ -14,7 +14,8 @@ be changed on a node is reported as a manual step (see
 
 ## Topology
 
-- 2 × `registry-center`, 2 × `orchestration-center`, 2 × `workflow-designer`,
+- 2 × `registry-center`, 2 × `orchestration-center`, 2 × `openan-frontend`
+  (openan-portal by default; `FRONTEND_TYPE` selects the unified entry),
   1 × database (MySQL 8.4.3 by default, or PostgreSQL when
   `DB_TYPE=postgresql`).
 - One `ingress-nginx` entry point behind a MetalLB LoadBalancer IP.
@@ -47,8 +48,8 @@ Application image sources (`--app-source`):
 
 | value | meaning |
 |---|---|
-| `pull` | `docker pull` the three app images from `--app-registry` (default `ghcr.io/project-openan`) |
-| `build` | build them from local source (`--registry-src`, `--orchestration-src`) |
+| `pull` | `docker pull` the app images (registry-center, orchestration-center, workflow-designer, openan-portal) from `--app-registry` (default `ghcr.io/project-openan`) |
+| `build` | build them from local source (`--registry-src`, `--orchestration-src`, optional `--portal-src`) |
 | `tars` | reuse pre-built tars (`--app-tars-dir`) |
 
 Everything else (PostgreSQL / MySQL, registry:2, ingress-nginx, MetalLB, helm,
