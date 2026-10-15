@@ -167,12 +167,12 @@ RC/OC Deployment 使用 `Recreate`，升级期间会短暂停服并清空内存�
 bash build/build.sh registry --source-ref <RC_SHA> --tag <IMAGE_TAG> --platforms linux/amd64 --no-push
 bash build/build.sh orchestration --source-ref <OC_SHA> --tag <IMAGE_TAG> --platforms linux/amd64 --no-push
 # 需要多架构时显式推送；多架构 --no-push 会拒绝，不会偷偷 --push。
-bash online-install/one_click_install.sh --skip-build --skip-infra --values /path/to/deployment.yaml
+bash online-install/install.sh --skip-build --skip-infra --values /path/to/deployment.yaml
 helm lint online-install/openan-chart -f /path/to/deployment.yaml
 helm template openan online-install/openan-chart -f /path/to/deployment.yaml
 ```
 
-one_click_install.sh 恢复可跳过的构建、审核后的本地基础设施 Chart 与交互引导阶段；--values 跳过交互，--skip-build/--skip-infra 使用已准备环境。秘密静默输入并经 stdin 创建 Secret，不写入生成的 values；生产推荐预备 Secret + 原生 Helm 路径。不会在业务镜像启动 samples。镜像中保留公共 solution_packages 示例数据，但不携带样例账户和 Agent 服务。数据库不存在时按服务已有创建权限/迁移策略处理，生产推荐 DBA 预建。
+install.sh 恢复可跳过的构建、审核后的本地基础设施 Chart 与交互引导阶段；--values 跳过交互，--skip-build/--skip-infra 使用已准备环境。秘密静默输入并经 stdin 创建 Secret，不写入生成的 values；生产推荐预备 Secret + 原生 Helm 路径。不会在业务镜像启动 samples。镜像中保留公共 solution_packages 示例数据，但不携带样例账户和 Agent 服务。数据库不存在时按服务已有创建权限/迁移策略处理，生产推荐 DBA 预建。
 
 CI 分别验证 Helm 矩阵、错误配置和构建失败退出；RC 已有 Linux 容器 smoke，OC 的真实启动/API 回归可独立执行。上线验收必须另外运行真实镜像+MySQL+nginx/Ingress，覆盖登录 Cookie、AgentCard CRUD/JWS、工作流 CRUD/SSE、证书缺失/错误密码、无/错 Token、断连和重启。Helm 渲染通过不是集群实测。
 

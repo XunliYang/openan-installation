@@ -135,9 +135,11 @@ def test_wizard_never_overwrites_an_existing_secret(monkeypatch):
 
 def test_wizard_generated_values_contain_references_not_credentials(tmp_path, monkeypatch):
     module = wizard()
-    answers = iter(["tested", "mysql", "sql.example", "3306", "registry_db", "orch_db",
-                    "registry_user", "orch_user", "rc-models", "oc-models", "signing", "openan.example"])
+    answers = iter(["all", "tested", "external", "mysql", "sql.example", "3306", "registry_db", "orch_db",
+                    "registry_user", "orch_user", "existing", "rc-models", "oc-models", "secret",
+                    "signing", "openan.example"])
     monkeypatch.setattr(module, "ask", lambda _: next(answers))
+    monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
     monkeypatch.setattr(module, "secret_input", lambda _: "SyntheticSecret9!")
     saved = {}
     monkeypatch.setattr(module, "create_secret", lambda ns, name, data: saved.update({name: data}))
@@ -162,6 +164,60 @@ def test_offline_k8s_entrypoints_are_not_sealed():
         assert "refuse execution" not in text
 
 
+def test_wizard_in_cluster_default_values_shape(tmp_path, monkeypatch):
+    module = wizard()
+    answers = iter(["all", "in-cluster", "existing", "rc-models", "oc-models", "auto", "openan.example"])
+    monkeypatch.setattr(module, "ask", lambda _: next(answers))
+    monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
+    monkeypatch.setattr(module, "secret_input", lambda _: "SyntheticSecret9!")
+    saved = {}
+    monkeypatch.setattr(module, "create_secret", lambda ns, name, data: saved.update({name: data}))
+    monkeypatch.setattr(module.subprocess, "run", lambda command, **kw: subprocess.CompletedProcess(command, 0, "", ""))
+    output = tmp_path / "values.json"
+    module.configure("openan", "openan", output, tag="tested")
+    text = output.read_text(encoding="utf-8")
+    values = json.loads(text)
+    assert values["postgresql"] == {"enabled": True, "existingSecret": "openan-pg"}
+    assert values["database"] == {"type": "postgresql"}
+    assert values["registry"]["signing"] == {"mode": "auto"}
+    assert saved["openan-pg"] == {"postgres-password": "SyntheticSecret9!"}
+    assert "SyntheticSecret9!" not in text
+
+
+def test_wizard_generate_models_keeps_keys_only_in_runtime_secrets(tmp_path, monkeypatch):
+    module = wizard()
+    answers = iter(["all", "in-cluster", "generate", "auto", "openan.example",
+                    "rc-model-id", "https://llm.example/v1/chat/completions",
+                    "oc-model-id", "https://llm.example/v1/chat/completions"])
+    secrets = iter(["PgSecret9!", "rc-llm-key", "oc-llm-key", "AdminPassw0rd!xy"])
+    monkeypatch.setattr(module, "ask", lambda _: next(answers))
+    monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
+    monkeypatch.setattr(module, "secret_input", lambda _: next(secrets))
+    monkeypatch.setattr(module, "probe_llm", lambda model, url, key: True)
+    saved, configmaps = {}, {}
+    monkeypatch.setattr(module, "create_secret", lambda ns, name, data: saved.update({name: data}))
+    monkeypatch.setattr(module, "create_configmap", lambda ns, name, data: configmaps.update({name: data}))
+    monkeypatch.setattr(module.subprocess, "run", lambda command, **kw: subprocess.CompletedProcess(command, 0, "", ""))
+    output = tmp_path / "values.json"
+    module.configure("openan", "openan", output, tag="tested")
+    text = output.read_text(encoding="utf-8")
+    values = json.loads(text)
+
+    rc_models = configmaps["openan-rc-models"]["models.yaml"]
+    oc_models = configmaps["openan-oc-models"]["models.yaml"]
+    assert "api_key_env: LLM_CHAT_API_KEY" in rc_models and "api_key_env: LLM_CHAT_API_KEY" in oc_models
+    assert '"rc-model-id"' in rc_models and '"oc-model-id"' in oc_models
+    assert "rc-llm-key" not in rc_models and "oc-llm-key" not in oc_models
+    assert values["registry"]["modelsConfigMap"] == "openan-rc-models"
+    assert values["orchestration"]["modelsConfigMap"] == "openan-oc-models"
+    assert saved["openan-rc-runtime"]["LLM_CHAT_API_KEY"] == "rc-llm-key"
+    assert saved["openan-oc-runtime"]["LLM_CHAT_API_KEY"] == "oc-llm-key"
+    assert saved["openan-oc-runtime"]["OC_ADMIN_INITIAL_PASSWORD"] == "AdminPassw0rd!xy"
+    assert "REGISTRY_ACCESS_TOKEN" in saved["openan-oc-runtime"]
+    for secret in ("rc-llm-key", "oc-llm-key", "AdminPassw0rd!xy", "PgSecret9!"):
+        assert secret not in text
+
+
 def test_ci_uses_accepted_org_revisions():
     workflow = (ROOT / ".github/workflows/deployment-contract.yml").read_text(encoding="utf-8")
     assert "repository: project-openan/registry-center" in workflow
@@ -183,7 +239,7 @@ def test_guided_skip_phases_preserve_selected_release_namespace_and_fail_fast(tm
     from test_offline_compose_contract import shell_path
     values = tmp_path / "deployment.yaml"
     values.write_text("namespace: team-a\n", encoding="utf-8")
-    script = ROOT / "containerized/online-install/one_click_install.sh"
+    script = ROOT / "containerized/online-install/install.sh"
     # Exported functions are test-owned substitutes, never real cluster/build calls.
     shim = """
 kubectl() { echo "KUBECTL:$*" >&2; }
@@ -209,9 +265,11 @@ bash "$@"
 
 def test_wizard_rejects_missing_public_dependencies_before_secrets(tmp_path, monkeypatch):
     module = wizard()
-    answers = iter(["tested", "mysql", "sql.example", "3306", "registry_db", "orch_db",
-                    "registry_user", "orch_user", "rc-models", "oc-models", "signing", "openan.example"])
+    answers = iter(["all", "tested", "external", "mysql", "sql.example", "3306", "registry_db", "orch_db",
+                    "registry_user", "orch_user", "existing", "rc-models", "oc-models", "secret",
+                    "signing", "openan.example"])
     monkeypatch.setattr(module, "ask", lambda _: next(answers))
+    monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
     monkeypatch.setattr(module.subprocess, "run", lambda command, **kw: subprocess.CompletedProcess(command, 1, "", ""))
     monkeypatch.setattr(module, "secret_input", lambda _: pytest.fail("Must not collect secrets yet"))
     monkeypatch.setattr(module, "create_secret", lambda *args: pytest.fail("Must not create secrets yet"))
