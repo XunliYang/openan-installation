@@ -19,11 +19,12 @@
 # OpenAN Platform - One-line Image Build Script
 # Usage: ./build.sh [components] [options]
 #   No arguments = build all components with defaults
-#   Specify component names to build only those: registry, orchestration
+#   Specify component names to build only those: registry, orchestration, portal
 #
 # Components (positional):
 #   registry          Build Registry Center only
 #   orchestration     Build Orchestration Center + Workflow Designer only
+#   portal            Build OpenAN Portal only
 #   (none)            Build all components
 #
 # Options:
@@ -31,6 +32,8 @@
 #   --orchestration-release <url> Orchestration Center release URL
 #   --registry-src <dir>       Local registry-center source dir (overrides remote download)
 #   --orchestration-src <dir>  Local orchestration-center source dir (overrides remote download)
+#   --portal-release <url>     OpenAN Portal release URL
+#   --portal-src <dir>         OpenAN Portal source directory (overrides --portal-release)
 #   --image-registry <url>     Image registry (default: ghcr.io)
 #   --namespace <ns>           Image namespace (default: project-openan)
 #   --tag <tag>                Image tag (overrides the tag derived from --source-ref)
@@ -58,11 +61,14 @@ REGISTRY_RELEASE=""
 ORCHESTRATION_RELEASE=""
 REGISTRY_SRC=""
 ORCHESTRATION_SRC=""
+PORTAL_RELEASE=""
+PORTAL_SRC=""
 PLATFORMS="linux/amd64,linux/arm64"
 PUSH=true
 
 BUILD_REGISTRY=false
 BUILD_ORCHESTRATION=false
+BUILD_PORTAL=false
 COMPONENTS_SPECIFIED=false
 
 TEMP_DIR=""
@@ -88,6 +94,7 @@ Usage: ./build.sh [components] [options]
 Components (positional, specify any):
   registry          Build Registry Center only
   orchestration     Build Orchestration Center + Workflow Designer only
+  portal            Build OpenAN Portal only
   (none)            Build all components
 
 Options:
@@ -100,6 +107,8 @@ Options:
   --orchestration-release <url>  Orchestration Center release tarball URL
   --registry-src <dir>       Local registry-center source dir (overrides remote download)
   --orchestration-src <dir>  Local orchestration-center source dir (overrides remote download)
+  --portal-release <url>     OpenAN Portal release tarball URL
+  --portal-src <dir>         OpenAN Portal source directory (overrides --portal-release)
   --platforms <platforms>    Target platforms (default: linux/amd64,linux/arm64)
   --no-push                  Build local only (single-arch only)
   --help                     Show help
@@ -108,12 +117,14 @@ Examples:
   ./build.sh                                                          # Build all components
   ./build.sh registry                                                 # Build Registry Center only
   ./build.sh orchestration                                            # Build Orchestration + Frontend only
-  ./build.sh registry orchestration                                   # Same as default (both)
+  ./build.sh portal                                                   # Build OpenAN Portal only
+  ./build.sh registry orchestration                                   # Build both, no portal
   ./build.sh --tag v1.1.0                                             # Custom tag, build all
   ./build.sh registry --image-registry harbor.example.com             # Private registry, registry only
   ./build.sh orchestration --platforms linux/amd64 --no-push          # Local single-arch, orchestration only
   ./build.sh --source-ref main                                        # Build main, tagged main-YYYYMMDD
   ./build.sh --registry-src ~/src/registry-center --orchestration-src ~/src/orchestration-center
+  ./build.sh portal --portal-src ~/src/openan-portal                  # Portal from local source
 EOF
     exit 0
 }
@@ -121,7 +132,7 @@ EOF
 # ===== Parse arguments =====
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --image-registry|--namespace|--tag|--source-ref|--registry-release|--orchestration-release|--registry-src|--orchestration-src|--platforms)
+        --image-registry|--namespace|--tag|--source-ref|--registry-release|--orchestration-release|--registry-src|--orchestration-src|--portal-release|--portal-src|--platforms)
             if [ "$#" -lt 2 ] || [ -z "$2" ] || [[ "$2" == --* ]]; then
                 log_error "$1 requires a value"; exit 2
             fi ;;
@@ -129,6 +140,7 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         registry)                BUILD_REGISTRY=true; COMPONENTS_SPECIFIED=true; shift ;;
         orchestration)           BUILD_ORCHESTRATION=true; COMPONENTS_SPECIFIED=true; shift ;;
+        portal)                  BUILD_PORTAL=true; COMPONENTS_SPECIFIED=true; shift ;;
         --image-registry)        IMAGE_REGISTRY="$2"; shift 2 ;;
         --namespace)             NAMESPACE="$2"; shift 2 ;;
         --tag)                   TAG="$2"; TAG_EXPLICIT=true; shift 2 ;;
@@ -137,6 +149,8 @@ while [[ $# -gt 0 ]]; do
         --orchestration-release) ORCHESTRATION_RELEASE="$2"; shift 2 ;;
         --registry-src)          REGISTRY_SRC="$2"; shift 2 ;;
         --orchestration-src)     ORCHESTRATION_SRC="$2"; shift 2 ;;
+        --portal-release)        PORTAL_RELEASE="$2"; shift 2 ;;
+        --portal-src)            PORTAL_SRC="$2"; shift 2 ;;
         --platforms)             PLATFORMS="$2"; shift 2 ;;
         --no-push)               PUSH=false; shift ;;
         --help)                  show_help ;;
@@ -148,6 +162,7 @@ done
 if [ "$COMPONENTS_SPECIFIED" = false ]; then
     BUILD_REGISTRY=true
     BUILD_ORCHESTRATION=true
+    BUILD_PORTAL=true
 fi
 
 # Auto-generate source URLs from SOURCE_REF, not the image TAG if not explicitly specified
@@ -156,6 +171,9 @@ if [ -z "$REGISTRY_RELEASE" ]; then
 fi
 if [ -z "$ORCHESTRATION_RELEASE" ]; then
     ORCHESTRATION_RELEASE="https://github.com/project-openan/orchestration-center/archive/${SOURCE_REF}.tar.gz"
+fi
+if [ -z "$PORTAL_RELEASE" ] && [ -z "$PORTAL_SRC" ]; then
+    PORTAL_RELEASE="https://github.com/project-openan/openan-portal/archive/${SOURCE_REF}.tar.gz"
 fi
 
 # Derive the image tag from the source ref when --tag was not given explicitly.
@@ -181,7 +199,10 @@ if [ "$BUILD_REGISTRY" = true ]; then
     COMPONENTS="${COMPONENTS}registry-center "
 fi
 if [ "$BUILD_ORCHESTRATION" = true ]; then
-    COMPONENTS="${COMPONENTS}orchestration-center workflow-designer"
+    COMPONENTS="${COMPONENTS}orchestration-center workflow-designer "
+fi
+if [ "$BUILD_PORTAL" = true ]; then
+    COMPONENTS="${COMPONENTS}openan-portal"
 fi
 
 echo ""
@@ -194,6 +215,13 @@ if [ "$BUILD_REGISTRY" = true ]; then
 fi
 if [ "$BUILD_ORCHESTRATION" = true ]; then
     echo "  Orchestration release:    $ORCHESTRATION_RELEASE"
+fi
+if [ "$BUILD_PORTAL" = true ]; then
+    if [ -n "$PORTAL_SRC" ]; then
+        echo "  Portal source:            $PORTAL_SRC"
+    else
+        echo "  Portal release:           $PORTAL_RELEASE"
+    fi
 fi
 echo "  Image registry:           $IMAGE_REGISTRY"
 echo "  Image namespace:          $NAMESPACE"
@@ -254,12 +282,11 @@ resolve_src() {
     detect_src_dir "$TEMP_DIR/$name"
 }
 
+# ===== Image references =====
 REGISTRY_IMAGE="$IMAGE_REGISTRY/$NAMESPACE/registry-center:$TAG"
 ORCHESTRATION_IMAGE="$IMAGE_REGISTRY/$NAMESPACE/orchestration-center:$TAG"
 FRONTEND_IMAGE="$IMAGE_REGISTRY/$NAMESPACE/workflow-designer:$TAG"
-
-RC_SRC=""
-OC_SRC=""
+PORTAL_IMAGE="$IMAGE_REGISTRY/$NAMESPACE/openan-portal:$TAG"
 
 if [ "$BUILD_REGISTRY" = true ]; then
     RC_SRC="$(resolve_src "$REGISTRY_SRC" "$REGISTRY_RELEASE" "registry-center")" || exit 1
@@ -277,6 +304,16 @@ if [ "$BUILD_ORCHESTRATION" = true ]; then
         exit 1
     fi
     log_info "Orchestration Center source: $OC_SRC"
+fi
+
+PORTAL_SOURCE_DIR=""
+if [ "$BUILD_PORTAL" = true ]; then
+    PORTAL_SOURCE_DIR="$(resolve_src "$PORTAL_SRC" "$PORTAL_RELEASE" "openan-portal")" || exit 1
+    if [ -z "$PORTAL_SOURCE_DIR" ]; then
+        log_error "Cannot find Dockerfile for openan-portal"
+        exit 1
+    fi
+    log_info "Portal source: $PORTAL_SOURCE_DIR"
 fi
 
 # ===== Build images =====
@@ -311,6 +348,9 @@ fi
 if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ] && [ -d "$OC_SRC/workflow-designer" ]; then
     TOTAL=$((TOTAL + 1))
 fi
+if [ "$BUILD_PORTAL" = true ] && [ -n "$PORTAL_SOURCE_DIR" ]; then
+    TOTAL=$((TOTAL + 1))
+fi
 CURRENT=0
 
 if [ "$BUILD_REGISTRY" = true ] && [ -n "$RC_SRC" ]; then
@@ -342,6 +382,13 @@ if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ]; then
     fi
 fi
 
+if [ "$BUILD_PORTAL" = true ] && [ -n "$PORTAL_SOURCE_DIR" ]; then
+    CURRENT=$((CURRENT + 1))
+    log_step "[$CURRENT/$TOTAL] Building OpenAN Portal..."
+    "${BUILD_CMD[@]}" --label "org.opencontainers.image.source=https://github.com/project-openan/openan-portal" --label "org.opencontainers.image.revision=$(git -C "$PORTAL_SOURCE_DIR" rev-parse HEAD 2>/dev/null || printf unknown)" -t "$PORTAL_IMAGE" "$PORTAL_SOURCE_DIR"
+    log_info "Done: $PORTAL_IMAGE"
+fi
+
 # ===== Result =====
 echo ""
 echo "=========================================="
@@ -358,6 +405,9 @@ fi
 if [ -n "$WD_SRC" ]; then
     echo "    - $FRONTEND_IMAGE"
 fi
+if [ "$BUILD_PORTAL" = true ] && [ -n "$PORTAL_SOURCE_DIR" ]; then
+    echo "    - $PORTAL_IMAGE"
+fi
 echo ""
 echo "  Deploy:"
 echo "    helm upgrade --install openan ./online-install/openan-chart -n openan --create-namespace -f /path/to/deployment.yaml \\"
@@ -368,6 +418,9 @@ if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ]; then
     echo "      --set orchestration.image.repository=$IMAGE_REGISTRY/$NAMESPACE/orchestration-center --set orchestration.image.tag=$TAG \\"
 fi
 if [ -n "$WD_SRC" ]; then
-    echo "      --set frontend.image.repository=$IMAGE_REGISTRY/$NAMESPACE/workflow-designer --set frontend.image.tag=$TAG"
+    echo "      --set frontend.image.repository=$IMAGE_REGISTRY/$NAMESPACE/workflow-designer --set frontend.image.tag=$TAG \\"
+fi
+if [ "$BUILD_PORTAL" = true ] && [ -n "$PORTAL_SOURCE_DIR" ]; then
+    echo "      --set frontend.image.repository=$IMAGE_REGISTRY/$NAMESPACE/openan-portal --set frontend.image.tag=$TAG"
 fi
 echo ""
