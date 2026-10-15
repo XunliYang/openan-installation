@@ -16,6 +16,7 @@ import sys
 DEFAULTS = {
     "PROJECT_NAME": "openan", "PUBLIC_PORT": "8080", "PUBLIC_BIND": "0.0.0.0",
     "PUBLIC_ENABLE_HTTPS": "false", "PUBLIC_TLS_DIR": "",
+    "FRONTEND_TYPE": "portal",
     "DATABASE_TYPE": "mysql", "DATABASE_INTERNAL": "false", "DB_HOST": "", "DB_PORT": "",
     "REGISTRY_DB_NAME": "registry_center", "REGISTRY_DB_USERNAME": "registry",
     "REGISTRY_DB_PASSWORD": "", "ORCH_DB_NAME": "orchestration_center",
@@ -106,7 +107,7 @@ def tls_proxy(config, role, base, required_client=False):
     return [bind(directory, target)], "\n".join(directives)
 
 
-def nginx_config(secure, locations, public_tls):
+def nginx_config(secure, locations, public_tls, portal):
     tls = ""
     if secure:
         tls = "ssl_certificate /etc/nginx/pki/public/server.cer;\nssl_certificate_key /etc/nginx/pki/public/server_key.pem;"
@@ -122,9 +123,9 @@ def nginx_config(secure, locations, public_tls):
   }}"""
         # Exact prefix redirect plus ^~ prevents asset regex or SPA fallback from
         # swallowing API paths. A trailing slash strips only the proxy prefix.
-        uri = "/" if prefix in {"/registry/", "/api/orchestrate/"} else ""
+        uri = "/" if prefix in {"/registry/", "/api/orchestrate/", "/api/registry/"} else ""
         browser_policy = 'proxy_set_header X-OpenAN-Browser-Gateway "1";' if prefix in {
-            "/api/orchestrate/", "/rest/v1/orchestrate/",
+            "/api/orchestrate/", "/rest/v1/orchestrate/", "/api/registry/",
         } else ""
         blocks.append(f"""
 location = {prefix.rstrip('/')} {{ return 308 {prefix}; }}
@@ -143,6 +144,39 @@ location ^~ {prefix} {{
   proxy_read_timeout 3600s;
   {directives}
 }}""")
+    if portal:
+        # The portal container serves its own statics and internal routes on
+        # 8080; the public proxy only forwards the unified web entry to it.
+        upstreams["portal"] = """upstream portal {
+    zone portal 64k;
+    server openan-portal:8080 resolve;
+  }"""
+        # Portal mode drops the static web locations: the portal serves them.
+        documents = ""
+        statics = ""
+        entry = """location / {
+  proxy_pass http://portal/;
+  proxy_http_version 1.1;
+  proxy_set_header Connection "";
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $remote_addr;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_set_header Authorization $http_authorization;
+}"""
+    else:
+        documents = "root /usr/share/nginx/html;\n    index index.html;"
+        statics = """    location ~ "^/assets/[^/]+-[A-Za-z0-9_-]{8,}\\\\.(js|css|svg|png|jpg|woff2)$" {
+      try_files $uri =404;
+      add_header Cache-Control "public, max-age=31536000, immutable";
+      add_header X-Content-Type-Options nosniff always;
+    }
+    location = /index.html {
+      add_header Cache-Control "no-store";
+      add_header X-Content-Type-Options nosniff always;
+    }
+"""
+        entry = "location / { try_files $uri $uri/ /index.html; }"
     # Access logs intentionally omit query strings (may contain user intent).
     return f"""worker_processes auto;
 events {{ worker_connections 1024; }}
@@ -160,24 +194,14 @@ http {{
     listen {443 if secure else 80}{' ssl' if secure else ''};
     server_name _;
     {tls}
-    root /usr/share/nginx/html;
-    index index.html;
+    {documents}
     gzip on;
     gzip_vary on;
     gzip_types text/css application/javascript image/svg+xml;
     add_header X-Content-Type-Options nosniff always;
     {''.join(blocks)}
-    location ~ "^/assets/[^/]+-[A-Za-z0-9_-]{{8,}}\\\\.(js|css|svg|png|jpg|woff2)$" {{
-      try_files $uri =404;
-      add_header Cache-Control "public, max-age=31536000, immutable";
-      add_header X-Content-Type-Options nosniff always;
-    }}
-    location = /index.html {{
-      add_header Cache-Control "no-store";
-      add_header X-Content-Type-Options nosniff always;
-    }}
-    # X-XSS-Protection intentionally omitted: deprecated legacy filter.
-    location / {{ try_files $uri $uri/ /index.html; }}
+{statics}    # X-XSS-Protection intentionally omitted: deprecated legacy filter.
+    {entry}
   }}
 }}
 """
@@ -204,6 +228,9 @@ def plan(config_file, bundle, arch):
     internal = boolean(config, "DATABASE_INTERNAL")
     if db not in {"mysql", "postgresql"}:
         raise ValueError("DATABASE_TYPE supports mysql/postgresql")
+    if config["FRONTEND_TYPE"] not in {"portal", "workflow-designer"}:
+        raise ValueError("FRONTEND_TYPE supports portal/workflow-designer")
+    portal = config["FRONTEND_TYPE"] == "portal"
     if config["REGISTRY_DB_NAME"] == config["ORCH_DB_NAME"]:
         raise ValueError("Registry and orchestration require distinct databases")
     if internal and config["REGISTRY_DB_USERNAME"] == config["ORCH_DB_USERNAME"]:
@@ -288,7 +315,11 @@ def plan(config_file, bundle, arch):
             volumes.extend(proxy_mounts)
         else:
             directives = ""
-        for prefix in (["/registry/"] if role == "REGISTRY" else ["/api/orchestrate/", "/rest/v1/orchestrate/", "/api/v1/orchestrate/"]):
+        if role == "REGISTRY":
+            prefixes = ["/registry/"] + (["/api/registry/"] if portal else [])
+        else:
+            prefixes = ["/api/orchestrate/", "/rest/v1/orchestrate/", "/api/v1/orchestrate/"]
+        for prefix in prefixes:
             locations.append((prefix, service + f":{port}", "https" if secure else "http", directives))
         conflicts = set(env) & set(managed)
         # Canonical service prefix aliases for database keys must not create a
@@ -307,6 +338,20 @@ def plan(config_file, bundle, arch):
                                              "interval": "10s", "timeout": "10s", "retries": 12, "start_period": "40s"}}
         if internal:
             services[service]["depends_on"] = {"openan-postgres" if db == "postgresql" else "openan-mysql": {"condition": "service_healthy"}}
+    # OC consumes the registry (agent cards) at runtime; start it only after the
+    # registry is healthy so a slow registry start cannot race OC's first contact.
+    services["orchestration-center"].setdefault("depends_on", {})["registry-center"] = {"condition": "service_healthy"}
+    if portal:
+        if "portal" not in images:
+            raise ValueError("FRONTEND_TYPE=portal requires a portal image in deps/image-tags.json")
+        # The portal image renders its own nginx config from its shipped
+        # template; only the backend URLs are injected, scheme per backend TLS.
+        services["openan-portal"] = {"image": images["portal"], "pull_policy": "never", "restart": "unless-stopped",
+                                     "environment": {"BACKEND_URL": ("https" if boolean(config, "ORCH_ENABLE_HTTPS") else "http") + "://orchestration-center:5001",
+                                                     "REGISTRY_URL": ("https" if boolean(config, "REGISTRY_ENABLE_HTTPS") else "http") + "://registry-center:5000"},
+                                     "networks": ["openan"],
+                                     "healthcheck": {"test": ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/"],
+                                                     "interval": "10s", "timeout": "5s", "retries": 12, "start_period": "10s"}}
     if config["REGISTRY_AUTH_MODE"] == "static_bearer":
         # Fail before containers start if OC's registry credential is unprovisioned.
         rcenv, ocenv = services["registry-center"]["environment"], services["orchestration-center"]["environment"]
@@ -349,18 +394,24 @@ def plan(config_file, bundle, arch):
         public_tls = input_path(config, "PUBLIC_TLS_DIR", base, True)
         material(public_tls, ["server.cer", "server_key.pem"], "Public HTTPS")
         volumes.append(bind(public_tls, "/etc/nginx/pki/public"))
-    if not (bundle / "web/index.html").is_file():
+    if not portal and not (bundle / "web/index.html").is_file():
         raise ValueError("Bundle web/index.html missing")
+    nginx_volumes = volumes + [bind(bundle / "runtime/nginx.conf", "/etc/nginx/nginx.conf")]
+    if not portal:
+        nginx_volumes.append(bind(bundle / "web", "/usr/share/nginx/html"))
+    depends_on = {name: {"condition": "service_healthy"} for name in ("registry-center", "orchestration-center")}
+    if portal:
+        depends_on["openan-portal"] = {"condition": "service_healthy"}
     services["openan-nginx"] = {"image": images["nginx"], "pull_policy": "never", "restart": "unless-stopped",
                                  "ports": [f"{config['PUBLIC_BIND']}:{config['PUBLIC_PORT']}:{443 if public_tls else 80}"],
-                                 "volumes": volumes + [bind(bundle / "runtime/nginx.conf", "/etc/nginx/nginx.conf"), bind(bundle / "web", "/usr/share/nginx/html")],
-                                 "depends_on": {name: {"condition": "service_healthy"} for name in ("registry-center", "orchestration-center")},
+                                 "volumes": nginx_volumes,
+                                 "depends_on": depends_on,
                                  "healthcheck": {"test": ["CMD", "nginx", "-t"], "interval": "5s", "timeout": "5s", "retries": 12},
                                  "networks": ["openan"]}
     compose = {"name": config["PROJECT_NAME"], "services": services, "networks": {"openan": {"driver": "bridge"}}}
     if internal:
         compose["volumes"] = {"postgres-data" if db == "postgresql" else "mysql-data": {}}
-    return compose, nginx_config(bool(public_tls), locations, public_tls)
+    return compose, nginx_config(bool(public_tls), locations, public_tls, portal)
 
 
 def write_plan(compose, nginx, bundle):

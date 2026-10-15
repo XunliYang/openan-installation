@@ -20,7 +20,7 @@ The installer is deliberately split in two:
 | ingress-nginx | `deps/manifests/ingress-nginx.yaml` (image refs rewritten) |
 | MetalLB | `deps/manifests/metallb-native.yaml` (image refs rewritten) |
 | Database (PostgreSQL 15 or MySQL 8.4.3, per `DB_TYPE`) | chart image, rewritten to `<registry>/library/postgres:15-alpine` or `<registry>/library/mysql:8.4.3` |
-| OpenAN app images | registry-center, orchestration-center, workflow-designer |
+| OpenAN app images | registry-center, orchestration-center, workflow-designer, openan-portal |
 
 Nothing above reaches the internet.
 

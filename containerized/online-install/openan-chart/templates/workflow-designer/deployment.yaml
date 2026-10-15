@@ -2,7 +2,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: workflow-designer
+  name: openan-frontend
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "openan.frontend.labels" . | nindent 4 }}
@@ -13,24 +13,44 @@ spec:
       {{- include "openan.frontend.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      {{- if eq (include "openan.frontendType" .) "workflow-designer" }}
       annotations:
         checksum/nginx: {{ include (print $.Template.BasePath "/workflow-designer/configmap.yaml") . | sha256sum }}
+      {{- end }}
       labels:
         {{- include "openan.frontend.selectorLabels" . | nindent 8 }}
     spec:
       containers:
-        - name: workflow-designer
-          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+        - name: openan-frontend
+          image: "{{ include "openan.frontendImageRepository" . }}:{{ .Values.frontend.image.tag }}"
           imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          {{- if eq (include "openan.frontendType" .) "portal" }}
+          # The portal image renders its own nginx config from the template
+          # shipped in the image; the chart only provides the upstream URLs.
+          # The scheme follows each backend's in-cluster TLS switch, matching
+          # the managed nginx config of the workflow-designer type.
+          env:
+            - name: BACKEND_URL
+              value: {{ ternary "https" "http" .Values.orchestration.tls.enabled }}://orchestration-center:{{ .Values.orchestration.port }}
+            - name: REGISTRY_URL
+              value: {{ ternary "https" "http" .Values.registry.tls.enabled }}://registry-center:{{ .Values.registry.port }}
+          {{- end }}
           ports:
-            - containerPort: {{ .Values.frontend.port }}
+            - containerPort: {{ include "openan.frontendContainerPort" . }}
               protocol: TCP
           livenessProbe:
-            {{- toYaml .Values.frontend.livenessProbe | nindent 12 }}
+            httpGet:
+              path: {{ dig "path" "/" .Values.frontend.livenessProbe.httpGet }}
+              port: {{ include "openan.frontendContainerPort" . }}
+            {{- toYaml (omit .Values.frontend.livenessProbe "httpGet") | nindent 12 }}
           readinessProbe:
-            {{- toYaml .Values.frontend.readinessProbe | nindent 12 }}
+            httpGet:
+              path: {{ dig "path" "/" .Values.frontend.readinessProbe.httpGet }}
+              port: {{ include "openan.frontendContainerPort" . }}
+            {{- toYaml (omit .Values.frontend.readinessProbe "httpGet") | nindent 12 }}
           resources:
             {{- toYaml .Values.frontend.resources | nindent 12 }}
+          {{- if eq (include "openan.frontendType" .) "workflow-designer" }}
           volumeMounts:
             - name: nginx-config
               mountPath: /etc/nginx/conf.d
@@ -40,14 +60,17 @@ spec:
               mountPath: /etc/nginx/backend-tls
               readOnly: true
             {{- end }}
+          {{- end }}
+      {{- if eq (include "openan.frontendType" .) "workflow-designer" }}
       volumes:
         - name: nginx-config
           configMap:
-            name: workflow-designer-nginx-config
+            name: openan-frontend-nginx-config
         {{- if .Values.frontend.backendTls.existingSecret }}
         - name: backend-tls
           secret:
             secretName: {{ .Values.frontend.backendTls.existingSecret }}
             defaultMode: 0400
         {{- end }}
+      {{- end }}
 {{- end }}

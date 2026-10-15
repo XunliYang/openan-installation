@@ -152,17 +152,14 @@ def test_wizard_generated_values_contain_references_not_credentials(tmp_path, mo
     assert values["database"]["registry"]["name"] != values["database"]["orchestration"]["name"]
 
 
-@pytest.mark.parametrize("relative", [
-    "containerized/offline-install/scripts/install.sh", "containerized/offline-install/build/build-offline.sh"
-])
-def test_unsupported_legacy_k8s_fails_before_any_tools(relative, tmp_path):
-    if not BASH:
-        pytest.skip("Set BASH_BIN")
-    # The guard precedes source/dependencies, so this doesn't call Kubernetes/Docker.
-    result = subprocess.run([BASH, str(ROOT / relative)], cwd=tmp_path,
-                            capture_output=True, text=True, encoding="utf-8")
-    assert result.returncode == 2
-    assert "unsupported" in result.stderr
+def test_offline_k8s_entrypoints_are_not_sealed():
+    # The offline Kubernetes line is maintained again; the legacy refusal
+    # seals must stay out of both entrypoints.
+    for script in ("containerized/offline-install/scripts/install.sh",
+                   "containerized/offline-install/build/build-offline.sh"):
+        text = Path(ROOT, script).read_text(encoding="utf-8")
+        assert "Legacy offline Kubernetes installer is unsupported" not in text
+        assert "refuse execution" not in text
 
 
 def test_ci_uses_accepted_org_revisions():
@@ -173,7 +170,7 @@ def test_ci_uses_accepted_org_revisions():
 
 
 def test_frontend_cache_is_static_only():
-    config = render()["workflow-designer-nginx-config"]["data"]["default.conf"]
+    config = render()["openan-frontend-nginx-config"]["data"]["default.conf"]
     assert "gzip on;" in config and "gzip off;" in config
     assert 'location = /index.html' in config and '"no-store"' in config
     assert "^/assets/" in config and "immutable" in config
@@ -224,7 +221,7 @@ def test_wizard_rejects_missing_public_dependencies_before_secrets(tmp_path, mon
 
 def test_compose_and_helm_static_asset_policy_agree():
     from test_offline_compose_contract import configure
-    config = configure.nginx_config(False, [], Path("unused"))
+    config = configure.nginx_config(False, [], Path("unused"), portal=False)
     assert "gzip on;" in config and "^/assets/" in config
     assert "immutable" in config and "no-store" in config
     assert 'add_header X-XSS-Protection' not in config

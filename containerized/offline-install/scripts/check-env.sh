@@ -49,6 +49,8 @@ INGRESS_HOST="${INGRESS_HOST:-}"
 STORAGE_MODE="${STORAGE_MODE:-auto}"
 STORAGE_NODE="${STORAGE_NODE:-}"
 DB_TYPE="${DB_TYPE:-mysql}"
+FRONTEND_TYPE="${FRONTEND_TYPE:-portal}"
+OC_ADMIN_PASSWORD="${OC_ADMIN_PASSWORD:-}"
 REGISTRY_CHAT_URL="${REGISTRY_CHAT_URL:-}"
 LLM_VALIDATE="${LLM_VALIDATE:-false}"
 
@@ -200,10 +202,22 @@ check_k8s() {
         fi
     fi
 
+    # OC admin credential (portal login; OC refuses to start over HTTP without one)
+    section "OC admin"
+    if [ -n "$OC_ADMIN_PASSWORD" ]; then
+        pass "OC admin password configured"
+    else
+        fail "OC_ADMIN_PASSWORD is empty - OC seeds its 'admin' account (portal login) from it and refuses to start over HTTP without a credential. Set it in config.env."
+    fi
+
     section "Image tars (this arch: $ARCH)"
     need_image_tar "registry-center"
     need_image_tar "orchestration-center"
-    need_image_tar "workflow-designer"
+    case "$FRONTEND_TYPE" in
+        portal)            need_image_tar "portal";;
+        workflow-designer) need_image_tar "workflow-designer";;
+        *)                 fail "invalid FRONTEND_TYPE: $FRONTEND_TYPE (use portal|workflow-designer)";;
+    esac
     need_image_tar "registry-2"
     case "$DB_TYPE" in
         mysql)      need_image_tar "mysql-8-4-3";;

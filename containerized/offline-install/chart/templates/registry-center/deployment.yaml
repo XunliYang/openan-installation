@@ -108,8 +108,11 @@ spec:
           {{- toYaml (omit .Values.registry.readinessProbe "httpGet") | nindent 10 }}
         resources:
           {{- toYaml .Values.registry.resources | nindent 10 }}
-        {{- if or (ne .Values.registry.tls.mode "off") (ne .Values.registry.signing.mode "off") }}
         volumeMounts:
+        - name: models-config
+          mountPath: /opt/registry-center/etc/config/models.yaml
+          subPath: models.yaml
+          readOnly: true
         {{- if ne .Values.registry.tls.mode "off" }}
         - name: tls-certs
           mountPath: /opt/registry-center/etc/ssl
@@ -120,9 +123,10 @@ spec:
           mountPath: /opt/registry-center/etc/sign_cert
           readOnly: true
         {{- end }}
-        {{- end }}
-      {{- if or (ne .Values.registry.tls.mode "off") (ne .Values.registry.signing.mode "off") }}
       volumes:
+      - name: models-config
+        configMap:
+          name: registry-center-models
       {{- if ne .Values.registry.tls.mode "off" }}
       - name: tls-certs
         secret:
@@ -140,6 +144,5 @@ spec:
           {{- else }}
           secretName: {{ .Values.registry.signing.existingSecret }}
           {{- end }}
-      {{- end }}
       {{- end }}
 {{- end }}

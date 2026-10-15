@@ -202,21 +202,31 @@ orchestration:
     periodSeconds: 10
 
 # =============================================================================
-# Workflow Designer Configuration (Frontend)
+# Frontend Configuration (unified entry: portal or workflow-designer)
 # =============================================================================
 frontend:
+  # Which frontend serves the unified entry:
+  #   portal            - openan-portal (default; container listens on 8080,
+  #                       proxies /api/orchestrate and /api/registry itself)
+  #   workflow-designer - legacy frontend (container listens on 80, chart
+  #                       manages its nginx config)
+  type: portal  # portal | workflow-designer
   backendTls:
     verifyServer: true
     existingSecret: ""  # trust.cer; client.cer/client_key.pem when OC requires mTLS
-  # Set to false to skip workflow-designer deployment
+  # Set to false to skip the frontend deployment
   enabled: true
   replicas: 2
   image:
-    repository: ghcr.io/project-openan/workflow-designer
+    # Empty repository -> derived from frontend.type
+    # (ghcr.io/project-openan/openan-portal or .../workflow-designer)
+    repository: ""
     tag: ""  # REQUIRED: tag/digest-built revision compatible with this chart; see deployment contract.
     pullPolicy: Always
+  # External Service port (stable); the container port switches by type.
   port: 80
   nodePort: 30191
+  # Nginx configuration for workflow-designer only (frontend.type=workflow-designer).
   # Empty uses the protocol-aware managed template. Advanced overrides are Helm templates.
   nginxConfig: ""
   # Resource limits

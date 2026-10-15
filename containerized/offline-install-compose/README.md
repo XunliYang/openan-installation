@@ -117,6 +117,17 @@ meet service validators. The installer never changes source PKI ownership.
 Nginx master reads its own private mounts as root. Do not grant world access
 to fix a bind-mount permission error.
 
+## Frontend
+
+FRONTEND_TYPE selects the unified web entry: `portal` (default) or
+`workflow-designer`. The portal container serves itself on 8080 and receives
+only BACKEND_URL/REGISTRY_URL (scheme per backend TLS); its image comes from
+the bundle manifest (deps/image-tags.json), never from operator config.
+`workflow-designer` is the fallback: Nginx mounts the bundle's static web
+directory and no portal container runs. The portal image is optional at build
+time until it is published (openan-portal#11); when absent the build warns and
+the bundle supports only FRONTEND_TYPE=workflow-designer.
+
 ## Runtime and lifecycle
 
 The stdlib configure.py is the single composition root for this installer,

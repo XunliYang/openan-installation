@@ -39,6 +39,7 @@ REGISTRY_NODEPORT="${REGISTRY_NODEPORT:-30500}"
 REGISTRY_CENTER_IMAGE="${REGISTRY_CENTER_IMAGE:-project-openan/registry-center:v1.0.0}"
 ORCHESTRATION_CENTER_IMAGE="${ORCHESTRATION_CENTER_IMAGE:-project-openan/orchestration-center:v1.0.0}"
 WORKFLOW_DESIGNER_IMAGE="${WORKFLOW_DESIGNER_IMAGE:-project-openan/workflow-designer:v1.0.0}"
+PORTAL_IMAGE="${PORTAL_IMAGE:-project-openan/openan-portal:v1.0.0}"
 
 [ -n "$CONFIG_FILE" ] && load_config "$CONFIG_FILE"
 
@@ -115,6 +116,7 @@ log_step "Pushing images to $REG_HOST"
 push_one "registry-center"      "$REGISTRY_CENTER_IMAGE"
 push_one "orchestration-center" "$ORCHESTRATION_CENTER_IMAGE"
 push_one "workflow-designer"    "$WORKFLOW_DESIGNER_IMAGE"
+push_one "portal"               "$PORTAL_IMAGE"
 
 # Infrastructure images (versions pinned at build time).
 if [ -r "$BUNDLE_DIR/deps/infra-images.list" ]; then

@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 HELM = os.environ.get("HELM_BIN") or shutil.which("helm")
 BASH = os.environ.get("BASH_BIN") or shutil.which("bash")
 CHART = ROOT / "containerized/online-install/openan-chart"
-BASE = {"registry.image.tag": "contract", "orchestration.image.tag": "contract", "frontend.image.tag": "contract",
+BASE = {"registry.image.tag": "contract", "orchestration.image.tag": "contract",
+        "frontend.type": "workflow-designer", "frontend.image.tag": "contract",
         "postgresql.existingSecret": "postgres-secret", "registry.runtimeSecret": "rc-runtime",
         "registry.credentialSecret": "rc-credentials", "orchestration.runtimeSecret": "oc-runtime",
         "registry.signing.mode": "off"}
@@ -37,6 +38,7 @@ def render(settings=None, success=True):
             # A Service and Deployment can legally share a name.
             if name not in docs or doc["kind"] in {"Deployment", "StatefulSet"}:
                 docs[name] = doc
+            docs[f"{doc['kind']}/{name}"] = doc
     return docs
 
 
@@ -68,7 +70,7 @@ def test_database_and_protocol_matrix(protocol, db):
         assert any(m["subPath"] == "models.yaml" for m in container["volumeMounts"] if "subPath" in m)
     assert docs["orchestration-center-config"]["data"]["AGENT_REGISTRY_URL"].startswith(protocol + "://")
     assert docs["orchestration-center-config"]["data"]["ORCH_EXTERNAL_AUTH_MODE"] == "user"
-    nginx = docs["workflow-designer-nginx-config"]["data"]["default.conf"]
+    nginx = docs["openan-frontend-nginx-config"]["data"]["default.conf"]
     assert f"proxy_pass {protocol}://orchestration-center:5001" in nginx
     assert "proxy_set_header Connection \"\"" in nginx
     assert "location ^~ /api/orchestrate/api/ { return 404; }" not in nginx
@@ -94,7 +96,7 @@ def test_mtls_material_and_probes_are_wired():
         assert any(m.get("subPath") == "probe-client.key" for m in mounts)
     assert docs["orchestration-center-config"]["data"]["REGISTRY_CLIENT_CERT"].endswith("client.cer")
     assert docs["orchestration-center-config"]["data"]["ORCH_EXTERNAL_AUTH_MODE"] == "user"
-    assert "proxy_ssl_certificate_key" in docs["workflow-designer-nginx-config"]["data"]["default.conf"]
+    assert "proxy_ssl_certificate_key" in docs["openan-frontend-nginx-config"]["data"]["default.conf"]
 
 
 @pytest.mark.parametrize("invalid,message", [
@@ -117,6 +119,11 @@ def test_mtls_material_and_probes_are_wired():
     ({"orchestration.extraEnv.REGISTRY_CA_FILE": "/wrong"}, "duplicates managed setting"),
     ({"registry.llm.chat.provider": "aoc_signed"}, "use modelsConfigMap"),
     ({"database.registry.existingSecret": "different-password"}, "for external SQL only"),
+    ({"registry.tls.enabled": True, "registry.tls.existingSecret": "rc-tls",
+      "orchestration.tls.enabled": True, "orchestration.tls.existingSecret": "oc-tls",
+      "orchestration.registryClientSecret": "oc-registry-trust",
+      "registry.ingressClientSecret": "rc-ingress-trust",
+      "orchestration.ingressClientSecret": "oc-ingress-trust"}, "requires frontend.backendTls.existingSecret"),
 ])
 def test_invalid_combinations_fail_before_install(invalid, message):
     assert message in render(invalid, success=False)
@@ -220,10 +227,64 @@ def test_model_and_proxy_updates_roll_out_pods():
                       "frontend.nginxConfig": "server { listen 80; }"})
     for component, checksum in [("registry-center", "checksum/models"),
                                 ("orchestration-center", "checksum/models"),
-                                ("workflow-designer", "checksum/nginx")]:
+                                ("openan-frontend", "checksum/nginx")]:
         before = original[component]["spec"]["template"]["metadata"]["annotations"][checksum]
         after = changed[component]["spec"]["template"]["metadata"]["annotations"][checksum]
         assert before != after
+
+
+def test_frontend_portal_default():
+    docs = render({"frontend.type": "portal", "frontend.image.tag": "p1"})
+    deployment = docs["openan-frontend"]
+    container = deployment["spec"]["template"]["spec"]["containers"][0]
+    assert "openan-portal" in container["image"]
+    assert container["ports"][0]["containerPort"] == 8080
+    env = {e["name"]: e["value"] for e in container["env"]}
+    assert env["BACKEND_URL"] == "http://orchestration-center:5001"
+    assert env["REGISTRY_URL"] == "http://registry-center:5000"
+    # portal renders no chart-managed nginx ConfigMap, backendTls or checksum
+    spec = deployment["spec"]["template"]["spec"]
+    assert "volumes" not in spec
+    assert "volumeMounts" not in container
+    assert "openan-frontend-nginx-config" not in docs
+    assert "checksum/nginx" not in deployment["spec"]["template"]["metadata"].get("annotations", {})
+    # Service keeps the stable external port, targets the container port
+    service = docs["Service/openan-frontend"]
+    assert service["spec"]["ports"][0]["port"] == 80
+    assert service["spec"]["ports"][0]["targetPort"] == 8080
+
+
+def test_frontend_invalid_type_fails():
+    assert "frontend.type must be" in render({"frontend.type": "bogus"}, success=False)
+
+
+def test_registry_ingress_exposes_api_registry_path():
+    docs = render()
+    paths = {p["path"]: p["backend"]["service"] for p in docs["openan-registry-ingress"]["spec"]["rules"][0]["http"]["paths"]}
+    assert paths["/api/registry(/|$)(.*)"]["name"] == "registry-center"
+    assert paths["/api/registry(/|$)(.*)"]["port"]["number"] == 5000
+    assert paths["/registry(/|$)(.*)"]["name"] == "registry-center"
+
+
+def test_frontend_image_override_beats_type_default():
+    docs = render({"frontend.type": "portal", "frontend.image.repository": "harbor.local/openan/portal-custom",
+                   "frontend.image.tag": "custom"})
+    container = docs["openan-frontend"]["spec"]["template"]["spec"]["containers"][0]
+    assert container["image"] == "harbor.local/openan/portal-custom:custom"
+
+
+def test_portal_skips_backend_tls_requirement_under_oc_https():
+    docs = render({"frontend.type": "portal",
+                   "registry.tls.enabled": True, "registry.tls.existingSecret": "rc-tls",
+                   "orchestration.tls.enabled": True, "orchestration.tls.existingSecret": "oc-tls",
+                   "orchestration.registryClientSecret": "oc-registry-trust",
+                   "registry.ingressClientSecret": "rc-ingress-trust",
+                   "orchestration.ingressClientSecret": "oc-ingress-trust"})
+    # Validation passes without frontend.backendTls; env URLs follow the TLS switches.
+    container = docs["openan-frontend"]["spec"]["template"]["spec"]["containers"][0]
+    env = {e["name"]: e["value"] for e in container["env"]}
+    assert env["BACKEND_URL"] == "https://orchestration-center:5001"
+    assert env["REGISTRY_URL"] == "https://registry-center:5000"
 
 
 def test_external_full_model_config_accepts_custom_provider():

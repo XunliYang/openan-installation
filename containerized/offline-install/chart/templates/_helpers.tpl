@@ -105,20 +105,20 @@ app: openan-mysql
 {{- end }}
 
 {{/*
-Workflow Designer labels
+Frontend labels
 */}}
 {{- define "openan.frontend.labels" -}}
 {{ include "openan.labels" . }}
-app: workflow-designer
-app.kubernetes.io/name: workflow-designer
+app: openan-frontend
+app.kubernetes.io/name: openan-frontend
 app.kubernetes.io/component: frontend
 {{- end }}
 
 {{/*
-Workflow Designer selector labels
+Frontend selector labels
 */}}
 {{- define "openan.frontend.selectorLabels" -}}
-app: workflow-designer
+app: openan-frontend
 {{- end }}
 
 {{/*
@@ -192,4 +192,33 @@ Database port, honouring database.type
 {{- else }}
 {{- .Values.postgresql.port }}
 {{- end }}
+{{- end }}
+
+{{/*
+Selected frontend type: portal (default) or workflow-designer
+*/}}
+{{- define "openan.frontendType" -}}
+{{- $t := .Values.frontend.type | default "portal" -}}
+{{- if not (or (eq $t "portal") (eq $t "workflow-designer")) -}}
+{{- fail (printf "frontend.type must be \"portal\" or \"workflow-designer\", got %q" $t) -}}
+{{- end -}}
+{{- $t -}}
+{{- end }}
+
+{{/*
+Frontend container port: portal listens 8080 (unprivileged), designer 80
+*/}}
+{{- define "openan.frontendContainerPort" -}}
+{{- if eq (include "openan.frontendType" .) "portal" -}}
+8080
+{{- else -}}
+80
+{{- end }}
+{{- end }}
+
+{{/*
+Frontend image repository; empty values default selects by frontend type
+*/}}
+{{- define "openan.frontendImageRepository" -}}
+{{- .Values.frontend.image.repository | default (ternary "ghcr.io/project-openan/openan-portal" "ghcr.io/project-openan/workflow-designer" (eq (include "openan.frontendType" .) "portal")) -}}
 {{- end }}

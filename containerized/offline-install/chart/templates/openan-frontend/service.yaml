@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: workflow-designer
+  name: openan-frontend
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "openan.frontend.labels" . | nindent 4 }}
@@ -10,7 +10,7 @@ spec:
   type: NodePort
   ports:
     - port: {{ .Values.frontend.port }}
-      targetPort: {{ .Values.frontend.port }}
+      targetPort: {{ include "openan.frontendContainerPort" . }}
       nodePort: {{ .Values.frontend.nodePort | default 30083 }}
       protocol: TCP
       name: http
