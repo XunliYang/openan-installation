@@ -21,7 +21,7 @@ jobs:
       - run: python -m pytest tests/ -q
       - name: Shell syntax
         run: |
-          bash -n containerized/online-install/one_click_install.sh
+          bash -n containerized/online-install/install.sh
           bash -n containerized/build/build.sh
           find containerized/offline-install-compose -name '*.sh' -exec bash -n {} \;
   offline-compose-container:
