@@ -338,6 +338,9 @@ def plan(config_file, bundle, arch):
                                              "interval": "10s", "timeout": "10s", "retries": 12, "start_period": "40s"}}
         if internal:
             services[service]["depends_on"] = {"openan-postgres" if db == "postgresql" else "openan-mysql": {"condition": "service_healthy"}}
+    # OC consumes the registry (agent cards) at runtime; start it only after the
+    # registry is healthy so a slow registry start cannot race OC's first contact.
+    services["orchestration-center"].setdefault("depends_on", {})["registry-center"] = {"condition": "service_healthy"}
     if portal:
         if "portal" not in images:
             raise ValueError("FRONTEND_TYPE=portal requires a portal image in deps/image-tags.json")

@@ -239,6 +239,7 @@ def test_compose_database_and_three_protocol_matrix(deployment, db, public_https
         assert portal["environment"]["REGISTRY_URL"] == f"{'https' if rc_https == 'true' else 'http'}://registry-center:5000"
         assert portal["healthcheck"]["test"] == ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/"]
         assert services["openan-nginx"]["depends_on"]["openan-portal"] == {"condition": "service_healthy"}
+        assert services["orchestration-center"]["depends_on"]["registry-center"] == {"condition": "service_healthy"}
         assert "server openan-portal:8080 resolve;" in nginx
         assert "proxy_pass http://portal/;" in nginx
         assert "location ^~ /api/registry/ {" in nginx

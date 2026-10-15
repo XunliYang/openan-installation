@@ -107,6 +107,28 @@ def command(*args, check=True, input=None):
     return result
 
 
+def diagnose(compose):
+    """Dump container states on failure: exit codes, OOM/restart flags, health
+    probe logs and service log tails. Without this, an unhealthy container
+    leaves no evidence of WHY it failed."""
+    def soft(*args):
+        result = subprocess.run(args, encoding="utf-8", capture_output=True, timeout=120)
+        return (result.stdout + result.stderr)[-4000:]
+    try:
+        states = soft("docker", "compose", "-f", str(compose), "ps", "-a", "--format", "json")
+        print(f"DIAGNOSE ps:\n{states}", flush=True)
+        names = subprocess.run(["docker", "compose", "-f", str(compose), "ps", "-a", "--format", "{{.Name}}"],
+                               encoding="utf-8", capture_output=True, timeout=120)
+        for name in [n for n in names.stdout.splitlines() if n.strip()]:
+            inspect = soft("docker", "inspect", name,
+                           "--format", "{{json .State}}")
+            print(f"DIAGNOSE {name}: {inspect}", flush=True)
+            logs = soft("docker", "logs", "--tail", "60", name)
+            print(f"DIAGNOSE {name} logs tail:\n{logs}", flush=True)
+    except Exception as error:  # diagnostics must never mask the original failure
+        print(f"DIAGNOSE failed: {error}", flush=True)
+
+
 def certificates(root):
     ca = root / "ca"
     ca.mkdir()
@@ -344,7 +366,11 @@ def run(bundle):
             config.write_text("\n".join(key + "=" + shlex.quote(value) for key, value in settings.items()))
             compose = case / "runtime/compose.json"
             try:
-                command("bash", str(case / "scripts/install.sh"), "--config", str(config))
+                try:
+                    command("bash", str(case / "scripts/install.sh"), "--config", str(config))
+                except RuntimeError:
+                    diagnose(compose)
+                    raise
                 command("docker", "compose", "-f", str(compose), "exec", "-T", "orchestration-center", "python", "-c",
                         "import os; assert os.environ['EXTRA_LITERAL'] == 'price $5 ${NOT_EXPANDED} # text'")
                 opener = build_opener(ProxyHandler({}), HTTPCookieProcessor(CookieJar()), HTTPSHandler(context=ssl.create_default_context(cafile=str(ca))))
