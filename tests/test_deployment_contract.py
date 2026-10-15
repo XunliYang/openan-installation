@@ -395,6 +395,9 @@ def test_offline_compose_source_ref_derives_dated_tag(tmp_path):
     docker = shim / "docker"
     docker.write_text(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "{log}"\nexit 1\n')
     docker.chmod(0o755)
+    python3 = shim / "python3"
+    python3.write_text("#!/usr/bin/env bash\nexit 0\n")
+    python3.chmod(0o755)
     result = _run_build_with_shim(
         ROOT / "containerized/offline-install-compose/build/build-offline.sh",
         ["--source-ref", "main", "--app-source", "pull",
@@ -440,6 +443,9 @@ def test_offline_compose_build_remote_source_downloads_archive(tmp_path):
     docker = shim / "docker"
     docker.write_text("#!/usr/bin/env bash\nexit 0\n")
     docker.chmod(0o755)
+    python3 = shim / "python3"
+    python3.write_text("#!/usr/bin/env bash\nexit 0\n")
+    python3.chmod(0o755)
     result = _run_build_with_shim(
         ROOT / "containerized/offline-install-compose/build/build-offline.sh",
         ["--source-ref", "main", "--app-source", "build",
