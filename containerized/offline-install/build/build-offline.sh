@@ -16,12 +16,16 @@
 #   ./build-offline.sh --app-source tars --app-tars-dir ~/prebuilt
 #
 # Options:
-#   --tag <tag>                 app image tag (default v1.0.0)
+#   --tag <tag>                 app image tag (overrides the tag derived from --source-ref)
+#   --source-ref <ref>          Source Git ref; when --tag is unset, 'main' -> main-YYYYMMDD,
+#                               any other ref becomes the tag (default v1.0.0)
 #   --app-registry <host/ns>    upstream app registry (default ghcr.io/project-openan)
 #   --app-source pull|build|tars
-#   --registry-src <dir>        registry-center source (with Dockerfile) for --app-source build
-#   --orchestration-src <dir>   orchestration-center source for --app-source build
+#   --registry-src <dir>        registry-center source dir (with Dockerfile) for --app-source build
+#   --orchestration-src <dir>   orchestration-center source dir for --app-source build
 #   --portal-src <dir>          openan-portal source (with Dockerfile) for --app-source build
+#   --registry-release <url>    remote registry-center source tarball (used when no --registry-src)
+#   --orchestration-release <url> remote orchestration-center source tarball (used when no --orchestration-src)
 #   --app-tars-dir <dir>        directory of pre-built <base>-<arch>.tar for --app-source tars
 #   --platforms a,b             target architectures (default linux/amd64,linux/arm64)
 #   --out <dir>                 output directory (default ./dist)
@@ -61,11 +65,15 @@ METALLB_VERSION="v0.16.1"
 
 # --- Defaults -----------------------------------------------------------------
 TAG="v1.0.0"
+TAG_EXPLICIT=false
+SOURCE_REF="v1.0.0"
 APP_REGISTRY="ghcr.io/project-openan"
 APP_SOURCE="pull"
 REGISTRY_SRC=""
 ORCHESTRATION_SRC=""
 PORTAL_SRC=""
+REGISTRY_RELEASE=""
+ORCHESTRATION_RELEASE=""
 APP_TARS_DIR=""
 PLATFORMS="linux/amd64,linux/arm64"
 OUT_DIR="$SCRIPT_DIR/dist"
@@ -73,12 +81,15 @@ KEEP_IMAGES="false"
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --tag)               TAG="$2"; shift 2 ;;
+        --tag)               TAG="$2"; TAG_EXPLICIT=true; shift 2 ;;
         --app-registry)      APP_REGISTRY="$2"; shift 2 ;;
         --app-source)        APP_SOURCE="$2"; shift 2 ;;
         --registry-src)      REGISTRY_SRC="$2"; shift 2 ;;
         --orchestration-src) ORCHESTRATION_SRC="$2"; shift 2 ;;
         --portal-src)         PORTAL_SRC="$2"; shift 2 ;;
+        --source-ref)        SOURCE_REF="$2"; shift 2 ;;
+        --registry-release)  REGISTRY_RELEASE="$2"; shift 2 ;;
+        --orchestration-release) ORCHESTRATION_RELEASE="$2"; shift 2 ;;
         --app-tars-dir)      APP_TARS_DIR="$2"; shift 2 ;;
         --platforms)         PLATFORMS="$2"; shift 2 ;;
         --out)               OUT_DIR="$2"; shift 2 ;;
@@ -87,6 +98,17 @@ while [ $# -gt 0 ]; do
         *) log_error "Unknown argument: $1"; exit 2 ;;
     esac
 done
+
+# Derive the image tag from --source-ref when --tag was not given explicitly.
+# 'main' becomes a dated snapshot (main-YYYYMMDD); any other ref (release tag
+# or commit) becomes the tag itself, keeping image tag and source in sync.
+if [ "$TAG_EXPLICIT" = false ]; then
+    if [ "$SOURCE_REF" = "main" ]; then
+        TAG="main-$(date +%Y%m%d)"
+    else
+        TAG="$SOURCE_REF"
+    fi
+fi
 
 for t in docker curl; do
     command -v "$t" >/dev/null 2>&1 || { log_error "$t is required"; exit 1; }
@@ -200,15 +222,39 @@ case "$APP_SOURCE" in
         save_image "$APP_PORTAL_REF" "portal"
         ;;
     build)
-        [ -n "$REGISTRY_SRC" ] || { log_error "--registry-src is required for --app-source build"; exit 1; }
-        [ -n "$ORCHESTRATION_SRC" ] || { log_error "--orchestration-src is required for --app-source build"; exit 1; }
-        _path="$(resolve_abs "$REGISTRY_SRC")" || { log_error "--registry-src path not found: $REGISTRY_SRC"; exit 1; }
-        REGISTRY_SRC="$_path"
-        _path="$(resolve_abs "$ORCHESTRATION_SRC")" || { log_error "--orchestration-src path not found: $ORCHESTRATION_SRC"; exit 1; }
-        ORCHESTRATION_SRC="$_path"
+        # A component's source is a local --*-src dir when given, otherwise a
+        # remote tarball (explicit --*-release URL, or the GitHub archive for
+        # --source-ref) is downloaded and extracted. Portal uses --portal-src
+        # only (local path, optional).
+        resolve_src() {
+            local local_dir="$1" url="$2" name="$3"
+            if [ -n "$local_dir" ]; then
+                local abs
+                abs="$(resolve_abs "$local_dir")" || { log_error "$name: source not found: $local_dir"; return 1; }
+                [ -f "$abs/Dockerfile" ] || { log_error "$name: no Dockerfile in $abs"; return 1; }
+                printf '%s\n' "$abs"; return 0
+            fi
+            [ -n "$url" ] || { log_error "$name: give --${name%-center}-src, --${name%-center}-release or --source-ref"; return 1; }
+            local dest="$BUILD_TMP/$name"
+            mkdir -p "$dest"
+            log_step "Downloading $name source: $url"
+            curl -fSL -o "$BUILD_TMP/${name}.tar.gz" "$url" || { log_error "$name download failed: $url"; return 1; }
+            tar -xzf "$BUILD_TMP/${name}.tar.gz" -C "$dest" || { log_error "$name extract failed: $url"; return 1; }
+            [ -f "$dest/Dockerfile" ] && { printf '%s\n' "$dest"; return 0; }
+            for d in "$dest"/*/; do [ -f "$d/Dockerfile" ] && { printf '%s\n' "$d"; return 0; }; done
+            log_error "$name: no Dockerfile after extracting $url"; return 1
+        }
+        BUILD_TMP="$(mktemp -d -t openan-src.XXXXXXXX)"
+        trap 'rm -rf "$BUILD_TMP" 2>/dev/null || true' EXIT
+        RC_URL=""; OC_URL=""
+        if [ -n "$SOURCE_REF" ]; then
+            RC_URL="https://github.com/project-openan/registry-center/archive/${SOURCE_REF}.tar.gz"
+            OC_URL="https://github.com/project-openan/orchestration-center/archive/${SOURCE_REF}.tar.gz"
+        fi
+        REGISTRY_SRC="$(resolve_src "$REGISTRY_SRC" "${REGISTRY_RELEASE:-$RC_URL}" "registry-center")" || exit 1
+        ORCHESTRATION_SRC="$(resolve_src "$ORCHESTRATION_SRC" "${ORCHESTRATION_RELEASE:-$OC_URL}" "orchestration-center")" || exit 1
         if [ -n "$PORTAL_SRC" ]; then
-            _path="$(resolve_abs "$PORTAL_SRC")" || { log_error "--portal-src path not found: $PORTAL_SRC"; exit 1; }
-            PORTAL_SRC="$_path"
+            PORTAL_SRC="$(resolve_abs "$PORTAL_SRC")" || { log_error "--portal-src path not found: $PORTAL_SRC"; exit 1; }
         fi
         for a in "${ARCHS[@]}"; do
             log_info "  build registry-center ($a)"
@@ -232,6 +278,7 @@ case "$APP_SOURCE" in
                 log_warn "  --portal-src not given - portal image not built; bundle only supports FRONTEND_TYPE=workflow-designer"
             fi
         done
+        rm -rf "$BUILD_TMP"
         ;;
     tars)
         [ -d "$APP_TARS_DIR" ] || { log_error "--app-tars-dir is required for --app-source tars"; exit 1; }

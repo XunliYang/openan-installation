@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Helm render contracts and controlled build failures; not a cluster smoke test."""
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -97,6 +98,21 @@ def test_mtls_material_and_probes_are_wired():
     assert docs["orchestration-center-config"]["data"]["REGISTRY_CLIENT_CERT"].endswith("client.cer")
     assert docs["orchestration-center-config"]["data"]["ORCH_EXTERNAL_AUTH_MODE"] == "user"
     assert "proxy_ssl_certificate_key" in docs["openan-frontend-nginx-config"]["data"]["default.conf"]
+
+
+@pytest.mark.parametrize("name", ["registry-center", "orchestration-center"])
+def test_probe_timeout_seconds_exceeds_healthcheck_time(name):
+    # BUG-5: the exec healthchecks (Python startup + RSA3072 handshake) take
+    # ~2.3s, beyond K8s's 1s default probe timeout; liveness killed the pod
+    # before it ever became Ready. Guard a lower bound (>= 3s) instead of
+    # pinning the exact value, so the timeout can be tuned later.
+    docs = render()
+    container = docs[name]["spec"]["template"]["spec"]["containers"][0]
+    for probe in ("livenessProbe", "readinessProbe"):
+        timeout = container[probe].get("timeoutSeconds")
+        assert timeout is not None and timeout >= 3, (
+            f"{name} {probe} timeoutSeconds must be set and >= 3s, got {timeout}"
+        )
 
 
 @pytest.mark.parametrize("invalid,message", [
@@ -341,3 +357,121 @@ def test_build_failure_is_nonzero_and_does_not_report_success(tmp_path):
     result = subprocess.run(command, text=True, capture_output=True, timeout=30)
     assert result.returncode == 17, result.stdout + result.stderr
     assert "Build completed" not in result.stdout and "Done:" not in result.stdout
+
+
+def _run_build_with_shim(script, args, shim_dir, timeout=60):
+    # Prepend a stub dir to PATH so `curl`/`docker` can be faked; real python3/
+    # tar/sha256sum remain available from the ambient PATH.
+    command = [BASH, "-c", 'export PATH="$1:$PATH"; shift; exec bash "$@"', "test",
+               str(shim_dir), str(script), *args]
+    return subprocess.run(command, text=True, capture_output=True, timeout=timeout)
+
+
+@pytest.mark.parametrize("args,expected", [
+    (["--source-ref", "main"], r"main-\d{8}"),
+    (["--source-ref", "v1.1.0"], r"v1\.1\.0"),
+    (["--source-ref", "main", "--tag", "custom"], r"custom"),
+])
+def test_build_source_ref_derives_image_tag(args, expected, tmp_path):
+    if not BASH:
+        pytest.skip("Bash unavailable")
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    curl = shim / "curl"
+    curl.write_text("#!/usr/bin/env bash\nexit 1\n")
+    curl.chmod(0o755)
+    result = _run_build_with_shim(ROOT / "containerized/build/build.sh", args, shim)
+    match = re.search(r"Image tag:\s+(\S+)", result.stdout)
+    assert match, result.stdout + result.stderr
+    assert re.fullmatch(expected, match.group(1)), result.stdout
+
+
+def test_offline_compose_source_ref_derives_dated_tag(tmp_path):
+    if not BASH:
+        pytest.skip("Bash unavailable")
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    log = tmp_path / "docker-args.txt"
+    docker = shim / "docker"
+    docker.write_text(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "{log}"\nexit 1\n')
+    docker.chmod(0o755)
+    python3 = shim / "python3"
+    python3.write_text("#!/usr/bin/env bash\nexit 0\n")
+    python3.chmod(0o755)
+    result = _run_build_with_shim(
+        ROOT / "containerized/offline-install-compose/build/build-offline.sh",
+        ["--source-ref", "main", "--app-source", "pull",
+         "--platforms", "linux/amd64", "--out", str(tmp_path / "dist")],
+        shim)
+    calls = log.read_text() if log.exists() else ""
+    assert re.search(r"registry-center:main-\d{8}", calls), \
+        result.stdout + result.stderr + "\nDOCKER CALLS:\n" + calls
+
+
+def test_build_local_source_skips_remote_download(tmp_path):
+    if not BASH:
+        pytest.skip("Bash unavailable")
+    src = tmp_path / "registry-src"
+    src.mkdir()
+    (src / "Dockerfile").write_text("FROM scratch\n")
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    marker = tmp_path / "curl-called"
+    curl = shim / "curl"
+    curl.write_text(f'#!/usr/bin/env bash\ntouch "{marker}"\nexit 1\n')
+    curl.chmod(0o755)
+    docker = shim / "docker"
+    docker.write_text("#!/usr/bin/env bash\nexit 0\n")
+    docker.chmod(0o755)
+    result = _run_build_with_shim(
+        ROOT / "containerized/build/build.sh",
+        ["registry", "--registry-src", str(src), "--no-push", "--platforms", "linux/amd64"],
+        shim)
+    assert not marker.exists(), result.stdout + result.stderr
+    assert "Build completed" in result.stdout, result.stdout + result.stderr
+
+
+def test_offline_compose_build_remote_source_downloads_archive(tmp_path):
+    if not BASH:
+        pytest.skip("Bash unavailable")
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    log = tmp_path / "curl-urls.txt"
+    curl = shim / "curl"
+    curl.write_text(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "{log}"\nexit 1\n')
+    curl.chmod(0o755)
+    docker = shim / "docker"
+    docker.write_text("#!/usr/bin/env bash\nexit 0\n")
+    docker.chmod(0o755)
+    python3 = shim / "python3"
+    python3.write_text("#!/usr/bin/env bash\nexit 0\n")
+    python3.chmod(0o755)
+    result = _run_build_with_shim(
+        ROOT / "containerized/offline-install-compose/build/build-offline.sh",
+        ["--source-ref", "main", "--app-source", "build",
+         "--platforms", "linux/amd64", "--out", str(tmp_path / "dist")],
+        shim)
+    calls = log.read_text() if log.exists() else ""
+    assert "registry-center/archive/main.tar.gz" in calls, \
+        result.stdout + result.stderr + "\nCURL CALLS:\n" + calls
+
+
+def test_offline_install_source_ref_derives_dated_tag(tmp_path):
+    # The legacy k8s offline builder is no longer gated at entry (BUG-fix:
+    # it was marked deprecated); verify it runs and derives main-YYYYMMDD.
+    if not BASH:
+        pytest.skip("Bash unavailable")
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    curl = shim / "curl"
+    curl.write_text("#!/usr/bin/env bash\nexit 1\n")
+    curl.chmod(0o755)
+    docker = shim / "docker"
+    docker.write_text("#!/usr/bin/env bash\nexit 0\n")
+    docker.chmod(0o755)
+    result = _run_build_with_shim(
+        ROOT / "containerized/offline-install/build/build-offline.sh",
+        ["--source-ref", "main", "--out", str(tmp_path / "dist")],
+        shim, timeout=90)
+    assert re.search(r"openan-offline-main-\d{8}", result.stdout), \
+        result.stdout + result.stderr

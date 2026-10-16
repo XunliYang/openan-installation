@@ -29,10 +29,13 @@
 # Options:
 #   --registry-release <url>   Registry Center release URL
 #   --orchestration-release <url> Orchestration Center release URL
+#   --registry-src <dir>       Local registry-center source dir (overrides remote download)
+#   --orchestration-src <dir>  Local orchestration-center source dir (overrides remote download)
 #   --image-registry <url>     Image registry (default: ghcr.io)
 #   --namespace <ns>           Image namespace (default: project-openan)
-#   --tag <tag>                Image tag (default: v1.0.0)
-#   --source-ref <ref>         Source Git ref, independent of the image tag
+#   --tag <tag>                Image tag (overrides the tag derived from --source-ref)
+#   --source-ref <ref>         Source Git ref (branch/tag/commit); when --tag is unset,
+#                              'main' derives tag main-YYYYMMDD, other refs become the tag
 #   --platforms <platforms>    Target platforms (default: linux/amd64,linux/arm64)
 #   --no-push                  Build local only (single-arch only)
 #   --help                     Show help
@@ -49,9 +52,12 @@ NC='\033[0m'
 IMAGE_REGISTRY="ghcr.io"
 NAMESPACE="project-openan"
 TAG="v1.0.0"
+TAG_EXPLICIT=false
 SOURCE_REF="v1.0.0"
 REGISTRY_RELEASE=""
 ORCHESTRATION_RELEASE=""
+REGISTRY_SRC=""
+ORCHESTRATION_SRC=""
 PLATFORMS="linux/amd64,linux/arm64"
 PUSH=true
 
@@ -87,10 +93,13 @@ Components (positional, specify any):
 Options:
   --image-registry <url>     Image registry (default: ghcr.io)
   --namespace <ns>           Image namespace (default: project-openan)
-  --tag <tag>                Image tag (default: v1.0.0)
-  --source-ref <ref>         Source Git tag/commit (default: v1.0.0), independent of image tag
+  --tag <tag>                Image tag (overrides the tag derived from --source-ref)
+  --source-ref <ref>         Source Git ref (default: v1.0.0); when --tag is unset, 'main'
+                             derives tag main-YYYYMMDD and other refs become the tag
   --registry-release <url>   Registry Center release tarball URL
   --orchestration-release <url>  Orchestration Center release tarball URL
+  --registry-src <dir>       Local registry-center source dir (overrides remote download)
+  --orchestration-src <dir>  Local orchestration-center source dir (overrides remote download)
   --platforms <platforms>    Target platforms (default: linux/amd64,linux/arm64)
   --no-push                  Build local only (single-arch only)
   --help                     Show help
@@ -103,6 +112,8 @@ Examples:
   ./build.sh --tag v1.1.0                                             # Custom tag, build all
   ./build.sh registry --image-registry harbor.example.com             # Private registry, registry only
   ./build.sh orchestration --platforms linux/amd64 --no-push          # Local single-arch, orchestration only
+  ./build.sh --source-ref main                                        # Build main, tagged main-YYYYMMDD
+  ./build.sh --registry-src ~/src/registry-center --orchestration-src ~/src/orchestration-center
 EOF
     exit 0
 }
@@ -110,7 +121,7 @@ EOF
 # ===== Parse arguments =====
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --image-registry|--namespace|--tag|--source-ref|--registry-release|--orchestration-release|--platforms)
+        --image-registry|--namespace|--tag|--source-ref|--registry-release|--orchestration-release|--registry-src|--orchestration-src|--platforms)
             if [ "$#" -lt 2 ] || [ -z "$2" ] || [[ "$2" == --* ]]; then
                 log_error "$1 requires a value"; exit 2
             fi ;;
@@ -120,10 +131,12 @@ while [[ $# -gt 0 ]]; do
         orchestration)           BUILD_ORCHESTRATION=true; COMPONENTS_SPECIFIED=true; shift ;;
         --image-registry)        IMAGE_REGISTRY="$2"; shift 2 ;;
         --namespace)             NAMESPACE="$2"; shift 2 ;;
-        --tag)                   TAG="$2"; shift 2 ;;
+        --tag)                   TAG="$2"; TAG_EXPLICIT=true; shift 2 ;;
         --source-ref)            SOURCE_REF="$2"; shift 2 ;;
         --registry-release)      REGISTRY_RELEASE="$2"; shift 2 ;;
         --orchestration-release) ORCHESTRATION_RELEASE="$2"; shift 2 ;;
+        --registry-src)          REGISTRY_SRC="$2"; shift 2 ;;
+        --orchestration-src)     ORCHESTRATION_SRC="$2"; shift 2 ;;
         --platforms)             PLATFORMS="$2"; shift 2 ;;
         --no-push)               PUSH=false; shift ;;
         --help)                  show_help ;;
@@ -143,6 +156,17 @@ if [ -z "$REGISTRY_RELEASE" ]; then
 fi
 if [ -z "$ORCHESTRATION_RELEASE" ]; then
     ORCHESTRATION_RELEASE="https://github.com/project-openan/orchestration-center/archive/${SOURCE_REF}.tar.gz"
+fi
+
+# Derive the image tag from the source ref when --tag was not given explicitly.
+# 'main' becomes a dated snapshot (main-YYYYMMDD); any other ref (release tag
+# or commit) becomes the tag itself, keeping image tag and source in sync.
+if [ "$TAG_EXPLICIT" = false ]; then
+    if [ "$SOURCE_REF" = "main" ]; then
+        TAG="main-$(date +%Y%m%d)"
+    else
+        TAG="$SOURCE_REF"
+    fi
 fi
 
 # Multi-arch requires push
@@ -183,7 +207,9 @@ echo ""
 
 TEMP_DIR=$(mktemp -d -t openan-build.XXXXXXXX)
 
-# ===== Download release packages =====
+# ===== Resolve component sources =====
+# A component's source is a local --*-src directory when given; otherwise the
+# remote release tarball (--*-release URL, or GitHub archive for --source-ref).
 download_release() {
     local url=$1
     local name=$2
@@ -197,21 +223,6 @@ download_release() {
     tar -xzf "$TEMP_DIR/${name}.tar.gz" -C "$dest"
     log_info "$name downloaded and extracted to $dest"
 }
-
-if [ "$BUILD_REGISTRY" = true ]; then
-    download_release "$REGISTRY_RELEASE" "registry-center"
-fi
-if [ "$BUILD_ORCHESTRATION" = true ]; then
-    download_release "$ORCHESTRATION_RELEASE" "orchestration-center"
-fi
-
-# ===== Detect source directories =====
-REGISTRY_IMAGE="$IMAGE_REGISTRY/$NAMESPACE/registry-center:$TAG"
-ORCHESTRATION_IMAGE="$IMAGE_REGISTRY/$NAMESPACE/orchestration-center:$TAG"
-FRONTEND_IMAGE="$IMAGE_REGISTRY/$NAMESPACE/workflow-designer:$TAG"
-
-RC_SRC=""
-OC_SRC=""
 
 detect_src_dir() {
     local base_dir="$1"
@@ -230,19 +241,39 @@ detect_src_dir() {
     return 1
 }
 
+resolve_src() {
+    local local_dir="$1" remote_url="$2" name="$3"
+    if [ -n "$local_dir" ]; then
+        local abs
+        abs="$(cd "$local_dir" 2>/dev/null && pwd)" || { log_error "Local source path not found: $local_dir"; return 1; }
+        [ -f "$abs/Dockerfile" ] || { log_error "No Dockerfile in local source: $abs"; return 1; }
+        printf '%s\n' "$abs"
+        return 0
+    fi
+    download_release "$remote_url" "$name"
+    detect_src_dir "$TEMP_DIR/$name"
+}
+
+REGISTRY_IMAGE="$IMAGE_REGISTRY/$NAMESPACE/registry-center:$TAG"
+ORCHESTRATION_IMAGE="$IMAGE_REGISTRY/$NAMESPACE/orchestration-center:$TAG"
+FRONTEND_IMAGE="$IMAGE_REGISTRY/$NAMESPACE/workflow-designer:$TAG"
+
+RC_SRC=""
+OC_SRC=""
+
 if [ "$BUILD_REGISTRY" = true ]; then
-    RC_SRC=$(detect_src_dir "$TEMP_DIR/registry-center") || true
+    RC_SRC="$(resolve_src "$REGISTRY_SRC" "$REGISTRY_RELEASE" "registry-center")" || exit 1
     if [ -z "$RC_SRC" ]; then
-        log_error "Cannot find Dockerfile for registry-center in $TEMP_DIR/registry-center"
+        log_error "Cannot find Dockerfile for registry-center"
         exit 1
     fi
     log_info "Registry Center source: $RC_SRC"
 fi
 
 if [ "$BUILD_ORCHESTRATION" = true ]; then
-    OC_SRC=$(detect_src_dir "$TEMP_DIR/orchestration-center") || true
+    OC_SRC="$(resolve_src "$ORCHESTRATION_SRC" "$ORCHESTRATION_RELEASE" "orchestration-center")" || exit 1
     if [ -z "$OC_SRC" ]; then
-        log_error "Cannot find Dockerfile for orchestration-center in $TEMP_DIR/orchestration-center"
+        log_error "Cannot find Dockerfile for orchestration-center"
         exit 1
     fi
     log_info "Orchestration Center source: $OC_SRC"
