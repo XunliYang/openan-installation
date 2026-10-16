@@ -303,6 +303,9 @@ def test_internal_postgres_and_quoted_credentials(deployment):
     pg = compose["services"]["openan-postgres"]
     assert pg["command"] == ["postgres", "-p", "5544"]
     assert pg["healthcheck"]["test"][-1] == "5544"
+    # Network-based probe: proves the Docker network listener is ready, not
+    # just the loopback socket that apps on the same container would use.
+    assert "openan-postgres" in " ".join(pg["healthcheck"]["test"])
     assert pg["environment"]["REGISTRY_DB_PASSWORD"] != pg["environment"]["ORCH_DB_PASSWORD"]
     init = (OFFLINE / "compose/init/create-databases.sh").read_text()
     assert ":'password'" in init and "<<'EOSQL'" in init
@@ -314,6 +317,9 @@ def test_internal_mysql_is_single_host_and_uses_authenticated_probe(deployment):
     db = compose["services"]["openan-mysql"]
     assert "mysql-data:/var/lib/mysql" in db["volumes"]
     assert "MYSQL_ROOT_PASSWORD" in db["healthcheck"]["test"][-1]
+    # Network-based probe: proves the Docker network listener is ready, not
+    # just the loopback socket.
+    assert "openan-mysql" in db["healthcheck"]["test"][-1]
     for service in ("registry-center", "orchestration-center"):
         assert compose["services"][service]["environment"]["DB_HOST"] == "openan-mysql"
     init = (OFFLINE / "compose/init/create-mysql-databases.sh").read_text()

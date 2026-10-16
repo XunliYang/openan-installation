@@ -376,7 +376,7 @@ def plan(config_file, bundle, arch):
                                                                                      "ORCH_DB_NAME", "ORCH_DB_USERNAME", "ORCH_DB_PASSWORD")}},
                                       "command": ["postgres", "-p", config["DB_PORT"] or "5432"],
                                       "volumes": ["postgres-data:/var/lib/postgresql/data", bind(bundle / "compose/init/create-databases.sh", "/docker-entrypoint-initdb.d/create-databases.sh")],
-                                      "networks": ["openan"], "healthcheck": {"test": ["CMD", "pg_isready", "-U", "postgres", "-p", config["DB_PORT"] or "5432"],
+                                      "networks": ["openan"],                                      "healthcheck": {"test": ["CMD", "pg_isready", "-h", "openan-postgres", "-U", "postgres", "-p", config["DB_PORT"] or "5432"],
                                                                               "interval": "5s", "timeout": "5s", "retries": 20}}
     elif internal:
         required(config, "MYSQL_ROOT_PASSWORD")
@@ -387,7 +387,7 @@ def plan(config_file, bundle, arch):
                                                                                    "ORCH_DB_NAME", "ORCH_DB_USERNAME", "ORCH_DB_PASSWORD")}},
                                     "command": ["mysqld", "--port=" + port],
                                     "volumes": ["mysql-data:/var/lib/mysql", bind(bundle / "compose/init/create-mysql-databases.sh", "/docker-entrypoint-initdb.d/create-databases.sh")],
-                                    "networks": ["openan"], "healthcheck": {"test": ["CMD-SHELL", f'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --protocol=TCP -h 127.0.0.1 -P {port} -u root -e "SELECT 1"'],
+                                    "networks": ["openan"], "healthcheck": {"test": ["CMD-SHELL", f'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --protocol=TCP -h openan-mysql -P {port} -u root -e "SELECT 1"'],
                                                                             "interval": "5s", "timeout": "5s", "retries": 40, "start_period": "40s"}}
     public_tls = None
     if boolean(config, "PUBLIC_ENABLE_HTTPS"):
