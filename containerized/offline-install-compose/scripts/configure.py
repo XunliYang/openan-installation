@@ -342,19 +342,24 @@ def plan(config_file, bundle, arch):
     # registry is healthy so a slow registry start cannot race OC's first contact.
     services["orchestration-center"].setdefault("depends_on", {})["registry-center"] = {"condition": "service_healthy"}
     # Wait for the database to accept an application-level connection before
-    # starting OC: the MySQL healthcheck (root SELECT 1) can pass while the
-    # app user's grant is still propagating, crashing MySQLBackend.__init__.
-    # Password is read from the container's DB_PASSWORD env at runtime, never
-    # embedded in compose.json.
+    # starting OC: the DB healthcheck (root SELECT 1 / pg_isready) can pass
+    # while the app user's grant is still propagating, crashing
+    # MySQLBackend.__init__ / the psycopg2 pool. The probe selects the right
+    # driver from PERSISTENCE_MODE and reads credentials from the container
+    # environment at runtime, never from compose.json.
     services["orchestration-center"]["command"] = [
         "sh", "-c",
-        "until python3 -c \"import os, pymysql; pymysql.connect("
-        "host=os.environ.get('DB_HOST', 'openan-mysql'), "
-        "port=int(os.environ.get('DB_PORT', '3306')), "
+        "until python3 -c \""
+        "import os; mode=os.environ.get('PERSISTENCE_MODE','postgresql'); "
+        "kw=dict(host=os.environ.get('DB_HOST','openan-postgres'), "
+        "port=int(os.environ.get('DB_PORT','5432')), "
         "user=os.environ['DB_USERNAME'], "
         "password=os.environ['DB_PASSWORD'], "
-        "database=os.environ.get('DB_NAME', 'orchestration_center'), "
-        "connect_timeout=2)\" 2>/dev/null; do "
+        "connect_timeout=2); "
+        "conn=(__import__('pymysql').connect(database=os.environ.get('DB_NAME','orchestration_center'), **kw) "
+        "if mode=='mysql' else "
+        "__import__('psycopg2').connect(dbname=os.environ.get('DB_NAME','orchestration_center'), **kw)); "
+        "conn.close()\" 2>/dev/null; do "
         "echo 'waiting for database at '\"$DB_HOST\"':'\"$DB_PORT\"'...'; sleep 2; done; "
         "exec python3 -m orchestrate.start"]
     if portal:
