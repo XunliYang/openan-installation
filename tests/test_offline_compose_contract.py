@@ -240,6 +240,15 @@ def test_compose_database_and_three_protocol_matrix(deployment, db, public_https
         assert portal["healthcheck"]["test"] == ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/"]
         assert services["openan-nginx"]["depends_on"]["openan-portal"] == {"condition": "service_healthy"}
         assert services["orchestration-center"]["depends_on"]["registry-center"] == {"condition": "service_healthy"}
+        # Wait-for-database wrapper: the DB healthcheck can pass before the
+        # app user's grant is live; OC's backend constructors make a real
+        # connection at construction time and crash on refusal.
+        oc_command = services["orchestration-center"]["command"]
+        assert oc_command[0] == "sh" and oc_command[1] == "-c"
+        assert "PERSISTENCE_MODE" in oc_command[2]
+        assert "pymysql" in oc_command[2] and "psycopg2" in oc_command[2]
+        assert "os.environ['DB_PASSWORD']" in oc_command[2]
+        assert "exec python3 -m orchestrate.start" in oc_command[2]
         assert "server openan-portal:8080 resolve;" in nginx
         assert "proxy_pass http://portal/;" in nginx
         assert "location ^~ /api/registry/ {" in nginx
