@@ -344,19 +344,19 @@ def plan(config_file, bundle, arch):
     # Wait for the database to accept an application-level connection before
     # starting OC: the MySQL healthcheck (root SELECT 1) can pass while the
     # app user's grant is still propagating, crashing MySQLBackend.__init__.
-    oc_env = services["orchestration-center"]["environment"]
-    db_host = oc_env.get("DB_HOST", "openan-mysql")
-    db_port = oc_env.get("DB_PORT", "3306")
-    db_user = oc_env.get("DB_USERNAME", "")
-    db_name = oc_env.get("DB_NAME", "orchestration_center")
+    # Password is read from the container's DB_PASSWORD env at runtime, never
+    # embedded in compose.json.
     services["orchestration-center"]["command"] = [
         "sh", "-c",
-        f'until python3 -c "import pymysql; pymysql.connect('
-        f'host=\'{db_host}\', port=int(\'{db_port}\'), '
-        f'user=\'{db_user}\', password=\'\' , database=\'{db_name}\', '
-        f'connect_timeout=2)" 2>/dev/null; do '
-        f'echo "waiting for database at {db_host}:{db_port}..."; sleep 2; done; '
-        f'exec python3 -m orchestrate.start']
+        "until python3 -c \"import os, pymysql; pymysql.connect("
+        "host=os.environ.get('DB_HOST', 'openan-mysql'), "
+        "port=int(os.environ.get('DB_PORT', '3306')), "
+        "user=os.environ['DB_USERNAME'], "
+        "password=os.environ['DB_PASSWORD'], "
+        "database=os.environ.get('DB_NAME', 'orchestration_center'), "
+        "connect_timeout=2)\" 2>/dev/null; do "
+        "echo 'waiting for database at '\"$DB_HOST\"':'\"$DB_PORT\"'...'; sleep 2; done; "
+        "exec python3 -m orchestrate.start"]
     if portal:
         if "portal" not in images:
             raise ValueError("FRONTEND_TYPE=portal requires a portal image in deps/image-tags.json")

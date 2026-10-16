@@ -245,8 +245,8 @@ def test_compose_database_and_three_protocol_matrix(deployment, db, public_https
         # makes a real connection at construction time and crashes on refusal.
         oc_command = services["orchestration-center"]["command"]
         assert oc_command[0] == "sh" and oc_command[1] == "-c"
-        assert "waiting for database" in oc_command[2]
         assert "pymysql.connect" in oc_command[2]
+        assert "os.environ['DB_PASSWORD']" in oc_command[2]
         assert "exec python3 -m orchestrate.start" in oc_command[2]
         assert "server openan-portal:8080 resolve;" in nginx
         assert "proxy_pass http://portal/;" in nginx
