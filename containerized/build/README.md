@@ -32,7 +32,9 @@ This single command downloads the source archive for tag v1.0.0 from GitHub, bui
 ```bash
 ./build.sh registry                 # Build Registry Center only
 ./build.sh orchestration            # Build Orchestration Center + Workflow Designer
-./build.sh registry orchestration   # Build both (same as default)
+./build.sh portal                   # Build OpenAN Portal only
+./build.sh registry orchestration   # Build both, no portal
+./build.sh portal --portal-src ~/src/openan-portal  # Portal from local source
 ```
 
 ### Custom Registry
@@ -55,9 +57,10 @@ This single command downloads the source archive for tag v1.0.0 from GitHub, bui
 |-----------|-------------|
 | `registry` | Build Registry Center only |
 | `orchestration` | Build Orchestration Center + Workflow Designer |
+| `portal` | Build OpenAN Portal only |
 | (none) | Build all components |
 
-If no components specified, all components are built. Specify one or both to build selectively.
+If no components specified, all components are built. Specify one or more to build selectively.
 
 ### Options
 
