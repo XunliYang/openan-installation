@@ -79,7 +79,7 @@ def _run(args, shim=None, env=None):
                    "test", str(shim), str(SCRIPT), *args]
     else:
         command = [BASH, str(SCRIPT), *args]
-    return subprocess.run(command, capture_output=True, text=True, timeout=60, env=full_env)
+    return subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60, env=full_env)
 
 
 def _payload(tmp_path, with_index=True):
