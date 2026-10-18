@@ -1,0 +1,4 @@
+=== CMD: env REGISTRY=ghcr.io/XunliYang bash containerized/build/portal/build-portal-image.sh -n ===
+[0;31mFAIL[0m image reference must be lowercase: ghcr.io/XunliYang/openan-portal:v1.0.0
+     (docker login user may be mixed-case, but the registry path may not)
+=== exit=1 ===

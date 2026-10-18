@@ -1,0 +1,364 @@
+=== CMD: bash containerized/build/build.sh orchestration --image-registry ghcr.io --namespace xunliyang --tag fix-stderr-test-20261018 ===
+=== exit=0 ===
+
+----- output -----
+[0;36m[STEP][0m Downloading orchestration-center from release...
+[0;32m[INFO][0m URL: https://github.com/project-openan/orchestration-center/archive/v1.0.0.tar.gz
+#=#=#                                                                         ##O#-#                                                                        ##O=#  #                                                                      #                                                                          2.7%############################                                              39.6%######################################################################## 100.0%
+[0;32m[INFO][0m orchestration-center downloaded and extracted to /tmp/multica-task-899370835/openan-build.2vjaQBz4/orchestration-center
+[0;32m[INFO][0m Orchestration Center source: /tmp/multica-task-899370835/openan-build.2vjaQBz4/orchestration-center/orchestration-center-1.0.0/
+[0;36m[STEP][0m [1/1] Building Orchestration Center...
+#0 building with "multiarch-builder" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.54kB done
+#1 DONE 0.0s
+
+#2 [linux/amd64 internal] load metadata for docker.io/library/python:3.12-slim
+#2 ...
+
+#3 [auth] library/python:pull token for registry-1.docker.io
+#3 DONE 0.0s
+
+#4 [linux/arm64 internal] load metadata for docker.io/library/python:3.12-slim
+#4 ...
+
+#2 [linux/amd64 internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 1.3s
+
+#4 [linux/arm64 internal] load metadata for docker.io/library/python:3.12-slim
+#4 DONE 1.3s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 285B done
+#5 DONE 0.0s
+
+#6 [linux/arm64 builder 1/4] FROM docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+#6 resolve docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 0.0s done
+#6 DONE 0.0s
+
+#7 [linux/amd64 builder 1/4] FROM docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+#7 resolve docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 done
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 13.65kB 0.0s done
+#8 DONE 0.0s
+
+#9 [linux/amd64 builder 2/4] RUN apt-get update && apt-get install -y --no-install-recommends     gcc     libc6-dev     libpq-dev     libssl-dev     libffi-dev     && rm -rf /var/lib/apt/lists/*
+#9 CACHED
+
+#10 [linux/arm64 stage-1 5/6] RUN useradd -m appuser     && mkdir -p /opt/orchestration-center/log /opt/orchestration-center/run /opt/orchestration-center/data     && mkdir -p /opt/orchestration-center/etc/ssl     && chmod +x /opt/orchestration-center/bin/*.sh /opt/orchestration-center/docker-entrypoint.sh     && chown -R appuser:appuser /opt/orchestration-center /opt/venv
+#10 CACHED
+
+#11 [linux/arm64 stage-1 2/6] RUN apt-get update && apt-get install -y --no-install-recommends bash libpq5 && rm -rf /var/lib/apt/lists/*
+#11 CACHED
+
+#12 [linux/arm64 builder 3/4] COPY requirements.txt /tmp/requirements.txt
+#12 CACHED
+
+#13 [linux/arm64 builder 4/4] RUN python3 -m venv /opt/venv --copies     && . /opt/venv/bin/activate     && pip install --no-cache-dir -r /tmp/requirements.txt     && rm -rf /tmp/requirements.txt /root/.cache/pip
+#13 CACHED
+
+#14 [linux/arm64 builder 2/4] RUN apt-get update && apt-get install -y --no-install-recommends     gcc     libc6-dev     libpq-dev     libssl-dev     libffi-dev     && rm -rf /var/lib/apt/lists/*
+#14 CACHED
+
+#15 [linux/arm64 stage-1 4/6] COPY . /opt/orchestration-center/
+#15 CACHED
+
+#16 [linux/arm64 stage-1 3/6] COPY --from=builder /opt/venv /opt/venv
+#16 CACHED
+
+#17 [linux/arm64 stage-1 6/6] WORKDIR /opt/orchestration-center
+#17 CACHED
+
+#18 [linux/amd64 builder 3/4] COPY requirements.txt /tmp/requirements.txt
+#18 DONE 0.0s
+
+#19 [linux/amd64 builder 4/4] RUN python3 -m venv /opt/venv --copies     && . /opt/venv/bin/activate     && pip install --no-cache-dir -r /tmp/requirements.txt     && rm -rf /tmp/requirements.txt /root/.cache/pip
+#19 108.4 Collecting pydantic>=2.12.5 (from -r /tmp/requirements.txt (line 18))
+#19 109.9   Downloading pydantic-2.14.1-py3-none-any.whl.metadata (133 kB)
+#19 110.6 Collecting a2a-t-sdk>=0.1.8 (from -r /tmp/requirements.txt (line 19))
+#19 110.7   Downloading a2a_t_sdk-1.1.0-py3-none-any.whl.metadata (10 kB)
+#19 114.4 Collecting openai>=2.26.0 (from -r /tmp/requirements.txt (line 22))
+#19 114.5   Downloading openai-3.35.1-py3-none-any.whl.metadata (44 kB)
+#19 117.2 Collecting fastapi>=0.135.1 (from -r /tmp/requirements.txt (line 23))
+#19 117.3   Downloading fastapi-0.143.3-py3-none-any.whl.metadata (26 kB)
+#19 118.8 Collecting uvicorn>=0.42 (from -r /tmp/requirements.txt (line 24))
+#19 118.9   Downloading uvicorn-0.54.0-py3-none-any.whl.metadata (6.6 kB)
+#19 119.4 Collecting loguru>=0.7.3 (from -r /tmp/requirements.txt (line 25))
+#19 119.5   Downloading loguru-0.7.3-py3-none-any.whl.metadata (22 kB)
+#19 121.1 Collecting PyYAML>=6.0.3 (from -r /tmp/requirements.txt (line 26))
+#19 121.2   Downloading pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+#19 126.6 Collecting pymupdf (from -r /tmp/requirements.txt (line 27))
+#19 126.7   Downloading pymupdf-1.28.2-cp310-abi3-manylinux_2_28_x86_64.whl.metadata (26 kB)
+#19 127.5 Collecting limits>=5.8.0 (from -r /tmp/requirements.txt (line 28))
+#19 127.5   Downloading limits-5.8.0-py3-none-any.whl.metadata (10 kB)
+#19 128.0 Collecting python-multipart>=0.0.24 (from -r /tmp/requirements.txt (line 29))
+#19 128.1   Downloading python_multipart-0.0.32-py3-none-any.whl.metadata (2.1 kB)
+#19 130.4 Collecting psycopg2-binary>=2.9.10 (from -r /tmp/requirements.txt (line 30))
+#19 130.5   Downloading psycopg2_binary-2.9.13-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (4.9 kB)
+#19 131.8 Collecting pytest>=8.0 (from -r /tmp/requirements.txt (line 32))
+#19 131.9   Downloading pytest-9.1.1-py3-none-any.whl.metadata (7.6 kB)
+#19 132.6 Collecting pytest-asyncio>=0.24 (from -r /tmp/requirements.txt (line 33))
+#19 132.7   Downloading pytest_asyncio-1.4.0-py3-none-any.whl.metadata (4.1 kB)
+#19 133.3 Collecting a2a-sdk[http-server] (from -r /tmp/requirements.txt (line 20))
+#19 133.3   Downloading a2a_sdk-1.2.2-py3-none-any.whl.metadata (9.6 kB)
+#19 133.8 Collecting annotated-types>=0.6.0 (from pydantic>=2.12.5->-r /tmp/requirements.txt (line 18))
+#19 133.9   Downloading annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+#19 160.1 Collecting pydantic-core==2.50.1 (from pydantic>=2.12.5->-r /tmp/requirements.txt (line 18))
+#19 160.2   Downloading pydantic_core-2.50.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.5 kB)
+#19 160.6 Collecting typing-extensions>=4.16.0 (from pydantic>=2.12.5->-r /tmp/requirements.txt (line 18))
+#19 160.7   Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+#19 160.9 Collecting typing-inspection>=0.4.4 (from pydantic>=2.12.5->-r /tmp/requirements.txt (line 18))
+#19 161.0   Downloading typing_inspection-0.4.4-py3-none-any.whl.metadata (2.6 kB)
+#19 161.9 Collecting jsonschema>=4.23.0 (from a2a-t-sdk>=0.1.8->-r /tmp/requirements.txt (line 19))
+#19 162.0   Downloading jsonschema-4.26.0-py3-none-any.whl.metadata (7.6 kB)
+#19 162.5 Collecting python-dotenv>=1.1.0 (from a2a-t-sdk>=0.1.8->-r /tmp/requirements.txt (line 19))
+#19 162.6   Downloading python_dotenv-1.2.4-py3-none-any.whl.metadata (29 kB)
+#19 163.4 Collecting httpx<1,>=0.23.0 (from a2a-t-sdk>=0.1.8->-r /tmp/requirements.txt (line 19))
+#19 163.5   Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+#19 163.9 Collecting culsans>=0.11.0 (from a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 164.0   Downloading culsans-0.11.0-py3-none-any.whl.metadata (13 kB)
+#19 165.5 Collecting google-api-core>=1.26.0 (from a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 165.5   Downloading google_api_core-2.42.0-py3-none-any.whl.metadata (3.2 kB)
+#19 166.2 Collecting googleapis-common-protos>=1.70.0 (from a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 166.3   Downloading googleapis_common_protos-1.75.5-py3-none-any.whl.metadata (8.5 kB)
+#19 166.9 Collecting json-rpc>=1.15.0 (from a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 167.0   Downloading json_rpc-1.15.0-py2.py3-none-any.whl.metadata (7.2 kB)
+#19 167.5 Collecting packaging>=24.0 (from a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 167.6   Downloading packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+#19 174.1 Collecting protobuf>=5.29.5 (from a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 174.2   Downloading protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl.metadata (595 bytes)
+#19 175.3 Collecting sse-starlette (from a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 175.4   Downloading sse_starlette-3.5.0-py3-none-any.whl.metadata (15 kB)
+#19 176.6 Collecting starlette (from a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 176.6   Downloading starlette-1.8.0-py3-none-any.whl.metadata (6.6 kB)
+#19 178.3 Collecting grpcio-reflection>=1.7.0 (from a2a-sdk[grpc]->-r /tmp/requirements.txt (line 21))
+#19 178.4   Downloading grpcio_reflection-1.84.0-py3-none-any.whl.metadata (1.2 kB)
+#19 199.2 Collecting grpcio-tools>=1.60 (from a2a-sdk[grpc]->-r /tmp/requirements.txt (line 21))
+#19 199.3   Downloading grpcio_tools-1.84.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.3 kB)
+#19 217.6 Collecting grpcio>=1.60 (from a2a-sdk[grpc]->-r /tmp/requirements.txt (line 21))
+#19 217.7   Downloading grpcio-1.84.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (3.8 kB)
+#19 218.3 Collecting anyio<5,>=4.10.0 (from openai>=2.26.0->-r /tmp/requirements.txt (line 22))
+#19 218.4   Downloading anyio-4.15.1-py3-none-any.whl.metadata (4.7 kB)
+#19 218.7 Collecting httpx2<3,>=2.12.0 (from openai>=2.26.0->-r /tmp/requirements.txt (line 22))
+#19 218.7   Downloading httpx2-2.13.1-py3-none-any.whl.metadata (9.8 kB)
+#19 222.1 Collecting jiter<1,>=0.16.0 (from openai>=2.26.0->-r /tmp/requirements.txt (line 22))
+#19 222.2   Downloading jiter-0.17.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.2 kB)
+#19 223.3 Collecting sniffio (from openai>=2.26.0->-r /tmp/requirements.txt (line 22))
+#19 223.4   Downloading sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+#19 225.6 Collecting annotated-doc>=0.0.2 (from fastapi>=0.135.1->-r /tmp/requirements.txt (line 23))
+#19 225.7   Downloading annotated_doc-0.0.5-py3-none-any.whl.metadata (6.5 kB)
+#19 226.3 Collecting opentelemetry-api>=1.44.0 (from fastapi>=0.135.1->-r /tmp/requirements.txt (line 23))
+#19 226.4   Downloading opentelemetry_api-1.45.1-py3-none-any.whl.metadata (1.4 kB)
+#19 227.0 Collecting click>=7.0 (from uvicorn>=0.42->-r /tmp/requirements.txt (line 24))
+#19 227.1   Downloading click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+#19 227.3 Collecting h11>=0.8 (from uvicorn>=0.42->-r /tmp/requirements.txt (line 24))
+#19 227.4   Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+#19 228.0 Collecting deprecated>=1.2 (from limits>=5.8.0->-r /tmp/requirements.txt (line 28))
+#19 228.0   Downloading deprecated-3.0.0-py3-none-any.whl.metadata (6.5 kB)
+#19 228.6 Collecting iniconfig>=1.0.1 (from pytest>=8.0->-r /tmp/requirements.txt (line 32))
+#19 228.6   Downloading iniconfig-2.3.1-py3-none-any.whl.metadata (2.8 kB)
+#19 229.5 Collecting pluggy<2,>=1.5 (from pytest>=8.0->-r /tmp/requirements.txt (line 32))
+#19 229.6   Downloading pluggy-1.7.0-py3-none-any.whl.metadata (5.0 kB)
+#19 230.3 Collecting pygments>=2.7.2 (from pytest>=8.0->-r /tmp/requirements.txt (line 32))
+#19 230.3   Downloading pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+#19 231.7 Collecting idna>=2.8 (from anyio<5,>=4.10.0->openai>=2.26.0->-r /tmp/requirements.txt (line 22))
+#19 231.8   Downloading idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+#19 232.3 Collecting aiologic<0.18.0,>=0.16.0 (from culsans>=0.11.0->a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 232.4   Downloading aiologic-0.17.1-py3-none-any.whl.metadata (10 kB)
+#19 245.9 Collecting wrapt<3,>=1.16 (from deprecated>=1.2->limits>=5.8.0->-r /tmp/requirements.txt (line 28))
+#19 246.0   Downloading wrapt-2.5.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (7.6 kB)
+#19 247.7 Collecting proto-plus<2.0.0,>=1.26.1 (from google-api-core>=1.26.0->a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 247.8   Downloading proto_plus-1.29.0-py3-none-any.whl.metadata (2.2 kB)
+#19 249.7 Collecting google-auth<3.0.0,>=2.14.1 (from google-api-core>=1.26.0->a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 249.8   Downloading google_auth-2.62.0-py3-none-any.whl.metadata (6.0 kB)
+#19 251.1 Collecting requests<3.0.0,>=2.33.0 (from google-api-core>=1.26.0->a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 251.2   Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+#19 257.5 Collecting setuptools>=77.0.1 (from grpcio-tools>=1.60->a2a-sdk[grpc]->-r /tmp/requirements.txt (line 21))
+#19 257.6   Downloading setuptools-84.0.0-py3-none-any.whl.metadata (6.6 kB)
+#19 258.6 Collecting certifi (from httpx<1,>=0.23.0->a2a-t-sdk>=0.1.8->-r /tmp/requirements.txt (line 19))
+#19 258.7   Downloading certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+#19 259.3 Collecting httpcore==1.* (from httpx<1,>=0.23.0->a2a-t-sdk>=0.1.8->-r /tmp/requirements.txt (line 19))
+#19 259.4   Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+#19 260.0 Collecting httpcore2==2.13.1 (from httpx2<3,>=2.12.0->openai>=2.26.0->-r /tmp/requirements.txt (line 22))
+#19 260.1   Downloading httpcore2-2.13.1-py3-none-any.whl.metadata (26 kB)
+#19 260.6 Collecting truststore>=0.10 (from httpx2<3,>=2.12.0->openai>=2.26.0->-r /tmp/requirements.txt (line 22))
+#19 260.6   Downloading truststore-0.10.5-py3-none-any.whl.metadata (4.5 kB)
+#19 261.6 Collecting attrs>=22.2.0 (from jsonschema>=4.23.0->a2a-t-sdk>=0.1.8->-r /tmp/requirements.txt (line 19))
+#19 261.7   Downloading attrs-26.1.0-py3-none-any.whl.metadata (8.8 kB)
+#19 262.0 Collecting jsonschema-specifications>=2023.03.6 (from jsonschema>=4.23.0->a2a-t-sdk>=0.1.8->-r /tmp/requirements.txt (line 19))
+#19 262.1   Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl.metadata (2.9 kB)
+#19 263.0 Collecting referencing>=0.28.4 (from jsonschema>=4.23.0->a2a-t-sdk>=0.1.8->-r /tmp/requirements.txt (line 19))
+#19 263.1   Downloading referencing-0.37.0-py3-none-any.whl.metadata (2.8 kB)
+#19 273.5 Collecting rpds-py>=0.25.0 (from jsonschema>=4.23.0->a2a-t-sdk>=0.1.8->-r /tmp/requirements.txt (line 19))
+#19 273.6   Downloading rpds_py-2026.9.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.1 kB)
+#19 276.4 Collecting pyasn1-modules>=0.2.1 (from google-auth<3.0.0,>=2.14.1->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 276.5   Downloading pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+#19 284.2 Collecting cryptography>=38.0.3 (from google-auth<3.0.0,>=2.14.1->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 284.3   Downloading cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (4.4 kB)
+#19 290.8 Collecting charset_normalizer<4,>=2 (from requests<3.0.0,>=2.33.0->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 290.9   Downloading charset_normalizer-3.5.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (46 kB)
+#19 292.3 Collecting urllib3<3,>=1.26 (from requests<3.0.0,>=2.33.0->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 292.4   Downloading urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)
+#19 297.5 Collecting cffi>=2.0.0 (from cryptography>=38.0.3->google-auth<3.0.0,>=2.14.1->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 297.6   Downloading cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+#19 298.9 Collecting pyasn1<0.7.0,>=0.6.1 (from pyasn1-modules>=0.2.1->google-auth<3.0.0,>=2.14.1->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 298.9   Downloading pyasn1-0.6.4-py3-none-any.whl.metadata (8.4 kB)
+#19 299.4 Collecting pycparser (from cffi>=2.0.0->cryptography>=38.0.3->google-auth<3.0.0,>=2.14.1->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /tmp/requirements.txt (line 20))
+#19 299.5   Downloading pycparser-3.11-py3-none-any.whl.metadata (8.2 kB)
+#19 299.9 Downloading pydantic-2.14.1-py3-none-any.whl (488 kB)
+#19 300.0 Downloading pydantic_core-2.50.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.2 MB)
+#19 300.3    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.2/2.2 MB 18.3 MB/s eta 0:00:00
+#19 300.4 Downloading a2a_t_sdk-1.1.0-py3-none-any.whl (387 kB)
+#19 300.5 Downloading openai-3.35.1-py3-none-any.whl (2.3 MB)
+#19 301.1    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.3/2.3 MB 3.7 MB/s eta 0:00:00
+#19 301.2 Downloading fastapi-0.143.3-py3-none-any.whl (144 kB)
+#19 301.3 Downloading uvicorn-0.54.0-py3-none-any.whl (87 kB)
+#19 301.4 Downloading loguru-0.7.3-py3-none-any.whl (61 kB)
+#19 301.5 Downloading pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (807 kB)
+#19 301.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 807.9/807.9 kB 17.5 MB/s eta 0:00:00
+#19 301.7 Downloading pymupdf-1.28.2-cp310-abi3-manylinux_2_28_x86_64.whl (25.8 MB)
+#19 303.2    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 25.8/25.8 MB 17.3 MB/s eta 0:00:00
+#19 303.3 Downloading limits-5.8.0-py3-none-any.whl (60 kB)
+#19 303.4 Downloading python_multipart-0.0.32-py3-none-any.whl (30 kB)
+#19 303.5 Downloading psycopg2_binary-2.9.13-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (4.3 MB)
+#19 303.8    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.3/4.3 MB 18.8 MB/s eta 0:00:00
+#19 303.9 Downloading pytest-9.1.1-py3-none-any.whl (386 kB)
+#19 304.0 Downloading pytest_asyncio-1.4.0-py3-none-any.whl (16 kB)
+#19 304.1 Downloading annotated_doc-0.0.5-py3-none-any.whl (5.3 kB)
+#19 304.2 Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+#19 304.2 Downloading anyio-4.15.1-py3-none-any.whl (132 kB)
+#19 304.3 Downloading click-8.5.0-py3-none-any.whl (125 kB)
+#19 304.4 Downloading culsans-0.11.0-py3-none-any.whl (21 kB)
+#19 304.5 Downloading deprecated-3.0.0-py3-none-any.whl (21 kB)
+#19 304.6 Downloading google_api_core-2.42.0-py3-none-any.whl (221 kB)
+#19 304.7 Downloading googleapis_common_protos-1.75.5-py3-none-any.whl (307 kB)
+#19 304.8 Downloading grpcio-1.84.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (7.2 MB)
+#19 305.2    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.2/7.2 MB 19.2 MB/s eta 0:00:00
+#19 305.3 Downloading grpcio_reflection-1.84.0-py3-none-any.whl (22 kB)
+#19 305.4 Downloading grpcio_tools-1.84.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (2.8 MB)
+#19 305.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.8/2.8 MB 20.9 MB/s eta 0:00:00
+#19 305.6 Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+#19 305.7 Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+#19 305.8 Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+#19 305.9 Downloading httpx2-2.13.1-py3-none-any.whl (95 kB)
+#19 306.0 Downloading httpcore2-2.13.1-py3-none-any.whl (83 kB)
+#19 306.1 Downloading iniconfig-2.3.1-py3-none-any.whl (7.6 kB)
+#19 306.2 Downloading jiter-0.17.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (345 kB)
+#19 306.2 Downloading json_rpc-1.15.0-py2.py3-none-any.whl (39 kB)
+#19 306.3 Downloading jsonschema-4.26.0-py3-none-any.whl (90 kB)
+#19 306.4 Downloading opentelemetry_api-1.45.1-py3-none-any.whl (60 kB)
+#19 306.5 Downloading packaging-26.3-py3-none-any.whl (129 kB)
+#19 306.6 Downloading pluggy-1.7.0-py3-none-any.whl (27 kB)
+#19 306.7 Downloading protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl (343 kB)
+#19 306.8 Downloading pygments-2.21.0-py3-none-any.whl (1.3 MB)
+#19 306.9    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.3/1.3 MB 21.6 MB/s eta 0:00:00
+#19 307.0 Downloading python_dotenv-1.2.4-py3-none-any.whl (23 kB)
+#19 307.1 Downloading starlette-1.8.0-py3-none-any.whl (79 kB)
+#19 307.2 Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+#19 307.3 Downloading typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+#19 307.4 Downloading a2a_sdk-1.2.2-py3-none-any.whl (275 kB)
+#19 307.4 Downloading sniffio-1.3.1-py3-none-any.whl (10 kB)
+#19 307.5 Downloading sse_starlette-3.5.0-py3-none-any.whl (17 kB)
+#19 307.6 Downloading aiologic-0.17.1-py3-none-any.whl (161 kB)
+#19 307.7 Downloading attrs-26.1.0-py3-none-any.whl (67 kB)
+#19 307.8 Downloading google_auth-2.62.0-py3-none-any.whl (267 kB)
+#19 307.9 Downloading idna-3.20-py3-none-any.whl (69 kB)
+#19 308.0 Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl (18 kB)
+#19 308.0 Downloading proto_plus-1.29.0-py3-none-any.whl (50 kB)
+#19 308.1 Downloading referencing-0.37.0-py3-none-any.whl (26 kB)
+#19 308.2 Downloading requests-2.34.2-py3-none-any.whl (73 kB)
+#19 308.3 Downloading certifi-2026.7.22-py3-none-any.whl (136 kB)
+#19 308.4 Downloading rpds_py-2026.9.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (371 kB)
+#19 308.5 Downloading setuptools-84.0.0-py3-none-any.whl (818 kB)
+#19 308.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 818.2/818.2 kB 20.0 MB/s eta 0:00:00
+#19 308.7 Downloading truststore-0.10.5-py3-none-any.whl (19 kB)
+#19 308.8 Downloading wrapt-2.5.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (250 kB)
+#19 308.9 Downloading charset_normalizer-3.5.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (257 kB)
+#19 309.0 Downloading cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl (4.8 MB)
+#19 309.3    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.8/4.8 MB 19.3 MB/s eta 0:00:00
+#19 309.4 Downloading pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+#19 309.5 Downloading urllib3-2.8.0-py3-none-any.whl (135 kB)
+#19 309.5 Downloading cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (221 kB)
+#19 309.6 Downloading pyasn1-0.6.4-py3-none-any.whl (84 kB)
+#19 309.7 Downloading pycparser-3.11-py3-none-any.whl (51 kB)
+#19 318.4 Installing collected packages: json-rpc, wrapt, urllib3, typing-extensions, truststore, sniffio, setuptools, rpds-py, PyYAML, python-multipart, python-dotenv, pymupdf, pygments, pycparser, pyasn1, psycopg2-binary, protobuf, pluggy, packaging, loguru, jiter, iniconfig, idna, h11, click, charset_normalizer, certifi, attrs, annotated-types, annotated-doc, uvicorn, typing-inspection, requests, referencing, pytest, pydantic-core, pyasn1-modules, proto-plus, opentelemetry-api, httpcore2, httpcore, grpcio, googleapis-common-protos, deprecated, cffi, anyio, aiologic, starlette, pytest-asyncio, pydantic, limits, jsonschema-specifications, httpx2, httpx, grpcio-tools, grpcio-reflection, culsans, cryptography, sse-starlette, openai, jsonschema, google-auth, fastapi, google-api-core, a2a-t-sdk, a2a-sdk
+#19 540.9 Successfully installed PyYAML-6.0.3 a2a-sdk-1.2.2 a2a-t-sdk-1.1.0 aiologic-0.17.1 annotated-doc-0.0.5 annotated-types-0.8.0 anyio-4.15.1 attrs-26.1.0 certifi-2026.7.22 cffi-2.1.1 charset_normalizer-3.5.2 click-8.5.0 cryptography-50.0.2 culsans-0.11.0 deprecated-3.0.0 fastapi-0.143.3 google-api-core-2.42.0 google-auth-2.62.0 googleapis-common-protos-1.75.5 grpcio-1.84.0 grpcio-reflection-1.84.0 grpcio-tools-1.84.0 h11-0.16.0 httpcore-1.0.9 httpcore2-2.13.1 httpx-0.28.1 httpx2-2.13.1 idna-3.20 iniconfig-2.3.1 jiter-0.17.0 json-rpc-1.15.0 jsonschema-4.26.0 jsonschema-specifications-2025.9.1 limits-5.8.0 loguru-0.7.3 openai-3.35.1 opentelemetry-api-1.45.1 packaging-26.3 pluggy-1.7.0 proto-plus-1.29.0 protobuf-7.36.2 psycopg2-binary-2.9.13 pyasn1-0.6.4 pyasn1-modules-0.4.2 pycparser-3.11 pydantic-2.14.1 pydantic-core-2.50.1 pygments-2.21.0 pymupdf-1.28.2 pytest-9.1.1 pytest-asyncio-1.4.0 python-dotenv-1.2.4 python-multipart-0.0.32 referencing-0.37.0 requests-2.34.2 rpds-py-2026.9.1 setuptools-84.0.0 sniffio-1.3.1 sse-starlette-3.5.0 starlette-1.8.0 truststore-0.10.5 typing-extensions-4.16.0 typing-inspection-0.4.4 urllib3-2.8.0 uvicorn-0.54.0 wrapt-2.5.1
+#19 543.3 
+#19 543.3 [notice] A new release of pip is available: 25.0.1 -> 26.2.1
+#19 543.3 [notice] To update, run: pip install --upgrade pip
+#19 DONE 545.9s
+
+#20 [linux/amd64 stage-1 2/6] RUN apt-get update && apt-get install -y --no-install-recommends bash libpq5 && rm -rf /var/lib/apt/lists/*
+#20 CACHED
+
+#21 [linux/amd64 stage-1 3/6] COPY --from=builder /opt/venv /opt/venv
+#21 DONE 2.0s
+
+#22 [linux/amd64 stage-1 4/6] COPY . /opt/orchestration-center/
+#22 DONE 0.2s
+
+#23 [linux/amd64 stage-1 5/6] RUN useradd -m appuser     && mkdir -p /opt/orchestration-center/log /opt/orchestration-center/run /opt/orchestration-center/data     && mkdir -p /opt/orchestration-center/etc/ssl     && chmod +x /opt/orchestration-center/bin/*.sh /opt/orchestration-center/docker-entrypoint.sh     && chown -R appuser:appuser /opt/orchestration-center /opt/venv
+#23 DONE 9.2s
+
+#24 [linux/amd64 stage-1 6/6] WORKDIR /opt/orchestration-center
+#24 DONE 0.1s
+
+#25 exporting to image
+#25 exporting layers
+#25 exporting layers 14.0s done
+#25 exporting manifest sha256:edcee02ee9a3971c0f34f9f0a7034fed7b3523143e978e11a2e2092e884caf12 done
+#25 exporting config sha256:d31f7301a7a54ead62b63465c9e8c7629086d40da42d4819ab86012cdcaaa7a2 done
+#25 exporting attestation manifest sha256:65b92f392994bc28fb0f3c86302d533fbca125e6af97b31e017156f14380c23e done
+#25 exporting manifest sha256:b549a8b8647d58120983adc533186f512434a534afc16974a19b87420b9e311f 0.0s done
+#25 exporting config sha256:044747d08d97dff03f15e023f5430c1775123df964f5f61f893fbae39679eb11 0.0s done
+#25 exporting attestation manifest sha256:8bd549978e22d55bfc87a86c66d356ad11e283742082b54e1f6074d017380288 0.0s done
+#25 exporting manifest list sha256:4f017c22a5b3c34f783fb68d5c6e2601e3e254d696a9d8c03f7a7f3eb9afe425 0.0s done
+#25 pushing layers
+#25 ...
+
+#26 [auth] xunliyang/orchestration-center:pull,push token for ghcr.io
+#26 DONE 0.0s
+
+#25 exporting to image
+#25 ...
+
+#27 [auth] xunliyang/orchestration-center:pull,push xunliyang/registry-center:pull token for ghcr.io
+#27 DONE 0.0s
+
+#25 exporting to image
+#25 pushing layers 17.5s done
+#25 pushing manifest for ghcr.io/xunliyang/orchestration-center:fix-stderr-test-20261018@sha256:4f017c22a5b3c34f783fb68d5c6e2601e3e254d696a9d8c03f7a7f3eb9afe425
+#25 pushing manifest for ghcr.io/xunliyang/orchestration-center:fix-stderr-test-20261018@sha256:4f017c22a5b3c34f783fb68d5c6e2601e3e254d696a9d8c03f7a7f3eb9afe425 3.8s done
+#25 DONE 35.5s
+[0;32m[INFO][0m Done: ghcr.io/xunliyang/orchestration-center:fix-stderr-test-20261018
+[1;33m[WARN][0m Workflow Designer Dockerfile not found, skipping
+
+==========================================
+  OpenAN Platform Image Build
+==========================================
+
+  Orchestration release:    https://github.com/project-openan/orchestration-center/archive/v1.0.0.tar.gz
+  Image registry:           ghcr.io
+  Image namespace:          xunliyang
+  Image tag:                fix-stderr-test-20261018
+  Platforms:                linux/amd64,linux/arm64
+  Push:                     true
+  Components:               orchestration-center workflow-designer 
+
+==========================================
+
+
+==========================================
+  Build completed!
+==========================================
+
+  Images:
+    - ghcr.io/xunliyang/orchestration-center:fix-stderr-test-20261018
+
+  Deploy:
+    helm upgrade --install openan ./online-install/openan-chart -n openan --create-namespace -f /path/to/deployment.yaml \
+      --set orchestration.image.repository=ghcr.io/xunliyang/orchestration-center --set orchestration.image.tag=fix-stderr-test-20261018 \
+

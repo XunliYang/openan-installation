@@ -1,0 +1,42 @@
+=== CMD: bash containerized/build/portal/build-portal-image.sh -h ===
+Build the OpenAN Portal container image from the published GitHub release
+artifact and (optionally) push a multi-architecture manifest list.
+
+Why a separate script: containerized/build/build.sh builds every component
+from a *source* archive using the component's own Dockerfile. The portal
+release ships a prebuilt static site (index.html + assets/ + plugins/) that
+already contains the compiled SPA and all bundle plugins, so building the
+image from the release is both faster and more faithful than rebuilding from
+source (which needs Node and, at v1.0.0, a Dockerfile whose COPY paths no
+longer exist). This script wraps that release-artifact path.
+
+The Dockerfile is generated inline, so nothing else in this image pipeline
+depends on the portal repo layout. The only bundled dependencies are the two
+nginx entrypoint files next to this script:
+  default.conf.template       API gateways + SPA fallback
+  15-openan-backends.envsh    composes BACKEND_URL / REGISTRY_URL
+
+Usage:
+  ./build-portal-image.sh                       # build+push v1.0.0, both arches
+  ./build-portal-image.sh -t v1.0.1             # different release/image tag
+  PUSH=0 PLATFORMS=linux/arm64 ./build-portal-image.sh   # local, single-arch
+  ./build-portal-image.sh -n                    # dry run (print plan only)
+  ./build-portal-image.sh -h                    # help
+
+Environment overrides (all optional):
+  TAG            release tag and default image tag  (default v1.0.0)
+  REGISTRY       registry host + namespace          (default ghcr.io/project-openan)
+  IMAGE_NAME     image name                         (default openan-portal)
+  PLATFORMS      buildx --platform list             (default linux/amd64,linux/arm64)
+  EXTRA_TAGS     space-separated additional tags    (default "")
+  PUSH           1 = push manifest list, 0 = load   (default 1)
+  BUILDER        buildx builder name                (default: first running docker-container)
+  TEMPLATE_SRC   dir holding the two nginx files    (default: this script's dir)
+  DIST_TARBALL   use this local tarball instead of downloading
+  SKIP_CHECKSUM  1 = skip sha256 verification       (default 0)
+  KEEP_CTX       1 = keep the temporary build context (default 0)
+
+NOTE: registry paths must be lowercase. `docker login ghcr.io -u MixedCase`
+is fine, but a tag like ghcr.io/MixedCase/img is rejected by the daemon.
+
+=== exit=0 ===

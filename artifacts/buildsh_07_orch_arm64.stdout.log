@@ -1,0 +1,27 @@
+
+==========================================
+  OpenAN Platform Image Build
+==========================================
+
+  Orchestration release:    https://github.com/project-openan/orchestration-center/archive/v1.0.0.tar.gz
+  Image registry:           ghcr.io
+  Image namespace:          xunliyang
+  Image tag:                fix-stderr-test-arm64-20261018
+  Platforms:                linux/arm64
+  Push:                     true
+  Components:               orchestration-center workflow-designer 
+
+==========================================
+
+
+==========================================
+  Build completed!
+==========================================
+
+  Images:
+    - ghcr.io/xunliyang/orchestration-center:fix-stderr-test-arm64-20261018
+
+  Deploy:
+    helm upgrade --install openan ./online-install/openan-chart -n openan --create-namespace -f /path/to/deployment.yaml \
+      --set orchestration.image.repository=ghcr.io/xunliyang/orchestration-center --set orchestration.image.tag=fix-stderr-test-arm64-20261018 \
+

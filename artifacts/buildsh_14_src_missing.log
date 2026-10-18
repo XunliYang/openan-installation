@@ -1,0 +1,18 @@
+=== CMD: bash containerized/build/build.sh --registry-src /nonexistent registry ===
+
+==========================================
+  OpenAN Platform Image Build
+==========================================
+
+  Registry Center release:  https://github.com/project-openan/registry-center/archive/v1.0.0.tar.gz
+  Image registry:           ghcr.io
+  Image namespace:          project-openan
+  Image tag:                v1.0.0
+  Platforms:                linux/amd64,linux/arm64
+  Push:                     true
+  Components:               registry-center 
+
+==========================================
+
+[0;31m[ERROR][0m Local source path not found: /nonexistent
+=== exit=1 ===

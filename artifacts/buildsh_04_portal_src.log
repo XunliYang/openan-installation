@@ -1,0 +1,205 @@
+=== CMD: bash containerized/build/build.sh portal --image-registry ghcr.io --namespace xunliyang --tag fix-stderr-test-20261018 --portal-release https://github.com/project-openan/openan-portal/archive/v1.0.0.tar.gz ===
+=== exit=1 ===
+
+----- output -----
+[0;36m[STEP][0m Downloading openan-portal from release...
+[0;32m[INFO][0m URL: https://github.com/project-openan/openan-portal/archive/v1.0.0.tar.gz
+#=#=#                                                                         ##O#-#                                                                        ##O=#  #                                                                      #=#=-#  #                                                                      #=#=-#   #                                                                   
+[0;32m[INFO][0m openan-portal downloaded and extracted to /tmp/multica-task-899370835/openan-build.8VSaRAE7/openan-portal
+[0;32m[INFO][0m Portal source: /tmp/multica-task-899370835/openan-build.8VSaRAE7/openan-portal/openan-portal-1.0.0/
+[0;36m[STEP][0m [1/1] Building OpenAN Portal...
+#0 building with "multiarch-builder" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 3.84kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1
+#2 DONE 1.8s
+
+#3 docker-image://docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#3 resolve docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e done
+#3 CACHED
+
+#4 [linux/arm64 internal] load metadata for docker.io/library/nginx:1.27-alpine
+#4 ...
+
+#5 [linux/amd64 internal] load metadata for docker.io/library/node:22-alpine
+#5 DONE 0.3s
+
+#6 [linux/arm64 internal] load metadata for docker.io/library/node:22-alpine
+#6 ...
+
+#4 [linux/arm64 internal] load metadata for docker.io/library/nginx:1.27-alpine
+#4 DONE 0.6s
+
+#7 [linux/amd64 internal] load metadata for docker.io/library/nginx:1.27-alpine
+#7 DONE 0.9s
+
+#6 [linux/arm64 internal] load metadata for docker.io/library/node:22-alpine
+#6 ...
+
+#8 [internal] load .dockerignore
+#8 transferring context: 355B done
+#8 DONE 0.0s
+
+#6 [linux/arm64 internal] load metadata for docker.io/library/node:22-alpine
+#6 DONE 1.2s
+
+#9 [internal] load build context
+#9 transferring context: 7.69kB 0.0s done
+#9 DONE 0.0s
+
+#10 [linux/amd64 build  2/13] WORKDIR /app
+#10 CACHED
+
+#11 [linux/amd64 build  5/13] COPY packages/portal-sdk/package.json packages/portal-sdk/
+#11 CACHED
+
+#12 [linux/amd64 build  3/13] COPY package.json package-lock.json ./
+#12 CACHED
+
+#13 [linux/amd64 build  4/13] COPY portal/package.json portal/
+#13 CACHED
+
+#14 [linux/amd64 build  6/13] COPY packages/shared-workflow/package.json packages/shared-workflow/
+#14 CACHED
+
+#15 [linux/amd64 build  7/13] COPY plugins/demo-showcase/package.json plugins/demo-showcase/
+#15 ERROR: failed to calculate checksum of ref u14kl3sqbz6pnhurw7y3oxi81::lroszzdb63mv1lb51ygte2vp8: "/plugins/demo-showcase/package.json": not found
+
+#16 [linux/amd64 build  8/13] COPY plugins/hello-portal/package.json plugins/hello-portal/
+#16 ERROR: failed to calculate checksum of ref u14kl3sqbz6pnhurw7y3oxi81::lroszzdb63mv1lb51ygte2vp8: "/plugins/hello-portal/package.json": not found
+
+#17 [linux/amd64 build  9/13] COPY plugins/orchestration-center/package.json plugins/orchestration-center/
+#17 CACHED
+
+#18 [linux/amd64 build 10/13] COPY plugins/registry-center/package.json plugins/registry-center/
+#18 ERROR: failed to calculate checksum of ref u14kl3sqbz6pnhurw7y3oxi81::lroszzdb63mv1lb51ygte2vp8: "/plugins/registry-center/package.json": not found
+
+#19 [linux/arm64 build  4/13] COPY portal/package.json portal/
+#19 CACHED
+
+#20 [linux/arm64 build  5/13] COPY packages/portal-sdk/package.json packages/portal-sdk/
+#20 CACHED
+
+#21 [linux/arm64 build  3/13] COPY package.json package-lock.json ./
+#21 CACHED
+
+#22 [linux/arm64 build  9/13] COPY plugins/orchestration-center/package.json plugins/orchestration-center/
+#22 CACHED
+
+#23 [linux/arm64 build  6/13] COPY packages/shared-workflow/package.json packages/shared-workflow/
+#23 CACHED
+
+#24 [linux/arm64 build  2/13] WORKDIR /app
+#24 CACHED
+
+#25 [linux/arm64 build 10/13] COPY plugins/registry-center/package.json plugins/registry-center/
+#25 ERROR: failed to calculate checksum of ref u14kl3sqbz6pnhurw7y3oxi81::lroszzdb63mv1lb51ygte2vp8: "/plugins/registry-center/package.json": not found
+
+#26 [linux/arm64 build  7/13] COPY plugins/demo-showcase/package.json plugins/demo-showcase/
+#26 ERROR: failed to calculate checksum of ref u14kl3sqbz6pnhurw7y3oxi81::lroszzdb63mv1lb51ygte2vp8: "/plugins/demo-showcase/package.json": not found
+
+#27 [linux/arm64 build  8/13] COPY plugins/hello-portal/package.json plugins/hello-portal/
+#27 ERROR: failed to calculate checksum of ref u14kl3sqbz6pnhurw7y3oxi81::lroszzdb63mv1lb51ygte2vp8: "/plugins/hello-portal/package.json": not found
+
+#28 [linux/arm64 build  1/13] FROM docker.io/library/node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402
+#28 resolve docker.io/library/node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 0.0s done
+#28 sha256:74849c662da757b89cfe8b5406d7beaaf491727ea6843cbba85b8889d1543956 0B / 1.26MB 0.0s
+#28 sha256:a9986cd6f37dbddae7862a6d4be71683472e7c2ea708e87db14f8a6393c00f00 0B / 4.19MB 0.0s
+#28 sha256:87919ed734a39bc185155d715bdcf2ce6c52d112ff642650d9e0e35502b481e9 0B / 55.60MB 0.0s
+#28 sha256:66fa63c7a061939c4346f9c3c1ada45434b276dd4e4274721d6bf13cb8adec6e 0B / 444B 0.0s
+#28 ...
+
+#29 [linux/amd64 build  1/13] FROM docker.io/library/node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402
+#29 DONE 0.1s
+
+#30 [linux/amd64 stage-1 1/6] FROM docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+#30 resolve docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 0.0s done
+#30 sha256:39c2ddfd6010082a4a646e7ca44e95aca9bf3eaebc00f17f7ccc2954004f2a7d 0B / 15.52MB 0.0s
+#30 sha256:81bd8ed7ec6789b0cb7f1b47ee731c522f6dba83201ec73cd6bca1350f582948 0B / 402B 0.0s
+#30 sha256:b464cfdf2a6319875aeb27359ec549790ce14d8214fcb16ef915e4530e5ed235 0B / 629B
+#30 sha256:d7e5070240863957ebb0b5a44a5729963c3462666baa2947d00628cb5f2d5773 0B / 955B
+#30 sha256:34a64644b756511a2e217f0508e11d1a572085d66cd6dc9a555a082ad49a3102 0B / 1.40kB 0.0s
+#30 sha256:197eb75867ef4fcecd4724f17b0972ab0489436860a594a9445f8eaff8155053 0B / 1.21kB 0.0s
+#30 sha256:61ca4f733c802afd9e05a32f0de0361b6d713b8b53292dc15fb093229f648674 0B / 1.79MB
+#30 ...
+
+#24 [linux/arm64 build  2/13] WORKDIR /app
+#24 CANCELED
+
+#10 [linux/amd64 build  2/13] WORKDIR /app
+#10 CANCELED
+
+#31 [linux/amd64 build 11/13] RUN npm ci
+#31 CACHED
+
+#32 [linux/amd64 build 12/13] COPY . .
+#32 CACHED
+
+#33 [linux/amd64 build 13/13] RUN npm run build
+#33 CACHED
+
+#34 [linux/amd64 stage-1 2/6] COPY --from=build /app/portal/dist /usr/share/nginx/html
+#34 CANCELED
+
+#35 [linux/arm64 stage-1 1/6] FROM docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+#35 resolve docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 0.0s done
+#35 sha256:d3282d7e6b7633cf153dce0ca1c72b6ea574edb0b34351f848fb16b7d13c851f 0B / 957B
+#35 sha256:c60e446e49a0b607fd79968afdc54cedce67644990a3930925add6caf577779d 0B / 1.79MB
+#35 ...
+
+#36 [linux/arm64 build 12/13] COPY . .
+#36 CACHED
+
+#37 [linux/arm64 build 11/13] RUN npm ci
+#37 CACHED
+
+#38 [linux/arm64 build 13/13] RUN npm run build
+#38 CACHED
+
+#39 [linux/arm64 stage-1 2/6] COPY --from=build /app/portal/dist /usr/share/nginx/html
+#39 CANCELED
+------
+ > [linux/amd64 build  7/13] COPY plugins/demo-showcase/package.json plugins/demo-showcase/:
+------
+------
+ > [linux/amd64 build  8/13] COPY plugins/hello-portal/package.json plugins/hello-portal/:
+------
+------
+ > [linux/amd64 build 10/13] COPY plugins/registry-center/package.json plugins/registry-center/:
+------
+------
+ > [linux/arm64 build  7/13] COPY plugins/demo-showcase/package.json plugins/demo-showcase/:
+------
+------
+ > [linux/arm64 build  8/13] COPY plugins/hello-portal/package.json plugins/hello-portal/:
+------
+------
+ > [linux/arm64 build 10/13] COPY plugins/registry-center/package.json plugins/registry-center/:
+------
+Dockerfile:50
+--------------------
+  48 |     COPY plugins/hello-portal/package.json plugins/hello-portal/
+  49 |     COPY plugins/orchestration-center/package.json plugins/orchestration-center/
+  50 | >>> COPY plugins/registry-center/package.json plugins/registry-center/
+  51 |     
+  52 |     RUN npm ci
+--------------------
+ERROR: failed to solve: failed to compute cache key: failed to calculate checksum of ref u14kl3sqbz6pnhurw7y3oxi81::lroszzdb63mv1lb51ygte2vp8: "/plugins/registry-center/package.json": not found
+
+==========================================
+  OpenAN Platform Image Build
+==========================================
+
+  Portal release:           https://github.com/project-openan/openan-portal/archive/v1.0.0.tar.gz
+  Image registry:           ghcr.io
+  Image namespace:          xunliyang
+  Image tag:                fix-stderr-test-20261018
+  Platforms:                linux/amd64,linux/arm64
+  Push:                     true
+  Components:               openan-portal
+
+==========================================
+

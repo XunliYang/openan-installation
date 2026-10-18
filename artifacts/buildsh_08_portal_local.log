@@ -1,0 +1,149 @@
+=== CMD: bash containerized/build/build.sh portal --platforms linux/arm64 --no-push --portal-src /tmp/openan-fixtures/openan-portal-1.0.0 ===
+=== exit=1 ===
+
+----- full output (stderr) -----
+[0;32m[INFO][0m Portal source: /tmp/openan-fixtures/openan-portal-1.0.0
+[0;36m[STEP][0m [1/1] Building OpenAN Portal...
+#0 building with "multiarch-builder" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 3.84kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1
+#2 ...
+
+#3 [auth] docker/dockerfile:pull token for registry-1.docker.io
+#3 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1
+#2 DONE 2.2s
+
+#4 docker-image://docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#4 resolve docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e done
+#4 sha256:c3fba84503b044ce5cd182dd0150892f3b0eff1350c4c5d7f5ca2066da594550 0B / 13.13MB 0.2s
+#4 sha256:c3fba84503b044ce5cd182dd0150892f3b0eff1350c4c5d7f5ca2066da594550 3.15MB / 13.13MB 0.3s
+#4 sha256:c3fba84503b044ce5cd182dd0150892f3b0eff1350c4c5d7f5ca2066da594550 13.13MB / 13.13MB 0.4s done
+#4 extracting sha256:c3fba84503b044ce5cd182dd0150892f3b0eff1350c4c5d7f5ca2066da594550
+#4 extracting sha256:c3fba84503b044ce5cd182dd0150892f3b0eff1350c4c5d7f5ca2066da594550 0.2s done
+#4 DONE 0.6s
+
+#5 [internal] load metadata for docker.io/library/node:22-alpine
+#5 ...
+
+#6 [auth] library/node:pull token for registry-1.docker.io
+#6 DONE 0.0s
+
+#7 [auth] library/nginx:pull token for registry-1.docker.io
+#7 DONE 0.0s
+
+#8 [internal] load metadata for docker.io/library/nginx:1.27-alpine
+#8 ...
+
+#5 [internal] load metadata for docker.io/library/node:22-alpine
+#5 DONE 1.7s
+
+#8 [internal] load metadata for docker.io/library/nginx:1.27-alpine
+#8 DONE 1.9s
+
+#9 [internal] load .dockerignore
+#9 transferring context: 355B done
+#9 DONE 0.0s
+
+#10 [stage-1 1/6] FROM docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+#10 resolve docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 0.0s done
+#10 DONE 0.2s
+
+#11 [build  1/13] FROM docker.io/library/node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402
+#11 resolve docker.io/library/node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 0.0s done
+#11 sha256:a9986cd6f37dbddae7862a6d4be71683472e7c2ea708e87db14f8a6393c00f00 0B / 4.19MB 0.0s
+#11 sha256:66fa63c7a061939c4346f9c3c1ada45434b276dd4e4274721d6bf13cb8adec6e 0B / 444B 0.1s
+#11 sha256:74849c662da757b89cfe8b5406d7beaaf491727ea6843cbba85b8889d1543956 0B / 1.26MB 0.1s
+#11 sha256:87919ed734a39bc185155d715bdcf2ce6c52d112ff642650d9e0e35502b481e9 0B / 55.60MB 0.1s
+#11 ...
+
+#12 [internal] load build context
+#12 transferring context: 970.17kB 0.1s done
+#12 DONE 0.2s
+
+#13 [build  3/13] COPY package.json package-lock.json ./
+#13 CACHED
+
+#14 [build  4/13] COPY portal/package.json portal/
+#14 CACHED
+
+#15 [build  5/13] COPY packages/portal-sdk/package.json packages/portal-sdk/
+#15 CACHED
+
+#16 [build  6/13] COPY packages/shared-workflow/package.json packages/shared-workflow/
+#16 CACHED
+
+#17 [build  8/13] COPY plugins/hello-portal/package.json plugins/hello-portal/
+#17 ERROR: failed to calculate checksum of ref u14kl3sqbz6pnhurw7y3oxi81::10hb3wmtyfyg0g0nuytw3u0kn: "/plugins/hello-portal/package.json": not found
+
+#18 [build  7/13] COPY plugins/demo-showcase/package.json plugins/demo-showcase/
+#18 ERROR: failed to calculate checksum of ref u14kl3sqbz6pnhurw7y3oxi81::10hb3wmtyfyg0g0nuytw3u0kn: "/plugins/demo-showcase/package.json": not found
+
+#19 [build  9/13] COPY plugins/orchestration-center/package.json plugins/orchestration-center/
+#19 CACHED
+
+#20 [build 10/13] COPY plugins/registry-center/package.json plugins/registry-center/
+#20 ERROR: failed to calculate checksum of ref u14kl3sqbz6pnhurw7y3oxi81::10hb3wmtyfyg0g0nuytw3u0kn: "/plugins/registry-center/package.json": not found
+
+#21 [build  2/13] WORKDIR /app
+#21 CANCELED
+
+#10 [stage-1 1/6] FROM docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+#10 sha256:9994ea1088e3f1d0eb3dea855f32e7e63742b2644c8611c124ba81bc3453047e 0B / 16.03MB 0.0s
+#10 sha256:37aca2470cdaf48d251d9308c09dc8735b45ebcbefada46537c9989991b3fe6d 0B / 1.40kB 0.0s
+#10 sha256:a4ce1202d74643d4e4ce15787afc2402a18802e3d7bfd0f6bf60c912b57eec1f 0B / 405B 0.0s
+#10 sha256:1ab010a063387e697fc32bb43022532c0e275d2e51fb65c2ac541e082e610a33 0B / 1.21kB 0.0s
+#10 sha256:e6557c42ebeaea010d8a8883fdacdc5a17dea1221416d0d980e206dd42dc7e29 0B / 627B
+#10 sha256:d3282d7e6b7633cf153dce0ca1c72b6ea574edb0b34351f848fb16b7d13c851f 0B / 957B
+#10 sha256:c60e446e49a0b607fd79968afdc54cedce67644990a3930925add6caf577779d 0B / 1.79MB
+#10 ...
+
+#22 [build 12/13] COPY . .
+#22 CACHED
+
+#23 [build 11/13] RUN npm ci
+#23 CACHED
+
+#24 [build 13/13] RUN npm run build
+#24 CACHED
+
+#25 [stage-1 2/6] COPY --from=build /app/portal/dist /usr/share/nginx/html
+#25 CANCELED
+------
+ > [build  7/13] COPY plugins/demo-showcase/package.json plugins/demo-showcase/:
+------
+------
+ > [build  8/13] COPY plugins/hello-portal/package.json plugins/hello-portal/:
+------
+------
+ > [build 10/13] COPY plugins/registry-center/package.json plugins/registry-center/:
+------
+Dockerfile:50
+--------------------
+  48 |     COPY plugins/hello-portal/package.json plugins/hello-portal/
+  49 |     COPY plugins/orchestration-center/package.json plugins/orchestration-center/
+  50 | >>> COPY plugins/registry-center/package.json plugins/registry-center/
+  51 |     
+  52 |     RUN npm ci
+--------------------
+ERROR: failed to solve: failed to compute cache key: failed to calculate checksum of ref u14kl3sqbz6pnhurw7y3oxi81::10hb3wmtyfyg0g0nuytw3u0kn: "/plugins/registry-center/package.json": not found
+
+==========================================
+  OpenAN Platform Image Build
+==========================================
+
+  Portal source:            /tmp/openan-fixtures/openan-portal-1.0.0
+  Image registry:           ghcr.io
+  Image namespace:          project-openan
+  Image tag:                v1.0.0
+  Platforms:                linux/arm64
+  Push:                     false
+  Components:               openan-portal
+
+==========================================
+
