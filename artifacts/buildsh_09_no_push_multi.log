@@ -1,0 +1,3 @@
+=== CMD: bash containerized/build/build.sh registry --platforms linux/amd64,linux/arm64 --no-push --image-registry ghcr.io --namespace xunliyang --tag fix-stderr-test-20261018 ===
+[0;31m[ERROR][0m --no-push requires one platform (e.g. --platforms linux/amd64); nothing was pushed
+=== exit=2 ===

@@ -1,0 +1,15 @@
+
+==========================================
+  OpenAN Platform Image Build
+==========================================
+
+  Portal source:            /tmp/openan-fixtures/openan-portal-1.0.0
+  Image registry:           ghcr.io
+  Image namespace:          project-openan
+  Image tag:                v1.0.0
+  Platforms:                linux/arm64
+  Push:                     false
+  Components:               openan-portal
+
+==========================================
+

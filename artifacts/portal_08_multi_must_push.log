@@ -1,0 +1,14 @@
+=== CMD: env PUSH=0 PLATFORMS=linux/amd64,linux/arm64 bash containerized/build/portal/build-portal-image.sh ===
+
+==========================================
+  OpenAN Portal Image Build (release)
+==========================================
+  Release tag:      v1.0.0
+  Image:            ghcr.io/project-openan/openan-portal:v1.0.0
+  Platforms:        linux/amd64,linux/arm64
+  Push:             0
+  nginx templates:  /root/multica_workspaces/leoyy6-c077c09ea391/leoy-155-8352c781af96/workdir/openan-installation/containerized/build/portal
+==========================================
+
+[0;31mFAIL[0m multi-arch builds must push (set PUSH=1); a manifest list cannot be --load'ed
+=== exit=1 ===

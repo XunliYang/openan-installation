@@ -1,0 +1,119 @@
+=== CMD: ./build.sh orchestration --platforms linux/arm64 --no-push --orchestration-src <local> ===
+
+==========================================
+  OpenAN Platform Image Build
+==========================================
+
+  Orchestration release:    https://github.com/project-openan/orchestration-center/archive/v1.0.0.tar.gz
+  Image registry:           ghcr.io
+  Image namespace:          project-openan
+  Image tag:                v1.0.0
+  Platforms:                linux/arm64
+  Push:                     false
+  Components:               orchestration-center workflow-designer 
+
+==========================================
+
+[0;32m[INFO][0m Orchestration Center source: /tmp/openan-fixtures/orchestration-center-1.0.0
+[0;36m[STEP][0m [1/1] Building Orchestration Center...
+#0 building with "multiarch-builder" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.54kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 ...
+
+#3 [auth] library/python:pull token for registry-1.docker.io
+#3 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 1.6s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 285B done
+#4 DONE 0.0s
+
+#5 [builder 1/4] FROM docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+#5 resolve docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 13.65kB 0.0s done
+#6 DONE 0.0s
+
+#7 [stage-1 5/6] RUN useradd -m appuser     && mkdir -p /opt/orchestration-center/log /opt/orchestration-center/run /opt/orchestration-center/data     && mkdir -p /opt/orchestration-center/etc/ssl     && chmod +x /opt/orchestration-center/bin/*.sh /opt/orchestration-center/docker-entrypoint.sh     && chown -R appuser:appuser /opt/orchestration-center /opt/venv
+#7 CACHED
+
+#8 [builder 4/4] RUN python3 -m venv /opt/venv --copies     && . /opt/venv/bin/activate     && pip install --no-cache-dir -r /tmp/requirements.txt     && rm -rf /tmp/requirements.txt /root/.cache/pip
+#8 CACHED
+
+#9 [stage-1 4/6] COPY . /opt/orchestration-center/
+#9 CACHED
+
+#10 [stage-1 2/6] RUN apt-get update && apt-get install -y --no-install-recommends bash libpq5 && rm -rf /var/lib/apt/lists/*
+#10 CACHED
+
+#11 [builder 3/4] COPY requirements.txt /tmp/requirements.txt
+#11 CACHED
+
+#12 [stage-1 3/6] COPY --from=builder /opt/venv /opt/venv
+#12 CACHED
+
+#13 [builder 2/4] RUN apt-get update && apt-get install -y --no-install-recommends     gcc     libc6-dev     libpq-dev     libssl-dev     libffi-dev     && rm -rf /var/lib/apt/lists/*
+#13 CACHED
+
+#14 [stage-1 6/6] WORKDIR /opt/orchestration-center
+#14 CACHED
+
+#15 exporting to docker image format
+#15 exporting layers done
+#15 exporting manifest sha256:35dad830f6ddbf7b85e9230c7df4d5ae85313efdf29a965645f1ae55e1fc7001 done
+#15 exporting config sha256:274ecd8b14b1cdc0ae253cafd8d81cb623eb73e2385fc1e84e783d550afb6004 done
+#15 sending tarball
+#15 ...
+
+#16 importing to docker
+#16 loading layer 258ba1f62b51 327.68kB / 30.20MB
+#16 loading layer 373ce1c1778b 32.77kB / 1.28MB
+#16 loading layer 11d89b6e886f 131.07kB / 12.06MB
+#16 loading layer 84dd5a4db43e 249B / 249B
+#16 loading layer 558ed67dbdfd 32.77kB / 1.28MB
+#16 loading layer d67c7ac75fb4 557.06kB / 76.24MB
+#16 loading layer d67c7ac75fb4 26.74MB / 76.24MB 2.5s
+#16 loading layer d67c7ac75fb4 72.97MB / 76.24MB 4.6s
+#16 loading layer 760c166c3f71 32.77kB / 329.77kB
+#16 loading layer f533d09ce97a 557.06kB / 76.58MB
+#16 loading layer f533d09ce97a 25.62MB / 76.58MB 2.0s
+#16 loading layer f533d09ce97a 38.99MB / 76.58MB 4.1s
+#16 loading layer 5f70bf18a086 32B / 32B
+#16 loading layer 258ba1f62b51 327.68kB / 30.20MB 13.6s done
+#16 loading layer 373ce1c1778b 32.77kB / 1.28MB 12.1s done
+#16 loading layer 11d89b6e886f 131.07kB / 12.06MB 12.0s done
+#16 loading layer 84dd5a4db43e 249B / 249B 11.1s done
+#16 loading layer 558ed67dbdfd 32.77kB / 1.28MB 11.1s done
+#16 loading layer d67c7ac75fb4 72.97MB / 76.24MB 11.0s done
+#16 loading layer 760c166c3f71 32.77kB / 329.77kB 5.9s done
+#16 loading layer f533d09ce97a 38.99MB / 76.58MB 5.7s done
+#16 loading layer 5f70bf18a086 32B / 32B 0.1s done
+#16 DONE 13.6s
+
+#15 exporting to docker image format
+#15 sending tarball 17.6s done
+#15 DONE 17.7s
+[0;32m[INFO][0m Done: ghcr.io/project-openan/orchestration-center:v1.0.0
+[1;33m[WARN][0m Workflow Designer Dockerfile not found, skipping
+
+==========================================
+  Build completed!
+==========================================
+
+  Images:
+    - ghcr.io/project-openan/orchestration-center:v1.0.0
+
+  Deploy:
+    helm upgrade --install openan ./online-install/openan-chart -n openan --create-namespace -f /path/to/deployment.yaml \
+      --set orchestration.image.repository=ghcr.io/project-openan/orchestration-center --set orchestration.image.tag=v1.0.0 \
+
+=== exit=0 ===

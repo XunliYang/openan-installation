@@ -1,0 +1,3 @@
+=== CMD: bash containerized/build/build.sh --nonsense ===
+[0;31m[ERROR][0m Unknown argument: --nonsense
+=== exit=1 ===
