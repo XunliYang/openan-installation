@@ -1,0 +1,115 @@
+# OpenAN Portal nginx configuration template.
+#
+# Rendered by the official nginx image entrypoint (envsubst) at container
+# start: /etc/nginx/templates/*.template -> /etc/nginx/conf.d/*.conf
+# Only variables present in the container environment are substituted;
+# nginx's own variables ($2, $host, $uri, ...) are left untouched.
+#
+# Variables substituted (composed by 15-openan-backends.envsh unless the
+# deployer set them explicitly; component defaults point at the in-cluster
+# service names):
+#   BACKEND_URL   Orchestration Center backend base URL
+#                 (default: http://orchestration-center:5001)
+#   REGISTRY_URL  Registry Center backend base URL
+#                 (default: http://registry-center:5000)
+#
+# Frontend call paths (mirrors portal/vite.config.js dev proxies and the
+# current production deployment):
+#   /api/orchestrate/rest/v1/orchestrate/*  Portal + auth + SSE streams
+#       -> ${BACKEND_URL}/rest/v1/orchestrate/*        (gateway, prefix strip)
+#   /api/registry/rest/v1/registry/*        registry-center plugin
+#       -> ${REGISTRY_URL}/rest/v1/registry/*          (gateway, prefix strip)
+#   /rest/v1/orchestrate/*                  orchestration-center plugin
+#       -> ${BACKEND_URL}/rest/v1/orchestrate/*        (direct, no rewrite)
+
+server {
+    # Unprivileged nginx (non-root, OpenShift-compatible) listens on 8080.
+    listen 8080;
+    server_name localhost;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/json application/javascript;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # API proxy to orchestration backend (gateway mode, prefix strip).
+    location ~ ^/api/orchestrate(/|$)(.*)$ {
+        rewrite ^/api/orchestrate(/|$)(.*)$ /$2 break;
+        proxy_pass ${BACKEND_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+
+        # SSE support (/rest/v1/orchestrate/execute, /dispatch)
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+    }
+
+    # API proxy to registry backend (gateway mode, prefix strip).
+    location ~ ^/api/registry(/|$)(.*)$ {
+        rewrite ^/api/registry(/|$)(.*)$ /$2 break;
+        proxy_pass ${REGISTRY_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+    }
+
+    # Direct API path used by the orchestration-center plugin in integrated
+    # mode (its manifest declares no gateway; calls hit the origin as-is).
+    location /rest/v1/orchestrate/ {
+        proxy_pass ${BACKEND_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+
+        # SSE support
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+    }
+
+    # Plugin UMD artifacts: no-cache (hot update) + CORS (remote debug).
+    # ^~ so bundle .js/.css under /plugins/ are NOT captured by the static
+    # regex below (regex locations otherwise win over prefix locations).
+    location ^~ /plugins/ {
+        add_header Cache-Control "no-cache";
+        add_header Access-Control-Allow-Origin *;
+        try_files $uri =404;
+    }
+
+    # Static assets (Vite emits content-hashed files): long cache.
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # SPA fallback
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
