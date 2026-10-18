@@ -1,0 +1,67 @@
+===== FINAL ARTIFACTS =====
+-rw-r--r-- 1 root root 617M Oct 18 11:58 binary/build/dist/orchestration-center-1.0.0-linux.tar.gz
+-rw-r--r-- 1 root root  99M Oct 18 11:56 binary/build/dist/registry-center-1.0.0-linux.tar.gz
+
+===== tar -tzf HEAD: registry-center =====
+registry-center-1.0.0-linux/
+registry-center-1.0.0-linux/run/
+registry-center-1.0.0-linux/docker-compose.yml
+registry-center-1.0.0-linux/log/
+registry-center-1.0.0-linux/requirements.txt
+registry-center-1.0.0-linux/deploy-all.ps1
+registry-center-1.0.0-linux/bin/
+registry-center-1.0.0-linux/bin/install_service.sh
+registry-center-1.0.0-linux/bin/agent-registry-init
+registry-center-1.0.0-linux/bin/entrypoint.sh
+registry-center-1.0.0-linux/bin/start.sh
+registry-center-1.0.0-linux/bin/stop.sh
+registry-center-1.0.0-linux/README.md
+registry-center-1.0.0-linux/Dockerfile
+registry-center-1.0.0-linux/.gitignore
+registry-center-1.0.0-linux/tests/
+registry-center-1.0.0-linux/tests/test_register.py
+registry-center-1.0.0-linux/tests/test_server_endpoints.py
+registry-center-1.0.0-linux/tests/test_jwk_endpoint.py
+registry-center-1.0.0-linux/tests/test_llm.py
+
+===== tar -tzf HEAD: orchestration-center =====
+orchestration-center-1.0.0-linux/
+orchestration-center-1.0.0-linux/docker-compose.yml
+orchestration-center-1.0.0-linux/requirements.txt
+orchestration-center-1.0.0-linux/deploy-all.ps1
+orchestration-center-1.0.0-linux/bin/
+orchestration-center-1.0.0-linux/bin/start_samples.sh
+orchestration-center-1.0.0-linux/bin/install_service.sh
+orchestration-center-1.0.0-linux/bin/start.sh
+orchestration-center-1.0.0-linux/bin/stop_samples.sh
+orchestration-center-1.0.0-linux/bin/stop.sh
+orchestration-center-1.0.0-linux/README.md
+orchestration-center-1.0.0-linux/Dockerfile
+orchestration-center-1.0.0-linux/.gitignore
+orchestration-center-1.0.0-linux/tests/
+orchestration-center-1.0.0-linux/tests/test_external_apis.py
+orchestration-center-1.0.0-linux/vendor/
+orchestration-center-1.0.0-linux/vendor/wheels/
+orchestration-center-1.0.0-linux/vendor/wheels/pyasn1_modules-0.4.2-py3-none-any.whl
+orchestration-center-1.0.0-linux/vendor/wheels/iniconfig-2.3.1-py3-none-any.whl
+orchestration-center-1.0.0-linux/vendor/wheels/pytest-9.1.1-py3-none-any.whl
+
+===== wheel ABI/structure =====
+--- registry-center-1.0.0-linux ---
+total .whl: 77
+cp312 .whl: 22
+x86_64 .whl: 13
+aarch64 .whl: 13
+--- orchestration-center-1.0.0-linux ---
+total .whl: 79
+cp312 .whl: 20
+x86_64 .whl: 13
+aarch64 .whl: 13
+
+===== vendor subdirs (orchestration) =====
+orchestration-center-1.0.0-linux/vendor/npm-cache/
+orchestration-center-1.0.0-linux/vendor/wheels/
+
+===== node_modules exclusion =====
+workflow-designer/node_modules entries: 0
+node_modules entries under vendor/npm-cache/_npx only: 7559

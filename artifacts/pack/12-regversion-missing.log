@@ -1,0 +1,4 @@
+START 2026-10-18 03:52:21 UTC
+binary/build/pack.sh: line 113: $2: unbound variable
+exit=1
+END 2026-10-18 03:52:21 UTC

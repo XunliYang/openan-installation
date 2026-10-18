@@ -1,0 +1,22 @@
+START 2026-10-18 03:59:23 UTC
+[0;34m========================================[0m
+[0;34m  OpenAN Offline Packager[0m
+[0;34m========================================[0m
+
+  Pack targets:
+    registry-center:       true
+    orchestration-center:  false
+  Versions (flag > default):
+    registry-center:       v1.0.0 (default)
+      https://github.com/project-openan/registry-center/archive/refs/tags/v1.0.0.tar.gz
+    orchestration-center:  v1.0.0 (default)
+      https://github.com/project-openan/orchestration-center/archive/refs/tags/v1.0.0.tar.gz
+  Target archs:    x86_64, aarch64
+  Python version:  3.12
+  Output:          /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist
+
+[1;33mChecking prerequisites...[0m
+[0;31mError: Python 3.12+ not found.[0m
+       Searched: python3.13, python3.12, python3.11, python3
+exit=1
+END 2026-10-18 03:59:23 UTC
