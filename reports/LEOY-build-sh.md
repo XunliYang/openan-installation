@@ -99,6 +99,7 @@
 ### 追加发现 D3：workflow-designer amd64 交叉构建 SIGSEGV（QEMU 仿真缺陷，非源码）
 
 - 现象：`./build.sh orchestration --source-ref main`（默认双架构）中 workflow-designer amd64 构建 `#27 RUN npm run build` 退出码 139（SIGSEGV），整体 exit 1；arm64 阶段 `#21 RUN npm run build` **DONE 15.4s** 成功。
-- 定位：`npm run build`（vite/esbuild 前端构建）在 buildx 的 QEMU usermode 仿真（linux/amd64 跑在 aarch64 宿主）下段错误；原生 arm64 构建正常。属**构建环境（QEMU 仿真）限制，非 workflow-designer 源码缺陷**。
+- **根因（已隔离复现）**：`npm run build` = `vite build`（Vite 8.0.16），其打包器是 **Rolldown 1.0.3（原生 Rust）**（另含原生 esbuild/lightningcss）。buildx 在 aarch64 宿主上经 QEMU usermode（binfmt_misc）仿真 linux/amd64。Rolldown 的 x86-64 Rust 二进制在 QEMU TCG 下直接段错误——最小复现 `docker run --platform linux/amd64 node:20-slim node -e "…rolldown({input})…"` 报 `qemu: uncaught target signal 11 (Segmentation fault)`。同命令原生 arm64 正常（15.4s）。
+- 定位：Vite 8 改用原生 Rust bundler 后，amd64 交叉构建在 QEMU 仿真下必然段错误（Rust 原生多线程/SIMD/内存映射语义 QEMU TCG 不能忠实复现）。属**构建环境（QEMU 仿真）限制，非 workflow-designer 源码缺陷**。
 - 验证：`./build.sh orchestration --source-ref main --platforms linux/arm64 --tag main-20261019-arm64` → 双组件 arm64 全部成功（exit 0），`workflow-designer:main-20261019-arm64` 已推送并 `imagetools inspect` 回查。
 - 影响：宿主为 aarch64 时，workflow-designer 的 amd64 交叉构建不可用；如需 amd64 镜像需在 amd64 原生机器/CI runner 上构建。orchestration-center 不受影响（Python 构建无此问题，双架构已推送成功）。
