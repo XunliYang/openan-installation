@@ -4,13 +4,16 @@
 # SPDX-License-Identifier: Apache-2.0
 """Guided evaluation configuration; secrets only in memory and kubectl stdin.
 
-Simplified wizard: components → DB password → LLM (once, reuse for both)
-→ admin password → hostname. Everything else defaults to evaluation mode
-(in-cluster PostgreSQL, auto signing, generated models.yaml).
+Simplified wizard: components → image tags (shared or per-component) → LLM
+(once, reuse for both) → signing → admin password. Everything else is
+automatic evaluation mode: in-cluster PostgreSQL, storage on the cluster's
+default StorageClass (automatic node-pinned local hostPath fallback when none
+exists), auto signing, generated models.yaml, and the empty catch-all Ingress
+host for direct LB-IP access.
 
-Production/custom HTTPS profiles use reviewed values (see example.values.yaml)
-and existing Secrets instead. No defaults for passwords, no credential
-arguments, no Secret overwrite.
+Production profiles (external SQL, HTTPS, host-based routing) use reviewed
+values (see example.values.yaml) and existing Secrets instead. No defaults
+for passwords, no credential arguments, no Secret overwrite.
 """
 import argparse
 import base64
@@ -34,27 +37,31 @@ def _kubectl_json(args, stdin=None):
 
 def create_secret(namespace, name, values):
     result = _kubectl_json(["get", "secret", name, "-n", namespace, "--ignore-not-found", "-o", "name"])
-    if result.returncode or result.stdout.strip():
-        raise RuntimeError("Secret lookup failed or a Secret already exists; use reviewed values for upgrades")
+    if result.returncode:
+        raise RuntimeError(f"Could not check Secret '{name}' in namespace '{namespace}'; verify kubeconfig and RBAC")
+    if result.stdout.strip():
+        raise RuntimeError(f"Secret '{name}' already exists; use reviewed values for upgrades instead of overwriting")
     document = {"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
                 "metadata": {"namespace": namespace, "name": name},
                 "data": {key: base64.b64encode(value.encode()).decode() for key, value in values.items()}}
     result = _kubectl_json(["create", "-f", "-"], stdin=json.dumps(document))
     if result.returncode:
         # Kubernetes error output can include submitted objects; never echo it.
-        raise RuntimeError("Secret creation failed; inspect Kubernetes audit/status without exposing credentials")
+        raise RuntimeError(f"Creating Secret '{name}' failed; inspect Kubernetes status without exposing credentials")
 
 
 def create_configmap(namespace, name, data):
     result = _kubectl_json(["get", "configmap", name, "-n", namespace, "--ignore-not-found", "-o", "name"])
-    if result.returncode or result.stdout.strip():
-        raise RuntimeError("ConfigMap lookup failed or a ConfigMap already exists; use existing references for upgrades")
+    if result.returncode:
+        raise RuntimeError(f"Could not check ConfigMap '{name}' in namespace '{namespace}'; verify kubeconfig and RBAC")
+    if result.stdout.strip():
+        raise RuntimeError(f"ConfigMap '{name}' already exists; use existing references for upgrades")
     document = {"apiVersion": "v1", "kind": "ConfigMap",
                 "metadata": {"namespace": namespace, "name": name},
                 "data": data}
     result = _kubectl_json(["create", "-f", "-"], stdin=json.dumps(document))
     if result.returncode:
-        raise RuntimeError("ConfigMap creation failed; inspect Kubernetes status without exposing credentials")
+        raise RuntimeError(f"Creating ConfigMap '{name}' failed; inspect Kubernetes status without exposing credentials")
 
 
 def ask(label):
@@ -67,7 +74,7 @@ def ask(label):
 def choose(label, options, default):
     value = input(f"{label} [{'/'.join(options)}, default: {default}]: ").strip().lower() or default
     if value not in options:
-        raise ValueError(f"Unsupported {label}: {value}")
+        raise ValueError(f"Unsupported {label} choice; pick one of: {', '.join(options)}")
     return value
 
 
@@ -80,6 +87,33 @@ def secret_input(label):
     if not value:
         raise ValueError("Empty secrets are not allowed")
     return value
+
+
+def ask_default(label, default=""):
+    prompt = f"{label} [{default}]: " if default else label + ": "
+    value = input(prompt).strip()
+    return value or default
+
+
+def has_default_storageclass():
+    jsonpath = (r'jsonpath={.items[?(@.metadata.annotations.storageclass\.kubernetes\.io'
+                r'/is-default-class=="true")].metadata.name}')
+    result = _kubectl_json(["get", "storageclass", "-o", jsonpath])
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+
+def first_node():
+    result = _kubectl_json(["get", "nodes", "-o", "jsonpath={.items[0].metadata.name}"])
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def leftover_local_pvs():
+    found = []
+    for name in ("openan-postgres-pv", "openan-rc-pv", "openan-oc-pv"):
+        result = _kubectl_json(["get", "pv", name, "-o", "name"])
+        if result.returncode == 0 and result.stdout.strip():
+            found.append(name)
+    return found
 
 
 def probe_llm(model, url, api_key):
@@ -152,23 +186,34 @@ def configure(namespace, release, output, tag=None):
         tag = ask("Compatible application image tag (already pushed)")
     prefix = release + "-"
 
-    # --- 2. Database (in-cluster default, just one password) ---------------
-    db_mode = choose("SQL hosting", ["in-cluster", "external"], "in-cluster")
-    external_db = {}
-    names = users = {}
-    if db_mode == "external":
-        db_type = ask("External SQL type: mysql or postgresql")
-        if db_type not in {"mysql", "postgresql"}:
-            raise ValueError("Unsupported SQL type")
-        host = ask("External SQL host")
-        port = int(ask("External SQL port"))
-        if not 1 <= port <= 65535:
-            raise ValueError("SQL port must be 1..65535")
-        names = {component: ask(component + " database name") for component in enabled}
-        if len(names) > 1 and names["registry"] == names["orchestration"]:
-            raise ValueError("Use separate database names")
-        users = {component: ask(component + " database username") for component in enabled}
-        external_db = {"type": db_type, "host": host, "port": port}
+    # --- 1b. Image tags (shared default, or one per component) ---------------
+    tags = {"registry": tag, "orchestration": tag, "frontend": tag}
+    if choose("image tags", ["shared", "per-component"], "shared") == "per-component":
+        for name in list(enabled) + (["frontend"] if components["orchestration"] else []):
+            tags[name] = ask_default(f"{name} image tag", tag)
+
+    # --- 2. SQL and storage (automatic; not asked) ---------------------------
+    # Evaluation always uses in-cluster PostgreSQL; external SQL deployments
+    # use reviewed values (see deployment.yaml.example).
+    storage_node = None
+    local_storage_class = "openan-local"
+    if has_default_storageclass():
+        print("  Cluster has a default StorageClass; claims use it as-is")
+    else:
+        print("  No default StorageClass found; enabling the local hostPath fallback")
+        for pv in leftover_local_pvs():
+            print(f"  Warning: leftover PV '{pv}' detected. If it still holds data (e.g. stale"
+                  " pgdata), in-cluster SQL users keep their OLD passwords;"
+                  " remove the PV and its hostPath data first (uninstall.sh can clean it)")
+        # Empty result must disable the fallback, not deploy a nodeless PV.
+        storage_node = first_node() or None
+        if storage_node:
+            print(f"  Local evaluation storage: {local_storage_class} StorageClass +"
+                  f" node-pinned hostPath PVs on {storage_node}"
+                  " (postgres, registry, orchestration)")
+        else:
+            print("  Warning: no node name detectable; claims are left unbound."
+                  " Provide a StorageClass or configure persistence in reviewed values")
 
     # --- 3. LLM (ask once, offer to reuse) ---------------------------------
     llm = {}
@@ -199,7 +244,10 @@ def configure(namespace, release, output, tag=None):
         if not re.match(r"^https?://", agent_registry_url):
             raise ValueError("Agent registry URL must start with http:// or https://")
 
-    ingress_host = ask("Public HTTP evaluation hostname (empty = IP access)")
+    # The Ingress host is not asked: the evaluation wizard always uses the
+    # empty catch-all host so the platform is reachable directly at the
+    # LoadBalancer IP. Host-based routing / HTTPS need reviewed values
+    # (ingress.host must be a DNS name; Kubernetes rejects IP hosts).
 
     # Check public references before collecting/creating any credentials.
     checks = [("configmap", name) for name in models_ref.values()]
@@ -215,15 +263,9 @@ def configure(namespace, release, output, tag=None):
     print("  Setting up secrets (input is hidden)...")
     print()
 
-    in_cluster_password = None
-    if db_mode == "in-cluster":
-        in_cluster_password = secret_input("PostgreSQL password (shared by the seeded app users)")
-        if len(in_cluster_password) < 8:
-            raise ValueError("PostgreSQL password requires at least 8 characters")
-
-    sql_passwords = {}
-    if db_mode == "external":
-        sql_passwords = {component: secret_input(component + " SQL password") for component in enabled}
+    in_cluster_password = secret_input("PostgreSQL password (shared by the seeded app users)")
+    if len(in_cluster_password) < 8:
+        raise ValueError("PostgreSQL password requires at least 8 characters")
 
     admin = None
     if components["orchestration"]:
@@ -246,11 +288,7 @@ def configure(namespace, release, output, tag=None):
     subprocess.run(["kubectl", "apply", "-f", "-"], input=ns.stdout, text=True, check=True)
 
     # --- Create Secrets / ConfigMaps -----------------------------------------
-    if in_cluster_password is not None:
-        create_secret(namespace, prefix + "pg", {"postgres-password": in_cluster_password})
-    for component, password in sql_passwords.items():
-        create_secret(namespace, prefix + ("rc-db" if component == "registry" else "oc-db"),
-                      {"db-password": password})
+    create_secret(namespace, prefix + "pg", {"postgres-password": in_cluster_password})
     if models_mode == "generate":
         for component in enabled:
             model, url, _ = llm[component]
@@ -276,36 +314,42 @@ def configure(namespace, release, output, tag=None):
         create_secret(namespace, prefix + "oc-runtime", oc_runtime)
 
     # --- Assemble non-secret values -------------------------------------------
-    values = {"namespace": namespace, "frontend": {"image": {"tag": tag}}}
-    if db_mode == "in-cluster":
-        values["postgresql"] = {"enabled": True, "existingSecret": prefix + "pg"}
-        values["database"] = {"type": "postgresql"}
-    else:
-        values["postgresql"] = {"enabled": False}
-        values["database"] = dict(external_db)
-        for component in enabled:
-            values["database"][component] = {
-                "name": names[component], "username": users[component],
-                "existingSecret": prefix + ("rc-db" if component == "registry" else "oc-db")}
+    values = {"namespace": namespace, "frontend": {"image": {"tag": tags["frontend"]}},
+              "postgresql": {"enabled": True, "existingSecret": prefix + "pg"},
+              "database": {"type": "postgresql"}}
+    if storage_node is not None:
+        values["postgresql"]["storage"] = {"createStorageClass": True,
+                                           "storageClassName": local_storage_class,
+                                           "createPV": True, "useHostPath": True,
+                                           "nodeName": storage_node}
     if components["registry"]:
         values["registry"] = {"runtimeSecret": prefix + "rc-runtime",
                               "credentialSecret": prefix + "rc-credentials",
-                              "modelsConfigMap": models_ref["registry"], "image": {"tag": tag}}
+                              "modelsConfigMap": models_ref["registry"], "image": {"tag": tags["registry"]}}
         if signing_ref:
             values["registry"]["signing"] = {"mode": "secret", "existingSecret": signing_ref}
         else:
             values["registry"]["signing"] = {"mode": "auto"}
+        if storage_node is not None:
+            values["registry"]["persistence"] = {
+                "storageClassName": local_storage_class, "createPV": True,
+                "useHostPath": True, "nodeName": storage_node}
     else:
         values["registry"] = {"enabled": False}
     if components["orchestration"]:
         values["orchestration"] = {"runtimeSecret": prefix + "oc-runtime",
-                                   "modelsConfigMap": models_ref["orchestration"], "image": {"tag": tag}}
+                                   "modelsConfigMap": models_ref["orchestration"],
+                                   "image": {"tag": tags["orchestration"]}}
         if agent_registry_url:
             values["orchestration"]["agentRegistryUrl"] = agent_registry_url
+        if storage_node is not None:
+            values["orchestration"]["persistence"] = {
+                "storageClassName": local_storage_class, "createPV": True,
+                "useHostPath": True, "nodeName": storage_node}
     else:
         values["orchestration"] = {"enabled": False}
-        values["frontend"] = {"enabled": False, "image": {"tag": tag}}
-    values["ingress"] = {"host": ingress_host}
+        values["frontend"] = {"enabled": False, "image": {"tag": tags["frontend"]}}
+    values["ingress"] = {"host": ""}
 
     # Only non-secret JSON/YAML-compatible values. Exclusive creation preserves operator files.
     with output.open("x", encoding="utf-8") as stream:
@@ -325,5 +369,8 @@ if __name__ == "__main__":
             parser.error("Invalid namespace/release")
     try:
         configure(args.namespace, args.release, args.output, tag=args.tag)
-    except (ValueError, RuntimeError, OSError, subprocess.SubprocessError):
-        parser.exit(2, "Configuration failed without exposing secret values; existing Secrets are not overwritten.\n")
+    except (ValueError, RuntimeError, OSError, EOFError, subprocess.SubprocessError) as error:
+        # Concrete reason, never the value: every raise site is audited to
+        # exclude secrets (and kubectl stderr, which can echo submitted objects).
+        parser.exit(2, f"Configuration failed: {error}\n"
+                      "Secret values are never echoed; existing Secrets are not overwritten.\n")

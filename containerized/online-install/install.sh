@@ -27,14 +27,23 @@ usage() {
     cat <<'EOF'
 Usage: ./install.sh [OPTIONS]
 
-Without --values the installer is interactive and runs six guided phases
+Without --values the installer is interactive and runs four guided phases
 (requires a terminal):
-  [1/6] preflight       kubectl / helm / python3 and cluster reachability
-  [2/6] targets         Helm release name and namespace
-  [3/6] images          build from source or reuse an already-pushed tag
-  [4/6] infrastructure  MetalLB + ingress-nginx (pinned, skipped when present)
-  [5/6] application     guided configuration (components, SQL, models, signing, admin)
-  [6/6] deploy          helm upgrade --install and access summary
+  [1/4] preflight       kubectl / helm / python3 and cluster reachability; missing
+                        kubectl/helm can be auto-installed on request (official
+                        installers; python3 and Docker Desktop stay manual)
+  [2/4] infrastructure  MetalLB + ingress-nginx (pinned, skipped when present)
+  [3/4] application     guided wizard: components, image tag(s), models, signing, admin
+                        password; SQL, storage and hostname are automatic
+                        (in-cluster PostgreSQL, default StorageClass or local
+                        hostPath fallback, catch-all host; use reviewed values
+                        for external SQL, HTTPS and host-based routing)
+  [4/4] deploy          deployment summary + confirmation, helm upgrade --install,
+                        optional agent examples server (interactive offer when
+                        orchestration is deployed), access summary
+
+Release and namespace default to "openan" without prompts; override them with
+--release/--namespace. Building from source is flag-driven, not a prompt.
 
 With --values the installer is non-interactive (CI / prepared environments);
 secrets must already exist as Kubernetes Secrets:
@@ -43,7 +52,8 @@ secrets must already exist as Kubernetes Secrets:
   --release NAME         Helm release name (default: openan)
   --namespace NAME       target namespace (default: openan)
   --skip-build           skip the image build phase
-  --tag TAG              image tag for the build phase
+  --tag TAG              shared application image tag; passed to the wizard as
+                         the default, and required with the build flags below
   --registry-release URL registry-center source archive (build phase)
   --orchestration-release URL orchestration-center source archive (build phase)
   --skip-infra           skip the infrastructure phase
@@ -89,22 +99,6 @@ ask_input() {
 }
 
 NAME_RE='^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
-
-ask_name() {
-    local prompt="$1"
-    local default="$2"
-    local value
-
-    for _ in 1 2 3; do
-        value="$(ask_input "$prompt" "$default")"
-        if [[ "$value" =~ $NAME_RE && ${#value} -le 53 ]]; then
-            echo "$value"
-            return 0
-        fi
-        log_error "Invalid value: lower-case alphanumerics and '-', starting/ending alphanumeric, at most 53 characters"
-    done
-    return 1
-}
 
 # ---------------------------------------------------------------------------
 # Argument parsing (both modes)
@@ -205,68 +199,146 @@ echo "=========================================="
 echo ""
 
 # ---------------------------------------------------------------------------
-# [1/6] Preflight
+# [1/4] Preflight
 # ---------------------------------------------------------------------------
-log_step "[1/6] Preflight"
+log_step "[1/4] Preflight"
+
+# Auto-install helpers: only run after an explicit interactive confirmation;
+# official installers, no custom scripts. python3 stays manual (OS package).
+install_binary() {  # $1 = download URL, $2 = binary name
+    local url="$1" name="$2" dest_dir
+    if [ -w /usr/local/bin ]; then
+        dest_dir=/usr/local/bin
+    elif command -v sudo >/dev/null 2>&1; then
+        dest_dir=/usr/local/bin
+    else
+        dest_dir="$HOME/.local/bin"
+        mkdir -p "$dest_dir"
+    fi
+    curl -fsSLo "./${name}" "$url" || return 1
+    chmod 0755 "./${name}"
+    if [ "$dest_dir" = /usr/local/bin ] && [ ! -w /usr/local/bin ]; then
+        sudo install -m 0755 "./${name}" "${dest_dir}/${name}" || { rm -f "./${name}"; return 1; }
+    else
+        mv "./${name}" "${dest_dir}/${name}" || { rm -f "./${name}"; return 1; }
+    fi
+    case ":$PATH:" in
+        *":${dest_dir}:"*) ;;
+        *) log_warn "${dest_dir} is not on this shell's PATH; export PATH=\"\$PATH:${dest_dir}\" and re-run" ;;
+    esac
+}
+
+install_tool() {
+    local tool="$1" os arch version
+    case "$(uname -s)" in
+        Linux*)  os=linux ;;
+        Darwin*) os=darwin ;;
+        *) log_error "Automatic $tool installation is unsupported on $(uname -s)"; return 1 ;;
+    esac
+    case "$(uname -m)" in
+        x86_64)        arch=amd64 ;;
+        aarch64|arm64) arch=arm64 ;;
+        *) log_error "Unsupported architecture: $(uname -m)"; return 1 ;;
+    esac
+    case "$tool" in
+        kubectl)
+            if [ "$os" = darwin ] && command -v brew >/dev/null 2>&1; then
+                brew install kubectl
+            else
+                version="$(curl -fsSL https://dl.k8s.io/release/stable.txt)" || {
+                    log_error "Could not resolve the stable kubectl version"; return 1; }
+                install_binary "https://dl.k8s.io/release/${version}/bin/${os}/${arch}/kubectl" kubectl
+            fi
+            ;;
+        helm)
+            if [ "$os" = darwin ] && command -v brew >/dev/null 2>&1; then
+                brew install helm
+            else
+                curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+            fi
+            ;;
+    esac
+}
+
+MISSING_TOOLS=()
 for tool in kubectl helm python3; do
-    if ! command -v "$tool" >/dev/null 2>&1; then
-        log_error "Required tool not found: $tool"
+    command -v "$tool" >/dev/null 2>&1 || MISSING_TOOLS+=("$tool")
+done
+if [ ${#MISSING_TOOLS[@]} -gt 0 ]; then
+    log_warn "Missing required tools: ${MISSING_TOOLS[*]}"
+    if printf '%s\n' "${MISSING_TOOLS[@]}" | grep -q '^python3$'; then
+        log_error "python3 must be installed manually (OS package manager)"
         exit 2
     fi
-done
+    if ask_yes_no "Install missing tools automatically (official kubectl/helm installers)?" "yes"; then
+        for tool in "${MISSING_TOOLS[@]}"; do
+            log_step "Installing $tool"
+            install_tool "$tool" || { log_error "Failed to install $tool"; exit 2; }
+        done
+        for tool in "${MISSING_TOOLS[@]}"; do
+            command -v "$tool" >/dev/null 2>&1 || {
+                log_error "$tool still unavailable; install it manually and re-run"; exit 2; }
+        done
+        log_info "Missing tools installed"
+    else
+        log_info "  kubectl: https://kubernetes.io/docs/tasks/tools/install-kubectl/"
+        log_info "  helm: https://helm.sh/docs/intro/install/"
+        exit 2
+    fi
+fi
 if ! kubectl cluster-info >/dev/null 2>&1; then
     log_error "Kubernetes cluster unreachable: kubectl cluster-info failed"
     exit 2
 fi
 KUBECTL_CLIENT="$(kubectl version --client 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)"
 log_info "kubectl client version: ${KUBECTL_CLIENT:-unknown}"
+log_info "Release: $RELEASE (override with --release)"
+log_info "Namespace: $NAMESPACE (override with --namespace)"
 
 # ---------------------------------------------------------------------------
-# [2/6] Targets
+# Images (optional pre-build from explicit sources; the wizard asks the tag
+# itself; the tag has no default by contract: old v1.0.0 images are not
+# compatible with the current chart)
 # ---------------------------------------------------------------------------
-log_step "[2/6] Targets"
-if ! RELEASE="$(ask_name "Release name" "$RELEASE")"; then
-    log_error "No valid release name after 3 attempts"
-    exit 2
-fi
-if ! NAMESPACE="$(ask_name "Namespace" "$NAMESPACE")"; then
-    log_error "No valid namespace after 3 attempts"
-    exit 2
-fi
-
-# ---------------------------------------------------------------------------
-# [3/6] Images
-# ---------------------------------------------------------------------------
-log_step "[3/6] Images"
-# The tag has no default on purpose: the deployment contract states old v1.0.0
-# images are not compatible with the current chart, so it must be explicit.
-APP_TAG="$BUILD_TAG"
-for _ in 1 2 3; do
-    [ -n "$APP_TAG" ] && break
-    APP_TAG="$(ask_input "Application image tag (no default; see the deployment contract)" "")"
-    [ -n "$APP_TAG" ] || log_warn "The image tag is required"
-done
-[ -n "$APP_TAG" ] || { log_error "No image tag given"; exit 2; }
-if ask_yes_no "Build images from source now?" "no"; then
-    RC_SOURCE_URL="$RC_SOURCE"
-    OC_SOURCE_URL="$OC_SOURCE"
-    [ -n "$RC_SOURCE_URL" ] || RC_SOURCE_URL="$(ask_input "registry-center source archive URL")"
-    [ -n "$OC_SOURCE_URL" ] || OC_SOURCE_URL="$(ask_input "orchestration-center source archive URL")"
-    if [ -z "$RC_SOURCE_URL" ] || [ -z "$OC_SOURCE_URL" ]; then
-        log_error "Building requires both source archive URLs at accepted revisions"
+if [ "$SKIP_BUILD" = false ] && { [ -n "$RC_SOURCE" ] || [ -n "$OC_SOURCE" ]; }; then
+    if [ -z "$RC_SOURCE" ] || [ -z "$OC_SOURCE" ] || [ -z "$BUILD_TAG" ]; then
+        log_error "Building requires --tag with --registry-release and --orchestration-release"
         exit 2
     fi
-    bash "$SCRIPT_DIR/../build/build.sh" --tag "$APP_TAG" \
-        --registry-release "$RC_SOURCE_URL" --orchestration-release "$OC_SOURCE_URL"
-else
-    log_info "Using already-pushed tag: $APP_TAG"
+    # The build phase needs a working Docker daemon with buildx; offer the
+    # official Linux installer behind an explicit confirmation.
+    if ! docker buildx version >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
+        log_warn "The build phase needs a working Docker daemon with buildx"
+        if [ "$(uname -s)" != Linux ]; then
+            log_error "Install Docker Desktop manually: https://docs.docker.com/desktop/"
+            exit 2
+        fi
+        if ask_yes_no "Install Docker automatically (get.docker.com)?" "yes"; then
+            curl -fsSL https://get.docker.com | sh || { log_error "Docker installation failed"; exit 2; }
+            if command -v systemctl >/dev/null 2>&1; then
+                sudo systemctl enable --now docker 2>/dev/null || true
+            fi
+            if ! id -nG "$USER" 2>/dev/null | grep -qw docker; then
+                sudo usermod -aG docker "$USER" 2>/dev/null || true
+            fi
+        else
+            log_info "  Docker: https://docs.docker.com/get-docker/"
+            exit 2
+        fi
+        docker info >/dev/null 2>&1 || {
+            log_error "Docker daemon unreachable; if you were just added to the docker group, re-login and re-run"
+            exit 2; }
+        docker buildx version >/dev/null 2>&1 || { log_error "docker buildx unavailable"; exit 2; }
+    fi
+    log_step "Building images from source (tag $BUILD_TAG)"
+    bash "$SCRIPT_DIR/../build/build.sh" --tag "$BUILD_TAG" \
+        --registry-release "$RC_SOURCE" --orchestration-release "$OC_SOURCE"
 fi
-log_info "Application image tag: $APP_TAG"
 
 # ---------------------------------------------------------------------------
-# [4/6] Infrastructure
+# [2/4] Infrastructure
 # ---------------------------------------------------------------------------
-log_step "[4/6] Infrastructure"
+log_step "[2/4] Infrastructure"
 METALLB_PRESENT=false
 INGRESS_PRESENT=false
 if kubectl get namespace metallb-system >/dev/null 2>&1; then
@@ -336,9 +408,9 @@ EOF
 fi
 
 # ---------------------------------------------------------------------------
-# [5/6] Application
+# [3/4] Application (the wizard asks the image tag and everything else)
 # ---------------------------------------------------------------------------
-log_step "[5/6] Application"
+log_step "[3/4] Application"
 VALUES="$PWD/deployment.generated.json"
 if [ -e "$VALUES" ]; then
     log_warn "Found existing $VALUES"
@@ -349,35 +421,50 @@ if [ -e "$VALUES" ]; then
         exit 0
     fi
 fi
-python3 "$SCRIPT_DIR/configure.py" --namespace "$NAMESPACE" --release "$RELEASE" --tag "$APP_TAG" --output "$VALUES"
+CONFIGURE_ARGS=(--namespace "$NAMESPACE" --release "$RELEASE" --output "$VALUES")
+if [ -n "$BUILD_TAG" ]; then
+    # Preset shared tag (e.g. the one just built); the wizard still offers
+    # per-component overrides.
+    CONFIGURE_ARGS+=(--tag "$BUILD_TAG")
+fi
+python3 "$SCRIPT_DIR/configure.py" "${CONFIGURE_ARGS[@]}"
 log_info "Linting the chart against the generated values"
 helm lint "$SCRIPT_DIR/openan-chart" --namespace "$NAMESPACE" --values "$VALUES"
 
 # ---------------------------------------------------------------------------
-# [6/6] Deploy
+# [4/4] Deploy
 # ---------------------------------------------------------------------------
-log_step "[6/6] Deploy"
-if ! helm upgrade --install "$RELEASE" "$SCRIPT_DIR/openan-chart" \
-        --namespace "$NAMESPACE" --create-namespace --values "$VALUES" \
-        --wait --timeout 10m; then
-    log_error "Helm deploy failed; inspect with: kubectl -n $NAMESPACE get pods"
-    exit 1
-fi
+log_step "[4/4] Deploy"
 
-# Access summary: LoadBalancer IP preferred, NodePort fallback (no secrets).
-INGRESS_IP="$(kubectl -n ingress-nginx get svc ingress-nginx-controller \
-    -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)"
-
+# Parse the generated values once: deployment choices and access summary.
 SCHEME="http"
 INGRESS_HOST=""
+REGISTRY_ENABLED=true
 ORCHESTRATION_ENABLED=true
 FRONTEND_ENABLED=true
+TAG_REGISTRY="-"
+TAG_ORCHESTRATION="-"
+TAG_FRONTEND="-"
+SIGNING="-"
+MODELS_RC="-"
+MODELS_OC="-"
+PG_SECRET="-"
+STORAGE_NODE=""
 while read -r key value; do
     case "$key" in
         scheme) SCHEME="$value" ;;
         host) INGRESS_HOST="$value" ;;
+        registry) REGISTRY_ENABLED="$value" ;;
         orchestration) ORCHESTRATION_ENABLED="$value" ;;
         frontend) FRONTEND_ENABLED="$value" ;;
+        tag_registry) TAG_REGISTRY="$value" ;;
+        tag_orchestration) TAG_ORCHESTRATION="$value" ;;
+        tag_frontend) TAG_FRONTEND="$value" ;;
+        signing) SIGNING="$value" ;;
+        models_rc) MODELS_RC="$value" ;;
+        models_oc) MODELS_OC="$value" ;;
+        pg_secret) PG_SECRET="$value" ;;
+        storage_node) STORAGE_NODE="$value" ;;
     esac
 done < <(python3 - "$VALUES" <<'PY'
 import json, sys
@@ -386,10 +473,96 @@ with open(sys.argv[1]) as stream:
 ingress = values.get("ingress") or {}
 print("scheme", "https" if (ingress.get("tls") or {}).get("enabled") else "http")
 print("host", ingress.get("host") or "")
-print("orchestration", str(bool((values.get("orchestration") or {}).get("enabled", True))).lower())
-print("frontend", str(bool((values.get("frontend") or {}).get("enabled", True))).lower())
+for comp in ("registry", "orchestration", "frontend"):
+    block = values.get(comp) or {}
+    print(comp, str(bool(block.get("enabled", True))).lower())
+    print("tag_" + comp, (block.get("image") or {}).get("tag") or "-")
+print("signing", ((values.get("registry") or {}).get("signing") or {}).get("mode") or "-")
+print("models_rc", (values.get("registry") or {}).get("modelsConfigMap") or "-")
+print("models_oc", (values.get("orchestration") or {}).get("modelsConfigMap") or "-")
+print("pg_secret", (values.get("postgresql") or {}).get("existingSecret") or "-")
+print("storage_node", ((values.get("postgresql") or {}).get("storage") or {}).get("nodeName") or "")
 PY
 )
+
+# Confirmation gate: non-secret summary before anything is deployed. Secrets
+# and ConfigMaps already created by the wizard remain if cancelled (the
+# wizard is not transactional; the redeploy command reuses the same values).
+echo ""
+echo "=========================================="
+echo "  Deployment summary"
+echo "=========================================="
+echo "  Release/namespace: $RELEASE / $NAMESPACE"
+COMPONENTS=""
+if [ "$REGISTRY_ENABLED" = true ]; then COMPONENTS="registry"; fi
+if [ "$ORCHESTRATION_ENABLED" = true ]; then COMPONENTS="${COMPONENTS:+$COMPONENTS }orchestration"; fi
+if [ "$FRONTEND_ENABLED" = true ]; then COMPONENTS="${COMPONENTS:+$COMPONENTS }frontend"; fi
+echo "  Components:        ${COMPONENTS:-none}"
+echo "  Image tags:        registry=$TAG_REGISTRY orchestration=$TAG_ORCHESTRATION frontend=$TAG_FRONTEND"
+echo "  SQL:               in-cluster PostgreSQL (Secret $PG_SECRET)"
+if [ -n "$STORAGE_NODE" ]; then
+    echo "  Storage:           local hostPath fallback on node $STORAGE_NODE (openan-local)"
+else
+    echo "  Storage:           cluster-provided StorageClass"
+fi
+echo "  Models:            $MODELS_RC / $MODELS_OC"
+echo "  Signing:           $SIGNING"
+echo "  Ingress host:      ${INGRESS_HOST:-<empty: direct LB-IP access>}"
+echo "  Note: Secrets/ConfigMaps are already created; cancelling keeps them."
+echo "=========================================="
+if ! ask_yes_no "Deploy with this configuration?" "yes"; then
+    log_info "Deployment cancelled. Values kept at: $VALUES"
+    log_info "Redeploy later with: ./install.sh --values $VALUES --release $RELEASE --namespace $NAMESPACE --skip-build --skip-infra"
+    exit 0
+fi
+
+# Agent examples server: interactive-only demo agents in the OC pod.
+START_AGENTS_SERVER=false
+if [ "$ORCHESTRATION_ENABLED" = true ] && ask_yes_no "Start the agent examples server (demo agents) after deploy?" "yes"; then
+    START_AGENTS_SERVER=true
+fi
+
+if ! helm upgrade --install "$RELEASE" "$SCRIPT_DIR/openan-chart" \
+        --namespace "$NAMESPACE" --create-namespace --values "$VALUES" \
+        --wait --timeout 10m; then
+    log_error "Helm deploy failed; inspect with: kubectl -n $NAMESPACE get pods"
+    exit 1
+fi
+
+# Optional agent examples server: demo agents run inside the OC pod via
+# kubectl exec + nohup, mirroring the offline installer. Convenience only:
+# not a chart resource and it does not survive pod restarts/recreation.
+if [ "$START_AGENTS_SERVER" = true ]; then
+    log_step "Starting agent examples server"
+    ORCH_POD="$(kubectl get pods -l app=orchestration-center -n "$NAMESPACE" \
+        -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+    if [ -z "$ORCH_POD" ]; then
+        log_warn "No orchestration-center pod found; skipping the agents server"
+    elif kubectl exec "$ORCH_POD" -n "$NAMESPACE" -- /bin/sh -c \
+        "cd /opt/orchestration-center && PYTHONPATH=/opt/orchestration-center nohup python3 samples/start_agents_server.py > /tmp/agents-server.log 2>&1 &" 2>/dev/null; then
+        log_info "Agents server start requested in $ORCH_POD; waiting for port 8903..."
+        AGENTS_OK=false
+        for _ in $(seq 1 12); do
+            if kubectl exec "$ORCH_POD" -n "$NAMESPACE" -- /bin/sh -c \
+                "curl -sf http://127.0.0.1:8903/health > /dev/null" 2>/dev/null; then
+                AGENTS_OK=true
+                break
+            fi
+            sleep 5
+        done
+        if [ "$AGENTS_OK" = true ]; then
+            log_info "Agent examples server healthy (port 8903)"
+        else
+            log_warn "Agents server not healthy after 60s; check: kubectl exec $ORCH_POD -n $NAMESPACE -- cat /tmp/agents-server.log"
+        fi
+    else
+        log_warn "Could not start the agents server (samples/start_agents_server.py may be absent from the image)"
+    fi
+fi
+
+# Access summary: LoadBalancer IP preferred, NodePort fallback (no secrets).
+INGRESS_IP="$(kubectl -n ingress-nginx get svc ingress-nginx-controller \
+    -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)"
 
 echo ""
 echo "=========================================="
@@ -406,7 +579,7 @@ if [ -n "$INGRESS_IP" ]; then
         echo "  HTTPS: enabled in values (ingress.tls)"
     fi
 else
-    NODE_PORT="$(kubectl -n "$NAMESPACE" get svc workflow-designer \
+    NODE_PORT="$(kubectl -n "$NAMESPACE" get svc openan-frontend \
         -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || true)"
     if [ -n "$NODE_PORT" ] && [ "$FRONTEND_ENABLED" = true ]; then
         NODE_IP="$(kubectl get nodes \

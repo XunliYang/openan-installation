@@ -43,6 +43,35 @@ CONFIG_RELEASE_NAME="openan"
 CONFIG_REMOVE_DATA=false
 CONFIG_REMOVE_NAMESPACE=false
 
+usage() {
+    cat <<'EOF'
+Usage: ./uninstall.sh [OPTIONS]
+
+  --namespace NAME   namespace of the installation (default: openan)
+  --release NAME     Helm release name (default: openan)
+  --help, -h         show this help
+
+Must match the --release/--namespace used by install.sh. The uninstaller
+detects Helm release, namespace, PVCs, OpenAN PVs (labels, claim bindings
+and local-fallback names), the openan-local StorageClass, MetalLB config and
+hostPath data, and asks before removing anything.
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --help|-h) usage; exit 0 ;;
+        --namespace|--release)
+            [ $# -ge 2 ] && [ -n "$2" ] || { usage >&2; exit 2; }
+            case "$1" in
+                --namespace) CONFIG_NAMESPACE="$2" ;;
+                --release) CONFIG_RELEASE_NAME="$2" ;;
+            esac
+            shift 2 ;;
+        *) echo "Unknown option: $1 (see --help)" >&2; exit 2 ;;
+    esac
+done
+
 # ===== Helper Functions =====
 ask_yes_no() {
     local prompt="$1"
@@ -88,13 +117,32 @@ check_prerequisites() {
 }
 
 # ===== Detection Functions =====
-DETECTED_HOSTPATH=""
-DETECTED_HOSTPATH_NODE=""
+DETECTED_PVS=()
+DETECTED_HOSTPATHS=()   # entries of "path|node" (node may be empty)
+
+scan_pv() {
+    local pv="$1"
+    local hostpath node
+    # One PV can be found via label, claim binding and legacy name; scan once.
+    if [[ " ${DETECTED_PVS[*]} " =~ " ${pv} " ]]; then
+        return 0
+    fi
+    DETECTED_PVS+=("$pv")
+    DETECTED_RESOURCES+=("pv")
+    log_info "Found PV: $pv"
+    hostpath=$(kubectl get pv "$pv" -o jsonpath='{.spec.hostPath.path}' 2>/dev/null)
+    if [ -n "$hostpath" ]; then
+        node=$(kubectl get pv "$pv" -o jsonpath='{.spec.nodeAffinity.required.nodeSelectorTerms[0].matchExpressions[0].values[0]}' 2>/dev/null)
+        DETECTED_HOSTPATHS+=("${hostpath}|${node}")
+        DETECTED_RESOURCES+=("hostpath")
+        log_info "  hostPath: $hostpath (node: ${node:-unknown})"
+    fi
+}
 
 detect_installation() {
     DETECTED_RESOURCES=()
-    DETECTED_HOSTPATH=""
-    DETECTED_HOSTPATH_NODE=""
+    DETECTED_PVS=()
+    DETECTED_HOSTPATHS=()
     
     # Check Helm release
     if helm status "$CONFIG_RELEASE_NAME" -n "$CONFIG_NAMESPACE" &>/dev/null; then
@@ -118,28 +166,19 @@ detect_installation() {
         log_info "Found $pvc_count PVC(s) in namespace $CONFIG_NAMESPACE"
     fi
     
-    # Check PVs created by OpenAN
-    if kubectl get pv openan-postgres-pv &>/dev/null; then
-        DETECTED_RESOURCES+=("pv")
-        log_info "Found PV: openan-postgres-pv"
-        
-        # Check if PV uses hostPath
-        local pv_hostpath
-        pv_hostpath=$(kubectl get pv openan-postgres-pv -o jsonpath='{.spec.hostPath.path}' 2>/dev/null)
-        if [ -n "$pv_hostpath" ]; then
-            DETECTED_RESOURCES+=("hostpath")
-            DETECTED_HOSTPATH="$pv_hostpath"
-            log_info "Found hostPath storage: $pv_hostpath"
-            
-            # Detect target node from nodeAffinity
-            local node
-            node=$(kubectl get pv openan-postgres-pv -o jsonpath='{.spec.nodeAffinity.required.nodeSelectorTerms[0].matchExpressions[0].values[0]}' 2>/dev/null)
-            if [ -n "$node" ]; then
-                DETECTED_HOSTPATH_NODE="$node"
-                log_info "hostPath pinned to node: $node"
-            fi
-        fi
-    fi
+    # Check PVs created by or bound to OpenAN: chart labels first, then PVs
+    # bound to this namespace's claims (covers manually created PVs), then
+    # the well-known names used by the local-storage fallback.
+    local pv
+    while IFS= read -r pv; do
+        [ -n "$pv" ] && scan_pv "$pv"
+    done < <(kubectl get pv -l app.kubernetes.io/part-of=openan -o name 2>/dev/null | sed 's|^PersistentVolume/||')
+    while IFS= read -r pv; do
+        [ -n "$pv" ] && scan_pv "$pv"
+    done < <(kubectl get pvc -n "$CONFIG_NAMESPACE" -o jsonpath='{range .items[*]}{.spec.volumeName}{"\n"}{end}' 2>/dev/null)
+    for pv in openan-postgres-pv openan-rc-pv openan-oc-pv; do
+        kubectl get pv "$pv" &>/dev/null && scan_pv "$pv"
+    done
     
     # Check StorageClass created by OpenAN
     if kubectl get storageclass openan-local &>/dev/null; then
@@ -201,61 +240,24 @@ remove_metallb_resources() {
     return 0
 }
 
-remove_data() {
-    log_step "Removing persistent data..."
+clean_hostpath_node() {
+    local target_node="$1"
+    local paths="$2"
+    local suffix="$3"
     
-    # Use pre-detected hostPath info
-    local hostpath_enabled=false
-    local hostpath_dir=""
-    local target_node=""
+    log_info "Detected hostPath storage on node: $target_node"
+    log_info "Paths: $paths"
     
-    if [[ " ${DETECTED_RESOURCES[*]} " =~ " hostpath " ]]; then
-        hostpath_enabled=true
-        hostpath_dir="$DETECTED_HOSTPATH"
-        target_node="$DETECTED_HOSTPATH_NODE"
-    fi
+    # Try to auto-clean using a privileged Job (one job removes all paths on the node)
+    log_info "Attempting to auto-clean hostPath data..."
     
-    # If node not detected from PV, try to get from postgres pod
-    if [ "$hostpath_enabled" = true ] && [ -z "$target_node" ]; then
-        target_node=$(kubectl get pod openan-postgres-0 -n "$CONFIG_NAMESPACE" -o jsonpath='{.spec.nodeName}' 2>/dev/null)
-        if [ -n "$target_node" ]; then
-            DETECTED_HOSTPATH_NODE="$target_node"
-        fi
-    fi
+    local job_name="openan-cleanup-$(date +%s)-$suffix"
+    local rm_list="" p
+    for p in $paths; do
+        rm_list="$rm_list /hostpath${p}"
+    done
     
-    # Remove PVCs
-    local pvcs
-    pvcs=$(kubectl get pvc -n "$CONFIG_NAMESPACE" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)
-    if [ -n "$pvcs" ]; then
-        for pvc in $pvcs; do
-            kubectl delete pvc "$pvc" -n "$CONFIG_NAMESPACE"
-            log_info "Deleted PVC: $pvc"
-        done
-    fi
-    
-    # Remove PV
-    if kubectl get pv openan-postgres-pv &>/dev/null; then
-        kubectl delete pv openan-postgres-pv
-        log_info "Deleted PV: openan-postgres-pv"
-    fi
-    
-    # Remove StorageClass
-    if kubectl get storageclass openan-local &>/dev/null; then
-        kubectl delete storageclass openan-local
-        log_info "Deleted StorageClass: openan-local"
-    fi
-    
-    # Handle hostPath data cleanup
-    if [ "$hostpath_enabled" = true ] && [ -n "$target_node" ]; then
-        log_info "Detected hostPath storage on node: $target_node"
-        log_info "Path: $hostpath_dir"
-        
-        # Try to auto-clean using a privileged Job
-        log_info "Attempting to auto-clean hostPath data..."
-        
-        local job_name="openan-cleanup-$(date +%s)"
-        
-        kubectl apply -f - <<EOF >/dev/null 2>&1
+    kubectl apply -f - <<EOF >/dev/null 2>&1
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -269,7 +271,7 @@ spec:
       containers:
       - name: cleanup
         image: busybox:latest
-        command: ['sh', '-c', 'rm -rf /hostpath${hostpath_dir}']
+        command: ['sh', '-c', 'rm -rf$rm_list']
         securityContext:
           privileged: true
         volumeMounts:
@@ -283,40 +285,97 @@ spec:
       restartPolicy: Never
   backoffLimit: 1
 EOF
+    
+    if [ $? -eq 0 ]; then
+        # Wait for job to complete (max 30s)
+        local wait_count=0
+        while [ $wait_count -lt 6 ]; do
+            local job_status
+            job_status=$(kubectl get job "$job_name" -n "$CONFIG_NAMESPACE" -o jsonpath='{.status.succeeded}' 2>/dev/null)
+            if [ "$job_status" = "1" ]; then
+                log_info "Successfully cleaned hostPath data on node: $target_node"
+                kubectl delete job "$job_name" -n "$CONFIG_NAMESPACE" --ignore-not-found
+                return 0
+            fi
+            sleep 5
+            wait_count=$((wait_count + 1))
+        done
         
-        if [ $? -eq 0 ]; then
-            # Wait for job to complete (max 30s)
-            local wait_count=0
-            while [ $wait_count -lt 6 ]; do
-                local job_status
-                job_status=$(kubectl get job "$job_name" -n "$CONFIG_NAMESPACE" -o jsonpath='{.status.succeeded}' 2>/dev/null)
-                if [ "$job_status" = "1" ]; then
-                    log_info "Successfully cleaned hostPath data on node: $target_node"
-                    kubectl delete job "$job_name" -n "$CONFIG_NAMESPACE" --ignore-not-found
+        # Job failed or timed out
+        log_warn "Auto-cleanup timed out or failed on node '$target_node'"
+        log_warn "Manual cleanup required:"
+        log_warn "  ssh $target_node"
+        for p in $paths; do
+            log_warn "  sudo rm -rf $p"
+        done
+        kubectl delete job "$job_name" -n "$CONFIG_NAMESPACE" --ignore-not-found
+    else
+        log_warn "Failed to create cleanup job for node '$target_node'"
+        log_warn "Manual cleanup required:"
+        for p in $paths; do
+            log_warn "  sudo rm -rf $p"
+        done
+    fi
+}
+
+remove_data() {
+    log_step "Removing persistent data..."
+    
+    # Remove PVCs
+    local pvcs
+    pvcs=$(kubectl get pvc -n "$CONFIG_NAMESPACE" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)
+    if [ -n "$pvcs" ]; then
+        for pvc in $pvcs; do
+            kubectl delete pvc "$pvc" -n "$CONFIG_NAMESPACE"
+            log_info "Deleted PVC: $pvc"
+        done
+    fi
+    
+    # Remove every detected OpenAN PV (postgres, registry, orchestration, manual)
+    local pv
+    for pv in "${DETECTED_PVS[@]}"; do
+        kubectl delete pv "$pv" 2>/dev/null
+        log_info "Deleted PV: $pv"
+    done
+    
+    # Remove StorageClass
+    if kubectl get storageclass openan-local &>/dev/null; then
+        kubectl delete storageclass openan-local
+        log_info "Deleted StorageClass: openan-local"
+    fi
+    
+    # Clean hostPath data: group directories by target node (one job per node)
+    if [ ${#DETECTED_HOSTPATHS[@]} -gt 0 ]; then
+        local entry path node i idx
+        local -a cleanup_nodes=()
+        local -a cleanup_paths=()
+        for entry in "${DETECTED_HOSTPATHS[@]}"; do
+            [ -n "$entry" ] || continue
+            path="${entry%%|*}"
+            node="${entry##*|}"
+            if [ -z "$node" ]; then
+                log_warn "hostPath '$path' has no node affinity; manual cleanup may be required:"
+                log_warn "  sudo rm -rf $path"
+                continue
+            fi
+            idx=""
+            for i in "${!cleanup_nodes[@]}"; do
+                if [ "${cleanup_nodes[$i]}" = "$node" ]; then
+                    idx=$i
                     break
                 fi
-                sleep 5
-                wait_count=$((wait_count + 1))
             done
-            
-            # Check if job failed or timed out
-            if [ "$wait_count" -ge 6 ]; then
-                log_warn "Auto-cleanup timed out or failed"
-                log_warn "Manual cleanup required on node '$target_node':"
-                log_warn "  ssh $target_node"
-                log_warn "  sudo rm -rf $hostpath_dir"
-                kubectl delete job "$job_name" -n "$CONFIG_NAMESPACE" --ignore-not-found
+            if [ -z "$idx" ]; then
+                cleanup_nodes+=("$node")
+                cleanup_paths+=("$path")
+            else
+                cleanup_paths[$idx]="${cleanup_paths[$idx]} $path"
             fi
-        else
-            log_warn "Failed to create cleanup job"
-            log_warn "Manual cleanup required on node '$target_node':"
-            log_warn "  ssh $target_node"
-            log_warn "  sudo rm -rf $hostpath_dir"
-        fi
-    elif [ "$hostpath_enabled" = true ]; then
-        log_warn "hostPath storage detected but could not determine target node"
-        log_warn "Manual cleanup may be required on cluster nodes:"
-        log_warn "  sudo rm -rf $hostpath_dir"
+        done
+        
+        for i in "${!cleanup_nodes[@]}"; do
+            clean_hostpath_node "${cleanup_nodes[$i]}" "${cleanup_paths[$i]}" "$i"
+        done
     fi
     
     return 0
@@ -365,19 +424,24 @@ echo ""
 if [[ " ${DETECTED_RESOURCES[*]} " =~ " pvcs " ]] || [[ " ${DETECTED_RESOURCES[*]} " =~ " pv " ]]; then
     echo "Data cleanup:"
     if [[ " ${DETECTED_RESOURCES[*]} " =~ " hostpath " ]]; then
-        echo "  Detected hostPath storage: $DETECTED_HOSTPATH"
-        if [ -n "$DETECTED_HOSTPATH_NODE" ]; then
-            echo "  Located on node: $DETECTED_HOSTPATH_NODE"
-        fi
+        hp_entry=""
+        for hp_entry in "${DETECTED_HOSTPATHS[@]}"; do
+            hp_node="${hp_entry##*|}"
+            if [ -n "$hp_node" ]; then
+                echo "  Detected hostPath: ${hp_entry%%|*} (node: $hp_node)"
+            else
+                echo "  Detected hostPath: ${hp_entry%%|*} (node unknown)"
+            fi
+        done
     fi
     if ask_yes_no "Remove persistent data (PVCs, PVs, StorageClass, hostPath)?" "no"; then
         CONFIG_REMOVE_DATA=true
-        echo "  - Will remove: PVCs, PV, StorageClass"
+        echo "  - Will remove: PVCs, PVs, StorageClass"
         if [[ " ${DETECTED_RESOURCES[*]} " =~ " hostpath " ]]; then
             echo "  - Will attempt to clean hostPath data"
         fi
     else
-        echo "  - Will preserve: PVCs, PV, StorageClass"
+        echo "  - Will preserve: PVCs, PVs, StorageClass"
     fi
     echo ""
 fi
@@ -403,7 +467,7 @@ echo "  Actions:"
 echo "    - Uninstall Helm release: $CONFIG_RELEASE_NAME"
 echo "    - Remove MetalLB configuration (if exists)"
 if [ "$CONFIG_REMOVE_DATA" = true ]; then
-    echo "    - Remove persistent data: PVCs, PV, StorageClass"
+    echo "    - Remove persistent data: PVCs, PVs, StorageClass"
 else
     echo "    - Preserve persistent data"
 fi
@@ -450,9 +514,9 @@ echo ""
 if [ "$CONFIG_REMOVE_DATA" = false ]; then
     log_info "Persistent data preserved. To remove later:"
     log_info "  kubectl delete pvc -n $CONFIG_NAMESPACE --all"
-    if kubectl get pv openan-postgres-pv &>/dev/null; then
-        log_info "  kubectl delete pv openan-postgres-pv"
-    fi
+    for preserved_pv in "${DETECTED_PVS[@]}"; do
+        log_info "  kubectl delete pv $preserved_pv"
+    done
     echo ""
 fi
 

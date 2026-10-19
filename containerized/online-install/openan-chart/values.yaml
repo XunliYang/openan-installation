@@ -28,6 +28,8 @@ postgresql:
   storage:
     size: 20Gi
     storageClassName: ""
+    # createStorageClass also serves registry/orchestration local PVs and
+    # applies even when PostgreSQL is external (external SQL deployments).
     createStorageClass: false
     createPV: false
     useHostPath: false
@@ -71,6 +73,14 @@ registry:
     existingClaim: ""  # Otherwise create registry-center-runtime (retained on uninstall).
     size: 5Gi
     storageClassName: ""  # Empty: default StorageClass; "-": explicitly no class.
+    # Evaluation fallback for clusters without a StorageClass: create a
+    # node-pinned local PV matching the claim (see QUICKSTART "Storage").
+    createPV: false
+    useHostPath: true
+    hostPath: "/data/openan-registry"
+    nodeName: ""
+    pvName: "openan-rc-pv"
+    reclaimPolicy: "Retain"
   image:
     repository: ghcr.io/project-openan/registry-center
     tag: ""  # REQUIRED: tag/digest-built revision compatible with this chart; see deployment contract.
@@ -156,6 +166,14 @@ orchestration:
     existingClaim: ""  # Otherwise create orchestration-center-runtime (retained).
     size: 10Gi
     storageClassName: ""
+    # Evaluation fallback for clusters without a StorageClass: create a
+    # node-pinned local PV matching the claim (see QUICKSTART "Storage").
+    createPV: false
+    useHostPath: true
+    hostPath: "/data/openan-orchestration"
+    nodeName: ""
+    pvName: "openan-oc-pv"
+    reclaimPolicy: "Retain"
   image:
     repository: ghcr.io/project-openan/orchestration-center
     tag: ""  # REQUIRED: tag/digest-built revision compatible with this chart; see deployment contract.
@@ -204,6 +222,9 @@ orchestration:
       command: ["python", "-m", "orchestrate.server.healthcheck"]
     failureThreshold: 12
     periodSeconds: 10
+    # The exec healthcheck takes ~1.3-1.4s; the K8s default of 1s never
+    # succeeds, so the timeout must be explicit (same as liveness/readiness).
+    timeoutSeconds: 10
 
 # =============================================================================
 # Frontend Configuration (unified entry: portal or workflow-designer)

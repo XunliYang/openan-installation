@@ -1,0 +1,46 @@
+{{/* Copyright (c) 2026 Huawei Technologies Co., Ltd. SPDX-License-Identifier: Apache-2.0 */}}
+{{/* Evaluation fallback for clusters without a StorageClass: a node-pinned
+     local PV matching the runtime PVC. Bind through a shared storageClassName
+     (e.g. openan-local created via postgresql.storage.createStorageClass).
+     Single-node clusters only: on multi-node clusters the workload must be
+     scheduled on the pinned node for the claim to bind. */}}
+{{- $defaultPv := dict "registry" "openan-rc-pv" "orchestration" "openan-oc-pv" }}
+{{- range $component, $name := dict "registry" "registry-center" "orchestration" "orchestration-center" }}
+{{- $c := index $.Values $component }}
+{{- if and $c.enabled (not $c.persistence.existingClaim) $c.persistence.createPV }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ $c.persistence.pvName | default (index $defaultPv $component) }}
+  labels:
+    {{- include (printf "openan.%s.labels" $component) $ | nindent 4 }}
+spec:
+  capacity:
+    storage: {{ $c.persistence.size }}
+  volumeMode: Filesystem
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: {{ $c.persistence.reclaimPolicy | default "Retain" }}
+  {{- if $c.persistence.storageClassName }}
+  storageClassName: {{ $c.persistence.storageClassName }}
+  {{- end }}
+  {{- if $c.persistence.useHostPath }}
+  hostPath:
+    path: {{ $c.persistence.hostPath }}
+  {{- else }}
+  local:
+    path: {{ $c.persistence.hostPath }}
+  {{- end }}
+  {{- if $c.persistence.nodeName }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - {{ $c.persistence.nodeName }}
+  {{- end }}
+{{- end }}
+{{- end }}

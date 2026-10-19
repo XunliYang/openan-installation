@@ -23,7 +23,7 @@ database:
 registry:
   enabled: true
   image:
-    tag: v1.0.0  # REQUIRED: no default; see deployment contract
+    tag: tested-source-build  # REQUIRED: no default; old v1.0.0 images are NOT compatible with this chart
   runtimeSecret: openan-rc-runtime
   credentialSecret: openan-rc-credentials
   modelsConfigMap: openan-rc-models
@@ -38,7 +38,7 @@ registry:
 orchestration:
   enabled: true
   image:
-    tag: v1.0.0  # REQUIRED: no default; see deployment contract
+    tag: tested-source-build  # REQUIRED: no default; per-component tags may differ
   runtimeSecret: openan-oc-runtime
   modelsConfigMap: openan-oc-models
   replicas: 1
@@ -51,11 +51,26 @@ frontend:
   type: portal  # portal | workflow-designer
   enabled: true
   image:
-    tag: v1.0.0  # REQUIRED: no default; see deployment contract
+    tag: tested-source-build  # REQUIRED: no default
   replicas: 2
   resources:
     requests: { cpu: 100m, memory: 128Mi }
     limits: { cpu: 500m, memory: 256Mi }
+
+# Bare-metal clusters without a StorageClass (single-node evaluation) can
+# uncomment this block instead of provisioning storage: it creates the shared
+# openan-local StorageClass and node-pinned hostPath PVs for all claims.
+# postgresql:
+#   storage:
+#     createStorageClass: true
+#     storageClassName: openan-local
+#     createPV: true
+#     useHostPath: true
+#     nodeName: node-1
+# registry:
+#   persistence: { storageClassName: openan-local, createPV: true, useHostPath: true, nodeName: node-1 }
+# orchestration:
+#   persistence: { storageClassName: openan-local, createPV: true, useHostPath: true, nodeName: node-1 }
 
 # Ingress
 ingress:

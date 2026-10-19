@@ -104,11 +104,15 @@ def test_mtls_material_and_probes_are_wired():
 def test_probe_timeout_seconds_exceeds_healthcheck_time(name):
     # BUG-5: the exec healthchecks (Python startup + RSA3072 handshake) take
     # ~2.3s, beyond K8s's 1s default probe timeout; liveness killed the pod
-    # before it ever became Ready. Guard a lower bound (>= 3s) instead of
-    # pinning the exact value, so the timeout can be tuned later.
+    # before it ever became Ready. The same applies to startupProbe: the
+    # orchestration startup probe measured 1.3-1.4s, so the K8s 1s default
+    # made it fail forever. Guard a lower bound (>= 3s) instead of pinning
+    # the exact value, so the timeout can be tuned later.
     docs = render()
     container = docs[name]["spec"]["template"]["spec"]["containers"][0]
-    for probe in ("livenessProbe", "readinessProbe"):
+    for probe in ("startupProbe", "livenessProbe", "readinessProbe"):
+        if probe not in container:
+            continue
         timeout = container[probe].get("timeoutSeconds")
         assert timeout is not None and timeout >= 3, (
             f"{name} {probe} timeoutSeconds must be set and >= 3s, got {timeout}"
@@ -210,6 +214,51 @@ def test_existing_runtime_claims_are_reused_without_creating_resources():
 def test_runtime_storage_class_selection(storage_class, expected):
     docs = render({"registry.persistence.storageClassName": storage_class})
     assert docs["registry-center-runtime"]["spec"]["storageClassName"] == expected
+
+
+def test_local_storage_fallback_creates_node_pinned_pvs():
+    # Clusters without a StorageClass leave every claim Pending; the wizard's
+    # fallback must provide PVs for ALL workloads (postgres, registry,
+    # orchestration), not just postgres.
+    settings = {"postgresql.storage.createStorageClass": True,
+                "postgresql.storage.storageClassName": "openan-local",
+                "postgresql.storage.createPV": True,
+                "postgresql.storage.useHostPath": True,
+                "postgresql.storage.nodeName": "node-a",
+                "registry.persistence.storageClassName": "openan-local",
+                "registry.persistence.createPV": True,
+                "registry.persistence.nodeName": "node-a",
+                "orchestration.persistence.storageClassName": "openan-local",
+                "orchestration.persistence.createPV": True,
+                "orchestration.persistence.nodeName": "node-a"}
+    docs = render(settings)
+    assert docs["StorageClass/openan-local"]["provisioner"] == "kubernetes.io/no-provisioner"
+    for pv_name, path in [("openan-postgres-pv", "/data/openan-postgres"),
+                          ("openan-rc-pv", "/data/openan-registry"),
+                          ("openan-oc-pv", "/data/openan-orchestration")]:
+        pv = docs[pv_name]
+        assert pv["spec"]["hostPath"]["path"] == path
+        assert pv["spec"]["storageClassName"] == "openan-local"
+        affinity = pv["spec"]["nodeAffinity"]["required"]["nodeSelectorTerms"][0]["matchExpressions"][0]
+        assert affinity["values"] == ["node-a"]
+    for claim in ("registry-center-runtime", "orchestration-center-runtime"):
+        assert docs[claim]["spec"]["storageClassName"] == "openan-local"
+
+
+@pytest.mark.parametrize("component", ["registry", "orchestration"])
+def test_local_pv_fallback_requires_storage_class_then_node(component):
+    settings = {f"{component}.persistence.createPV": True,
+                f"{component}.persistence.useHostPath": False}
+    assert "requires storageClassName" in render(settings, success=False)
+    settings[f"{component}.persistence.storageClassName"] = "openan-local"
+    assert "local PV requires nodeName" in render(settings, success=False)
+    settings[f"{component}.persistence.nodeName"] = "node-a"
+    render(settings)  # complete fallback triple renders
+
+
+def test_postgres_local_pv_requires_node_name():
+    settings = {"postgresql.storage.createPV": True, "postgresql.storage.useHostPath": False}
+    assert "postgresql.storage local PV requires nodeName" in render(settings, success=False)
 
 
 def test_disabled_registry_has_no_runtime_claim_or_replica_guard():

@@ -49,7 +49,13 @@ SPDX-License-Identifier: Apache-2.0 */}}
 {{- range $name := list "registry" "orchestration" }}
 {{- $c := index $.Values $name }}
 {{- if and $c.enabled (not $c.persistence.existingClaim) (not $c.persistence.size) }}{{ fail (printf "%s.persistence.size is required when creating a runtime PVC" $name) }}{{ end }}
+{{- if and $c.enabled $c.persistence.createPV }}
+{{- if $c.persistence.existingClaim }}{{ fail (printf "%s.persistence.createPV conflicts with existingClaim" $name) }}{{ end }}
+{{- if not $c.persistence.storageClassName }}{{ fail (printf "%s.persistence.createPV requires storageClassName matching the claim so the PV and PVC can bind" $name) }}{{ end }}
+{{- if and (not $c.persistence.useHostPath) (not $c.persistence.nodeName) }}{{ fail (printf "%s.persistence local PV requires nodeName" $name) }}{{ end }}
 {{- end }}
+{{- end }}
+{{- if and .Values.postgresql.enabled .Values.postgresql.storage.createPV (not .Values.postgresql.storage.useHostPath) (not .Values.postgresql.storage.nodeName) }}{{ fail "postgresql.storage local PV requires nodeName" }}{{ end }}
 {{- if and .Values.frontend.enabled (not (has (default "portal" .Values.frontend.type) (list "portal" "workflow-designer"))) }}{{ fail "frontend.type must be portal or workflow-designer" }}{{ end }}
 {{- if and .Values.frontend.enabled (not .Values.orchestration.enabled) }}{{ fail "frontend requires orchestration.enabled=true" }}{{ end }}
 {{- /* Limitation: the portal image cannot verify upstream TLS. With

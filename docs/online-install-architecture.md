@@ -18,7 +18,7 @@ scriptable CI; it never bypasses the chart.
 
 ### Scope
 
-- Target: a running Kubernetes cluster (v1.34+), internet-connected.
+- Target: a running Kubernetes cluster (v1.25+), internet-connected.
 - The installer provisions MetalLB and ingress-nginx (or skips them) but
   does not create the cluster itself.
 - Portal image is pulled from a registry (never built from source here); see
@@ -103,6 +103,7 @@ graph TB
 | PostgreSQL | StatefulSet | `openan-postgres` | Only when `postgresql.enabled=true` |
 | RC runtime PVC | PVC | `registry-center-runtime` | `helm.sh/resource-policy: keep` |
 | OC runtime PVC | PVC | `orchestration-center-runtime` | `helm.sh/resource-policy: keep` |
+| Local PVs (fallback) | PV | `openan-postgres-pv`, `openan-rc-pv`, `openan-oc-pv` | Only when `createPV` is set; node-pinned hostPath/local, single-node evaluation |
 | Frontend Ingress | Ingress | `openan-frontend-ingress` | path `/` |
 | Orchestration Ingress | Ingress | `openan-orchestration-ingress` | path `/api/orchestrate(/|$)(.*)` → rewrite |
 | Registry Ingress | Ingress | `openan-registry-ingress` | paths `/registry`, `/api/registry` → rewrite |
@@ -112,10 +113,11 @@ graph TB
 
 | Dependency | Managed by | Notes |
 |------------|-----------|-------|
-| ingress-nginx | Installer phase [4/6] or operator | Must have `ingressClassName: nginx` |
-| MetalLB | Installer phase [4/6] or operator | Only needed on bare-metal for LoadBalancer IP |
+| ingress-nginx | Installer phase [2/4] or operator | Must have `ingressClassName: nginx` |
+| MetalLB | Installer phase [2/4] or operator | Only needed on bare-metal for LoadBalancer IP |
 | Container images | `ghcr.io/project-openan` (default) | `frontend.image.repository` empty → derived by `frontend.type` |
-| External SQL | Operator-provisioned | MySQL or external PostgreSQL via `database.type` |
+| External SQL | Operator-provisioned | MySQL or external PostgreSQL via `database.type` (reviewed values; the wizard is in-cluster only) |
+| StorageClass | Operator-provisioned | The wizard falls back to node-pinned local hostPath PVs when none exists |
 
 ---
 
@@ -203,14 +205,21 @@ Only rendered when `postgresql.enabled=true` and `database.type=postgresql`.
 - Both apps share the `postgres-password` (in-cluster mode); per-app
   `existingSecret` is rejected for in-cluster PG (validate.yaml:70).
 - Storage: default StorageClass, or explicit `storageClassName`, or `-`
-  (no class).
+  (no class). Without any StorageClass, `postgresql.storage.createStorageClass`
+  + `createPV`/`useHostPath`/`nodeName` create the shared `openan-local`
+  class and a node-pinned PV (single-node evaluation; the wizard enables
+  this automatically).
 
 ### 3.5 Runtime PVCs (`runtime-pvc.yaml`)
 
 Each of RC and OC gets a dedicated PVC (`<name>-runtime`) with
 `helm.sh/resource-policy: keep` — uninstalling the Helm release does NOT
 delete runtime data. This is a data-safety decision: the PVC outlives the
-chart lifecycle.
+chart lifecycle. On clusters without a StorageClass,
+`persistence.createPV` (plus `storageClassName`, `useHostPath`, `nodeName`,
+`pvName`) renders a matching node-pinned PV (`openan-rc-pv` /
+`openan-oc-pv`) so the claims bind; single-node evaluation only, and
+`uninstall.sh` detects and cleans these PVs and their hostPath data.
 
 ---
 
@@ -252,28 +261,27 @@ paths coexist without conflict.
 ```mermaid
 flowchart LR
     subgraph "install.sh"
-        P1[Phase 1: Preflight<br/>kubectl/helm/python3 + cluster]
-        P2[Phase 2: Targets<br/>release + namespace]
-        P3[Phase 3: Images<br/>build or pull tag]
-        P4[Phase 4: Infrastructure<br/>MetalLB + ingress-nginx]
-        P5[Phase 5: Application<br/>configure.py wizard]
-        P6[Phase 6: Deploy<br/>helm lint + upgrade --install]
+        P1[Phase 1: Preflight<br/>kubectl/helm/python3 + cluster<br/>optional tool auto-install<br/>release/namespace from flags]
+        B[Optional build<br/>--tag + --registry-release<br/>+ --orchestration-release]
+        P4[Phase 2: Infrastructure<br/>MetalLB + ingress-nginx]
+        P5[Phase 3: Application<br/>configure.py wizard]
+        P6[Phase 4: Deploy<br/>summary + confirmation,<br/>helm upgrade --install,<br/>optional agents server]
     end
 
     subgraph "configure.py"
-        W[Interactive wizard<br/>components, SQL, models, signing, admin]
+        W[Interactive wizard<br/>components, image tags, models,<br/>signing, admin password;<br/>SQL/storage/hostname automatic]
         CS[Create Secrets via<br/>kubectl stdin]
         CM[Create ConfigMaps via<br/>kubectl stdin]
         V[Write non-secret values<br/>deployment.generated.json]
     end
 
     subgraph "Kubernetes"
-        S[Secrets<br/>rc-db, oc-db, rc-runtime, oc-runtime, rc-credentials]
+        S[Secrets<br/>pg, rc-runtime, oc-runtime, rc-credentials]
         C[ConfigMaps<br/>rc-models, oc-models]
         H[Helm release<br/>openan]
     end
 
-    P1-->P2-->P3-->P4-->P5
+    P1-->B-->P4-->P5
     P5-->W
     W-->CS & CM & V
     P6-->H
@@ -286,6 +294,28 @@ never appear in command-line arguments, environment files, or values files.
 The generated values file (`deployment.generated.json`) contains only
 non-secret references (Secret/ConfigMap names, image tags, hosts).
 
+**Agent examples server**: when orchestration is deployed, the installer
+interactively offers to start the demo agents (`samples/start_agents_server.py`)
+inside the orchestration-center pod via `kubectl exec` + `nohup`, then
+health-checks port 8903 (log: `/tmp/agents-server.log`). It mirrors the
+offline installer's `START_AGENTS_SERVER` option but is a post-deploy
+convenience, not a chart resource: it is not reconciled by Helm and does not
+survive pod restarts or upgrades.
+
+**Preflight auto-install and deploy gate**: missing kubectl/helm are offered
+for automatic installation — official installers only (`dl.k8s.io` binary,
+`get-helm-3`, `brew` on macOS when present), behind an explicit interactive
+confirmation, with a re-check after installation; python3 always stays
+manual, and Docker (get.docker.com, Linux) is only offered inside the
+flag-driven build phase. Nothing is installed on the host without a "yes".
+Before `helm upgrade --install`, the installer prints a non-secret
+deployment summary (release/namespace, components, image tags, SQL,
+storage, models, signing, ingress host) and requires confirmation;
+cancelling keeps the generated values file and the Secrets/ConfigMaps the
+wizard already created (the wizard is not transactional). Neither behavior
+exists in the non-interactive `--values` mode: CI fails fast on missing
+tools and deploys without prompts.
+
 ### 4.3 Image flow
 
 ```mermaid
@@ -296,10 +326,10 @@ flowchart TD
         PORTAL[containerized/build/portal/<br/>portal release-artifact builder]
     end
 
-    subgraph "Installer phase 3"
-        CHOICE{--app-source}
-        PULL[pull mode:<br/>docker pull tag]
-        SRC[build mode:<br/>buildx from --*-release URL]
+    subgraph "install.sh image sourcing"
+        CHOICE{Build flags given?}
+        PULL[no flags: wizard asks the tag;<br/>nodes pull it from the registry]
+        SRC[--tag + --registry-release<br/>+ --orchestration-release:<br/>buildx before the wizard]
     end
 
     subgraph "Cluster"
@@ -376,6 +406,9 @@ at `helm template/lint/install` time. It rejects:
 - OC replicas > 1 or HPA enabled (process-local sessions)
 - In-cluster PG with per-app `existingSecret` (in-cluster uses one shared
   password)
+- `persistence.createPV` without a matching `storageClassName`, or a local
+  (non-hostPath) PV without `nodeName` (the PV and PVC could not bind)
+- Probe timeouts below 3s on liveness/readiness/startup probes
 - Duplicate `extraEnv` keys that shadow managed settings
 - Probe host that shadows another service or the SQL host
 
