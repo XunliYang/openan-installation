@@ -228,8 +228,8 @@ def configure(namespace, release, output, tag=None):
     admin = None
     if components["orchestration"]:
         admin = secret_input("Initial admin password (change it in the web UI before API use)")
-        if len(admin) < 12 or not all(re.search(p, admin) for p in (r"[a-z]", r"[A-Z]", r"[0-9]", r"[^a-zA-Z0-9]")):
-            raise ValueError("Initial password requires 12+ characters and lower/upper/digit/special classes")
+        if len(admin) < 8 or not all(re.search(p, admin) for p in (r"[a-z]", r"[A-Z]", r"[0-9]", r"[^a-zA-Z0-9]")):
+            raise ValueError("Initial password requires 8+ characters and lower/upper/digit/special classes")
 
     # --- Service-token machinery (registry <-> orchestration pairing) ---------
     token = hmac_key = fingerprint = credential = None
