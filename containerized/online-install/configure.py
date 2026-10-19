@@ -2,12 +2,15 @@
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Guided HTTP evaluation configuration; secrets only in memory and kubectl stdin.
+"""Guided evaluation configuration; secrets only in memory and kubectl stdin.
 
-Production/custom HTTPS profiles use reviewed values and existing Secrets instead.
-No defaults for passwords, no credential arguments, no Secret overwrite.
-Evaluation paths (in-cluster SQL, generated models.yaml, auto signing) are
-convenience only; every secret still travels getpass -> kubectl stdin.
+Simplified wizard: components → DB password → LLM (once, reuse for both)
+→ admin password → hostname. Everything else defaults to evaluation mode
+(in-cluster PostgreSQL, auto signing, generated models.yaml).
+
+Production/custom HTTPS profiles use reviewed values (see example.values.yaml)
+and existing Secrets instead. No defaults for passwords, no credential
+arguments, no Secret overwrite.
 """
 import argparse
 import base64
@@ -102,11 +105,7 @@ def probe_llm(model, url, api_key):
 
 
 def models_yaml(model, url):
-    """chat-only models.yaml; the API key is referenced by env name, never inlined.
-
-    json.dumps emits a YAML-compatible double-quoted scalar, so ids like
-    `123` or `true` stay strings.
-    """
+    """chat-only models.yaml; the API key is referenced by env name, never inlined."""
     return ("models:\n"
             "  chat:\n"
             "    provider: openai_compatible\n"
@@ -142,15 +141,21 @@ def configure(namespace, release, output, tag=None):
     if output.exists():
         raise ValueError("Output exists; refusing to overwrite deployment configuration")
 
+    print()
+    print("  Press Enter to accept the [default] for each prompt.")
+    print()
+
+    # --- 1. Components -------------------------------------------------------
     components = choose_components()
     enabled = [component for component in COMPONENTS if components[component]]
     if not tag:
         tag = ask("Compatible application image tag (already pushed)")
     prefix = release + "-"
 
-    # --- non-secret configuration + reference checks -------------------------
+    # --- 2. Database (in-cluster default, just one password) ---------------
     db_mode = choose("SQL hosting", ["in-cluster", "external"], "in-cluster")
     external_db = {}
+    names = users = {}
     if db_mode == "external":
         db_type = ask("External SQL type: mysql or postgresql")
         if db_type not in {"mysql", "postgresql"}:
@@ -165,11 +170,24 @@ def configure(namespace, release, output, tag=None):
         users = {component: ask(component + " database username") for component in enabled}
         external_db = {"type": db_type, "host": host, "port": port}
 
+    # --- 3. LLM (ask once, offer to reuse) ---------------------------------
+    llm = {}
     models_mode = choose("models.yaml source", ["generate", "existing"], "generate")
     models_ref = {}
     if models_mode == "existing":
         models_ref = {component: ask(component + " existing models.yaml ConfigMap") for component in enabled}
+    elif enabled:
+        # Ask for the first component, then offer to reuse
+        first = enabled[0]
+        llm[first] = collect_llm(first)
+        for other in enabled[1:]:
+            reuse = choose(f"use same LLM for {other}", ["yes", "no"], "yes")
+            if reuse == "no":
+                llm[other] = collect_llm(other)
+            else:
+                llm[other] = llm[first]
 
+    # --- 4. Signing (auto default, one question) ----------------------------
     signing_ref = None
     if components["registry"]:
         if choose("registry signing material", ["auto", "secret"], "auto") == "secret":
@@ -181,7 +199,7 @@ def configure(namespace, release, output, tag=None):
         if not re.match(r"^https?://", agent_registry_url):
             raise ValueError("Agent registry URL must start with http:// or https://")
 
-    ingress_host = ask("Public HTTP evaluation hostname")
+    ingress_host = ask("Public HTTP evaluation hostname (empty = IP access)")
 
     # Check public references before collecting/creating any credentials.
     checks = [("configmap", name) for name in models_ref.values()]
@@ -192,7 +210,11 @@ def configure(namespace, release, output, tag=None):
         if result.returncode:
             raise ValueError(f"Required model/signing reference is missing or inaccessible: {name}")
 
-    # --- secret collection ----------------------------------------------------
+    # --- 5. Secrets collection ----------------------------------------------
+    print()
+    print("  Setting up secrets (input is hidden)...")
+    print()
+
     in_cluster_password = None
     if db_mode == "in-cluster":
         in_cluster_password = secret_input("PostgreSQL password (shared by the seeded app users)")
@@ -203,19 +225,13 @@ def configure(namespace, release, output, tag=None):
     if db_mode == "external":
         sql_passwords = {component: secret_input(component + " SQL password") for component in enabled}
 
-    llm = {}
-    if models_mode == "generate":
-        # Connectivity probing happens here; it needs the key, so it cannot
-        # precede secret collection.
-        llm = {component: collect_llm(component) for component in enabled}
-
     admin = None
     if components["orchestration"]:
         admin = secret_input("Initial admin password (change it in the web UI before API use)")
         if len(admin) < 12 or not all(re.search(p, admin) for p in (r"[a-z]", r"[A-Z]", r"[0-9]", r"[^a-zA-Z0-9]")):
             raise ValueError("Initial password requires 12+ characters and lower/upper/digit/special classes")
 
-    # --- service-token machinery (registry <-> orchestration pairing) ---------
+    # --- Service-token machinery (registry <-> orchestration pairing) ---------
     token = hmac_key = fingerprint = credential = None
     if components["registry"]:
         token, hmac_key, fingerprint = (secrets.token_urlsafe(48) for _ in range(3))
@@ -229,7 +245,7 @@ def configure(namespace, release, output, tag=None):
                         capture_output=True, text=True, check=True)
     subprocess.run(["kubectl", "apply", "-f", "-"], input=ns.stdout, text=True, check=True)
 
-    # --- create Secrets / ConfigMaps -----------------------------------------
+    # --- Create Secrets / ConfigMaps -----------------------------------------
     if in_cluster_password is not None:
         create_secret(namespace, prefix + "pg", {"postgres-password": in_cluster_password})
     for component, password in sql_passwords.items():
@@ -259,7 +275,7 @@ def configure(namespace, release, output, tag=None):
     if oc_runtime:
         create_secret(namespace, prefix + "oc-runtime", oc_runtime)
 
-    # --- assemble non-secret values -------------------------------------------
+    # --- Assemble non-secret values -------------------------------------------
     values = {"namespace": namespace, "frontend": {"image": {"tag": tag}}}
     if db_mode == "in-cluster":
         values["postgresql"] = {"enabled": True, "existingSecret": prefix + "pg"}

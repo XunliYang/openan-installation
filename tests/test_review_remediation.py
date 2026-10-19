@@ -186,10 +186,12 @@ def test_wizard_in_cluster_default_values_shape(tmp_path, monkeypatch):
 
 def test_wizard_generate_models_keeps_keys_only_in_runtime_secrets(tmp_path, monkeypatch):
     module = wizard()
-    answers = iter(["all", "in-cluster", "generate", "auto", "openan.example",
+    answers = iter(["all", "in-cluster", "generate",
                     "rc-model-id", "https://llm.example/v1/chat/completions",
-                    "oc-model-id", "https://llm.example/v1/chat/completions"])
-    secrets = iter(["PgSecret9!", "rc-llm-key", "oc-llm-key", "AdminPassw0rd!xy"])
+                    "no",
+                    "oc-model-id", "https://llm.example/v1/chat/completions",
+                    "auto", "openan.example"])
+    secrets = iter(["rc-llm-key", "oc-llm-key", "PgSecret9!", "AdminPassw0rd!xy"])
     monkeypatch.setattr(module, "ask", lambda _: next(answers))
     monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
     monkeypatch.setattr(module, "secret_input", lambda _: next(secrets))
