@@ -27,7 +27,9 @@ scriptable CI; it never bypasses the chart.
 ### Non-goals
 
 - Cluster creation (see `containerized/offline-install/docs/KUBEADM_CLUSTER.md`).
-- Offline/air-gapped deployment (see `docs/offline-install-architecture.md`).
+- Offline/air-gapped deployment (see `offline-install-architecture.md` for
+  the Kubernetes line and `offline-install-compose-architecture.md` for the
+  Docker Compose line).
 - Image building for registry-center/orchestration-center (see
   `containerized/build/build.sh`); the installer can invoke it but does not
   own the logic.
