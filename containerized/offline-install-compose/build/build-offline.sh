@@ -7,7 +7,7 @@ umask 077
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE="$(cd "$SCRIPT_DIR/.." && pwd)"
 TAG=""; SOURCE_REF=""; APP_REGISTRY="ghcr.io/project-openan"; APP_SOURCE="pull"
-REGISTRY_SRC=""; ORCHESTRATION_SRC=""; REGISTRY_RELEASE=""; ORCHESTRATION_RELEASE=""; APP_TARS_DIR=""; PORTAL_SRC=""
+REGISTRY_SRC=""; ORCHESTRATION_SRC=""; REGISTRY_RELEASE=""; ORCHESTRATION_RELEASE=""; APP_TARS_DIR=""
 PLATFORMS="linux/amd64"; OUT_DIR="$SCRIPT_DIR/dist"
 log_warn() { echo "[WARN] $1"; }
 while [ $# -gt 0 ]; do
@@ -24,7 +24,6 @@ while [ $# -gt 0 ]; do
         --registry-release) REGISTRY_RELEASE="$2"; shift 2 ;;
         --orchestration-release) ORCHESTRATION_RELEASE="$2"; shift 2 ;;
         --app-tars-dir) APP_TARS_DIR="$2"; shift 2 ;;
-        --portal-src) PORTAL_SRC="$2"; shift 2 ;;
         --platforms) PLATFORMS="$2"; shift 2 ;;
         --out) OUT_DIR="$2"; shift 2 ;;
         --help|-h) echo 'Use --source-ref <main|tag> [or --tag <tag>] --app-source pull|build|tars [--registry-src/--orchestration-src <dir> | --registry-release/--orchestration-release <url>] [--platforms linux/amd64,linux/arm64] [--out <dir>]'; exit 0 ;;
@@ -83,10 +82,8 @@ if [ "$APP_SOURCE" == build ]; then
     ORCHESTRATION_SRC="$(resolve_src "$ORCHESTRATION_SRC" "${ORCHESTRATION_RELEASE:-$OC_URL}" "orchestration-center")" || exit 1
     [ -f "$ORCHESTRATION_SRC/workflow-designer/Dockerfile" ] || { echo 'orchestration-center source lacks workflow-designer/Dockerfile' >&2; exit 1; }
 fi
-if [ -n "$PORTAL_SRC" ]; then
-    PORTAL_SRC="$(cd "$PORTAL_SRC" && pwd)"
-    [ -f "$PORTAL_SRC/Dockerfile" ] || { echo 'Portal source requires a Dockerfile' >&2; exit 1; }
-fi
+# Portal is NOT built from source here — it uses a different build pipeline
+# (containerized/build/portal/); this builder pulls it from the registry.
 if [ "$APP_SOURCE" == tars ]; then [ -d "$APP_TARS_DIR" ] || { echo '--app-tars-dir required' >&2; exit 2; }; fi
 mkdir -p "$OUT_DIR"
 BUNDLE="$(cd "$OUT_DIR" && pwd)/openan-offline-compose-$TAG"
@@ -136,9 +133,7 @@ done
 PORTAL_ARCHES=0
 for arch in "${ARCHS[@]}"; do
     echo "Preparing portal ($arch)"
-    if [ -n "$PORTAL_SRC" ]; then
-        docker buildx build --platform "linux/$arch" --load -t "$PORTAL" "$PORTAL_SRC"
-    elif [ "$APP_SOURCE" == tars ] && [ -s "$APP_TARS_DIR/portal-$arch.tar" ]; then
+    if [ "$APP_SOURCE" == tars ] && [ -s "$APP_TARS_DIR/portal-$arch.tar" ]; then
         docker load -i "$APP_TARS_DIR/portal-$arch.tar"
     elif ! docker pull --platform "linux/$arch" "$PORTAL"; then
         log_warn "portal image unavailable for $arch; bundle supports only FRONTEND_TYPE=workflow-designer"
