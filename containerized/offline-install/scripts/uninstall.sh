@@ -99,6 +99,16 @@ uninstall_k8s() {
     fi
 
     # ------------------------------------------------------------------
+    # 2b. Installer-generated TLS Secrets (labeled openan-offline-installer)
+    # ------------------------------------------------------------------
+    for secret in openan-rc-tls openan-oc-tls openan-ingress-client openan-public-tls; do
+        if [ "$("$KUBECTL" -n "$ns" get secret "$secret" -o jsonpath='{.metadata.labels.openan-offline-installer}' 2>/dev/null)" = "true" ]; then
+            "$KUBECTL" -n "$ns" delete secret "$secret" --ignore-not-found --timeout=60s 2>/dev/null || true
+            log_info "Deleted generated TLS Secret: $secret"
+        fi
+    done
+
+    # ------------------------------------------------------------------
     # 3. Drain pods (pvc-protection needs mounting pods gone first)
     # ------------------------------------------------------------------
     if "$KUBECTL" get pods -n "$ns" --no-headers 2>/dev/null | grep -qv "No resources"; then

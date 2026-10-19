@@ -223,8 +223,10 @@ gatekeeper.
 Identical path contract to the online line: `/` → frontend,
 `/api/orchestrate(/|$)(.*)` → OC (rewrite `/$2`), `/registry` +
 `/api/registry` → RC. `backend-protocol: HTTPS` annotations follow
-`https.enabled`; the ingress TLS block requires `ingress.tls.enabled` and a
-DNS host.
+`https.enabled` (default on), with backend certificate verification
+(`proxy-ssl-verify` + per-service SNI) when `ingress.backendVerifyServer`
+is set; the ingress TLS block requires `ingress.tls.enabled` and a DNS
+host.
 
 ### 4.2 Configuration flow
 
@@ -233,9 +235,11 @@ flowchart LR
     A[config.env 600<br/>or interactive prompts] --> B[install.sh effective config]
     B --> C[save_config<br/>config.env 600]
     B --> D[config.values.yaml 600<br/>generated values]
+    T[tool/gen_certs.py openssl<br/>CA + RC/OC/ingress certs] --> S[installer-labeled Secrets<br/>rc/oc tls, ingress-client,<br/>public tls]
+    S --> D
     D --> E[Helm chart]
     E --> F[stringData Secrets<br/>db / admin / llm api keys]
-    E --> G[genCA genSignedCert<br/>TLS + JWS signing, 3650d, lookup reuse]
+    E --> G[signing auto mode<br/>genCA genSignedCert, lookup reuse]
 ```
 
 Secrets live on disk by design in this line (contrast: the online wizard
@@ -268,7 +272,7 @@ Grouped summary (authoritative list: `config.env.example`):
 | Infra add-ons | `INSTALL_METALLB`, `METALLB_POOL`, `INGRESS_HOST` |
 | Frontend | `FRONTEND_TYPE` (`portal` default) |
 | Access control | `OC_ADMIN_PASSWORD` (required) |
-| Transport security | `HTTPS_ENABLED`, `HTTPS_VERIFY_CLIENT` |
+| Transport security | `HTTPS_ENABLED` (default true), `HTTPS_VERIFY_CLIENT`, `RC_TLS_SECRET`, `OC_TLS_SECRET`, `INGRESS_CLIENT_SECRET` |
 | Storage | `STORAGE_MODE`, `STORAGE_CLASS`, `STORAGE_SIZE`, `HOSTPATH`, `STORAGE_NODE` |
 | Database | `DB_TYPE`, `DB_PASSWORD` |
 | Images | `REGISTRY_CENTER_IMAGE`, `ORCHESTRATION_CENTER_IMAGE`, `WORKFLOW_DESIGNER_IMAGE`, `PORTAL_IMAGE`, `POSTGRES_IMAGE`, `MYSQL_IMAGE` (registry-relative) |
@@ -287,14 +291,30 @@ names only (`api_key_env`) — keys are never inlined.
 
 ### 5.3 PKI
 
-No certificates ship in the bundle. Helm generates self-signed material
-(`genCA`/`genSignedCert`, 3650 days) for registry TLS + JWS signing (always,
-mode `auto`) and orchestration TLS (only when `HTTPS_ENABLED=true`);
-`lookup` preserves the material across releases. The default offline
-topology is plain HTTP with JWS signature validation disabled. One
+No certificates ship in the bundle. **HTTPS is the default** (`HTTPS_ENABLED`
+defaults to `true`): the installer generates a self-signed CA plus
+per-service certificates with `tool/gen_certs.py` (openssl CLI — the online
+line's tool vendors registry-center code and needs the cryptography library,
+which an air-gapped host has neither of; this port keeps the same output
+contract) and stores them as installer-labeled Secrets:
+
+| Secret | Contents | Used by |
+|--------|----------|---------|
+| `openan-rc-tls` | `server.cer`, `server_key.pem`, `trust.cer`, `cert_pwd` | RC `tls-certs` volume (`mode=secret`) |
+| `openan-oc-tls` | same | OC `tls-certs` volume (`mode=secret`) |
+| `openan-ingress-client` | `tls.crt`, `tls.key`, `ca.crt` | ingress `proxy-ssl-verify` (+ mTLS client material) |
+| `openan-public-tls` (when `INGRESS_HOST` set) | `tls.crt`, `tls.key` | public ingress TLS termination |
+
+The ingress **always verifies backend server certificates** against the
+shared CA (`proxy-ssl-verify: on` + `proxy-ssl-secret`, SNI pinned per
+service). Operator-provided certificates are supported by pre-creating the
+Secrets and setting `RC_TLS_SECRET` / `OC_TLS_SECRET` /
+`INGRESS_CLIENT_SECRET` together. JWS signing material stays on the chart's
+`auto` mode (Helm `genCA`/`genSignedCert`, 3650 days, `lookup` reuse). One
 interface contract: `REGISTRY_JWK_PRIVATE_KEY_PASSWORD` is set to `""` in
 auto mode because an empty `cert_pwd` *file* reads as `b''` and crashes the
-signer (`registry-center/configmap.yaml:24-29`).
+signer. `HTTPS_VERIFY_CLIENT` (registry mTLS) remains opt-in — kubelet
+httpGet probes present no client certificate.
 
 ---
 
@@ -305,6 +325,7 @@ signer (`registry-center/configmap.yaml:24-29`).
 | Secret input | Masked char-by-char read from `/dev/tty` (interactive) |
 | Secret at rest | `config.env` + `config.values.yaml`, chmod 600, gitignored |
 | Registry transport | Plain HTTP by necessity (air-gapped); trust is a documented per-node containerd prerequisite |
+| In-cluster service TLS | Default on: `tool/gen_certs.py` (openssl) → installer-labeled Secrets; ingress verifies backends (`proxy-ssl-verify`); operator Secrets supported |
 | Admin bootstrap | `OC_ADMIN_PASSWORD` required at the gate; seeds OC `admin` |
 | Token identity | RC default `token` mode with `static_bearer` credentials |
 | Bundle integrity | `SHA256SUMS` over every bundle file; check-env refuses on mismatch (detects corruption, not authenticity) |

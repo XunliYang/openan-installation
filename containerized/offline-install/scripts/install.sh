@@ -46,8 +46,16 @@ REGISTRY_NODEPORT="30500"
 INSTALL_METALLB="true"
 METALLB_POOL=""
 INGRESS_HOST=""
-HTTPS_ENABLED="false"
+HTTPS_ENABLED="true"
 HTTPS_VERIFY_CLIENT="false"
+# TLS secrets: empty = generate self-signed certificates at install time
+# (tool/gen_certs.py) into openan-rc-tls / openan-oc-tls /
+# openan-ingress-client (+ openan-public-tls when INGRESS_HOST is set).
+# Set all three names to use operator-provided Secrets instead.
+RC_TLS_SECRET=""
+OC_TLS_SECRET=""
+INGRESS_CLIENT_SECRET=""
+PUBLIC_TLS_SECRET=""
 STORAGE_MODE="auto"
 STORAGE_CLASS=""
 STORAGE_SIZE="20Gi"
@@ -74,6 +82,30 @@ REGISTRY_SIGNATURE_VALIDATION_ENABLED="false"
 START_AGENTS_SERVER="false"
 
 [ -n "$CONFIG_FILE" ] && load_config "$CONFIG_FILE"
+
+# --- Normalize booleans (config values are free-text strings) -----------------
+normalize_bool() {
+    case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+        true|yes|1)  echo "true" ;;
+        false|no|0|"") echo "false" ;;
+        *) return 1 ;;
+    esac
+}
+for _bool_var in INSTALL_REGISTRY INSTALL_METALLB HTTPS_ENABLED HTTPS_VERIFY_CLIENT \
+                 LLM_VALIDATE REGISTRY_SIGNATURE_VALIDATION_ENABLED START_AGENTS_SERVER; do
+    _bool_val="$(normalize_bool "${!_bool_var}")" || {
+        log_error "${_bool_var} must be true or false (got: ${!_bool_var})"
+        exit 2
+    }
+    printf -v "$_bool_var" '%s' "$_bool_val"
+done
+
+if [ -n "$INGRESS_HOST" ]; then
+    if printf '%s' "$INGRESS_HOST" | grep -Eq '^[0-9.]+$' || printf '%s' "$INGRESS_HOST" | grep -q ':'; then
+        log_error "INGRESS_HOST must be a DNS name, not an IP address (Kubernetes rejects IP hosts; leave empty for direct IP access)"
+        exit 2
+    fi
+fi
 
 case "$DB_TYPE" in
     postgresql|mysql) ;;
@@ -114,11 +146,21 @@ if [ "$ASSUME_YES" != "true" ] && [ -z "$CONFIG_FILE" ]; then
         METALLB_POOL="$(ask_input "  MetalLB IP pool (e.g. 192.168.1.200-192.168.1.250)" "$METALLB_POOL")"
     fi
     INGRESS_HOST="$(ask_input "  Ingress host (empty = access by IP)" "$INGRESS_HOST")"
-    HTTPS_ANS="$(ask_input "  Enable HTTPS for in-cluster services? (true/false)" "$HTTPS_ENABLED")"
-    HTTPS_ENABLED="$HTTPS_ANS"
-    if [ "$HTTPS_ENABLED" = "true" ]; then
-        HTTPS_VC_ANS="$(ask_input "  Require client certificates (mTLS) on registry? (true/false)" "$HTTPS_VERIFY_CLIENT")"
-        HTTPS_VERIFY_CLIENT="$HTTPS_VC_ANS"
+    if ask_yes_no "  Enable HTTPS for in-cluster services" "yes"; then
+        HTTPS_ENABLED="true"
+        if ask_yes_no "  Generate self-signed certificates now (openssl, stored in Secrets)" "yes"; then
+            : # generate mode: secrets are created during deploy
+        else
+            RC_TLS_SECRET="$(ask_input "  Registry TLS Secret name" "$RC_TLS_SECRET")"
+            OC_TLS_SECRET="$(ask_input "  Orchestration TLS Secret name" "$OC_TLS_SECRET")"
+            INGRESS_CLIENT_SECRET="$(ask_input "  Ingress client/CA Secret name (tls.crt, tls.key, ca.crt)" "$INGRESS_CLIENT_SECRET")"
+            PUBLIC_TLS_SECRET="$(ask_input "  Public ingress TLS Secret name (empty = plain HTTP entry)" "$PUBLIC_TLS_SECRET")"
+        fi
+        if ask_yes_no "  Require client certificates (mTLS) on the registry listener" "no"; then
+            HTTPS_VERIFY_CLIENT="true"
+        fi
+    else
+        HTTPS_ENABLED="false"
     fi
     DB_TYPE="$(ask_choice "  Database backend:" "mysql" "postgresql")"
     DB_PASSWORD="$(ask_input_secret "  Database password" "$DB_PASSWORD")"
@@ -198,6 +240,13 @@ echo "  Database:         $DB_TYPE"
 echo "  Frontend:         $FRONTEND_TYPE"
 echo "  Ingress host:     ${INGRESS_HOST:-<none, IP access>}"
 echo "  HTTPS (services): $HTTPS_ENABLED (verifyClient: $HTTPS_VERIFY_CLIENT)"
+if [ "$HTTPS_ENABLED" = "true" ]; then
+    if [ -n "$RC_TLS_SECRET" ] || [ -n "$OC_TLS_SECRET" ] || [ -n "$INGRESS_CLIENT_SECRET" ]; then
+        echo "  TLS:              existing Secrets ($RC_TLS_SECRET / $OC_TLS_SECRET); ingress verifies backends"
+    else
+        echo "  TLS:              self-signed via tool/gen_certs.py; ingress verifies backends"
+    fi
+fi
 echo "  Registry center:  $REGISTRY_CENTER_IMAGE"
 echo "  Orchestration:    $ORCHESTRATION_CENTER_IMAGE"
 if [ "$FRONTEND_TYPE" = "portal" ]; then
@@ -416,6 +465,69 @@ fi
 # ---------------------------------------------------------------------------
 log_step "[6/7] Deploying OpenAN"
 
+# --- TLS certificates (HTTPS default) ----------------------------------------
+# generate: tool/gen_certs.py (openssl) + installer-created Secrets
+# existing: operator-provided Secrets (all three names required)
+create_secret_from_files() {
+    local name="$1"; shift
+    if "$KUBECTL" -n "$K8S_NAMESPACE" get secret "$name" >/dev/null 2>&1; then
+        log_info "TLS Secret $name already exists, reusing"
+        return 0
+    fi
+    local args=() pair
+    for pair in "$@"; do args+=(--from-file="$pair"); done
+    "$KUBECTL" -n "$K8S_NAMESPACE" create secret generic "$name" "${args[@]}" \
+        && "$KUBECTL" -n "$K8S_NAMESPACE" label secret "$name" openan-offline-installer=true >/dev/null
+}
+
+if [ "$HTTPS_ENABLED" = "true" ]; then
+    if [ -n "$RC_TLS_SECRET" ] || [ -n "$OC_TLS_SECRET" ] || [ -n "$INGRESS_CLIENT_SECRET" ]; then
+        if [ -z "$RC_TLS_SECRET" ] || [ -z "$OC_TLS_SECRET" ] || [ -z "$INGRESS_CLIENT_SECRET" ]; then
+            log_error "Existing TLS mode requires RC_TLS_SECRET, OC_TLS_SECRET and INGRESS_CLIENT_SECRET together"
+            exit 1
+        fi
+        log_info "Using operator-provided TLS Secrets: $RC_TLS_SECRET / $OC_TLS_SECRET / $INGRESS_CLIENT_SECRET"
+    else
+        RC_TLS_SECRET="openan-rc-tls"
+        OC_TLS_SECRET="openan-oc-tls"
+        INGRESS_CLIENT_SECRET="openan-ingress-client"
+        CERT_DIR="$BUNDLE_DIR/certs"
+        GEN_ARGS=(--out "$CERT_DIR" --namespace "$K8S_NAMESPACE")
+        [ -n "$INGRESS_HOST" ] && GEN_ARGS+=(--ingress-host "$INGRESS_HOST")
+        [ -n "$INGRESS_IP" ] && GEN_ARGS+=(--ingress-ip "$INGRESS_IP")
+        log_info "Generating self-signed certificates (openssl)..."
+        python3 "$BUNDLE_DIR/tool/gen_certs.py" "${GEN_ARGS[@]}" || {
+            log_error "Certificate generation failed (openssl and python3 are required)"
+            exit 1
+        }
+        create_secret_from_files "$RC_TLS_SECRET" \
+            "server.cer=$CERT_DIR/registry-center/server.cer" \
+            "server_key.pem=$CERT_DIR/registry-center/server_key.pem" \
+            "trust.cer=$CERT_DIR/registry-center/trust.cer" \
+            "cert_pwd=$CERT_DIR/registry-center/cert_pwd"
+        create_secret_from_files "$OC_TLS_SECRET" \
+            "server.cer=$CERT_DIR/orchestration-center/server.cer" \
+            "server_key.pem=$CERT_DIR/orchestration-center/server_key.pem" \
+            "trust.cer=$CERT_DIR/orchestration-center/trust.cer" \
+            "cert_pwd=$CERT_DIR/orchestration-center/cert_pwd"
+        create_secret_from_files "$INGRESS_CLIENT_SECRET" \
+            "tls.crt=$CERT_DIR/ingress-client/tls.crt" \
+            "tls.key=$CERT_DIR/ingress-client/tls.key" \
+            "ca.crt=$CERT_DIR/ca/ca.cer"
+        if [ -n "$INGRESS_HOST" ]; then
+            PUBLIC_TLS_SECRET="openan-public-tls"
+            if "$KUBECTL" -n "$K8S_NAMESPACE" get secret "$PUBLIC_TLS_SECRET" >/dev/null 2>&1; then
+                log_info "TLS Secret $PUBLIC_TLS_SECRET already exists, reusing"
+            else
+                "$KUBECTL" -n "$K8S_NAMESPACE" create secret tls "$PUBLIC_TLS_SECRET" \
+                    --cert="$CERT_DIR/ingress/tls.crt" --key="$CERT_DIR/ingress/tls.key" \
+                    && "$KUBECTL" -n "$K8S_NAMESPACE" label secret "$PUBLIC_TLS_SECRET" openan-offline-installer=true >/dev/null
+            fi
+        fi
+        log_info "TLS Secrets ready (ingress verifies backends against the shared CA)"
+    fi
+fi
+
 VALUES="$BUNDLE_DIR/config.values.yaml"
 
 # emit_db_storage <hostpath> — shared storage block for the database values
@@ -470,6 +582,12 @@ emit_db_storage() {
     echo "    repository: ${REG_HOST}/$(REF_REPO "$REGISTRY_CENTER_IMAGE")"
     echo "    tag: $(REF_TAG "$REGISTRY_CENTER_IMAGE")"
     echo "    pullPolicy: IfNotPresent"
+    if [ "$HTTPS_ENABLED" = "true" ]; then
+        echo "  tls:"
+        echo "    mode: secret"
+        echo "    existingSecret: \"${RC_TLS_SECRET}\""
+        echo "  ingressClientSecret: \"${INGRESS_CLIENT_SECRET}\""
+    fi
     if [ -n "$REGISTRY_CHAT_MODEL" ]; then
         echo "  llm:"
         echo "    chat:"
@@ -486,6 +604,12 @@ emit_db_storage() {
     echo "    pullPolicy: IfNotPresent"
     echo "  admin:"
     echo "    initialPassword: \"${OC_ADMIN_PASSWORD}\""
+    if [ "$HTTPS_ENABLED" = "true" ]; then
+        echo "  tls:"
+        echo "    mode: secret"
+        echo "    existingSecret: \"${OC_TLS_SECRET}\""
+        echo "  ingressClientSecret: \"${INGRESS_CLIENT_SECRET}\""
+    fi
     if [ -n "$ORCH_CHAT_MODEL" ]; then
         echo "  llm:"
         echo "    chat:"
@@ -510,6 +634,14 @@ emit_db_storage() {
     echo "  enabled: true"
     echo "  className: nginx"
     echo "  host: \"${INGRESS_HOST}\""
+    if [ "$HTTPS_ENABLED" = "true" ]; then
+        echo "  backendVerifyServer: true"
+        if [ -n "$INGRESS_HOST" ] && [ -n "$PUBLIC_TLS_SECRET" ]; then
+            echo "  tls:"
+            echo "    enabled: true"
+            echo "    secretName: \"${PUBLIC_TLS_SECRET}\""
+        fi
+    fi
 } >"$VALUES"
 chmod 600 "$VALUES"
 
@@ -565,7 +697,8 @@ fi
 smoke() {
     local url="$1" name="$2"
     local code
-    code="$(curl -s -o /dev/null -w '%{http_code}' -m 10 "$url" 2>/dev/null)"
+    # CURL_EXTRA carries --resolve/--cacert (or -k) for public HTTPS
+    code="$(curl $CURL_EXTRA -s -o /dev/null -w '%{http_code}' -m 10 "$url" 2>/dev/null)"
     if [ "$code" -ge 200 ] 2>/dev/null && [ "$code" -lt 500 ] 2>/dev/null; then
         log_info "smoke $name: HTTP $code"
     else
@@ -573,12 +706,26 @@ smoke() {
     fi
 }
 
+CURL_EXTRA=""
 echo ""
 if [ -n "$INGRESS_IP" ]; then
-    echo "  Access URL:  http://${INGRESS_IP}/"
-    smoke "http://${INGRESS_IP}/registry/rest/v1/registry-center/agent-cards" "registry"
-    smoke "http://${INGRESS_IP}/api/orchestrate/rest/v1/orchestrate/agent-cards" "orchestration"
-    smoke "http://${INGRESS_IP}/api/registry/rest/v1/registry-center/agent-cards" "registry-via-gateway"
+    if [ "$HTTPS_ENABLED" = "true" ] && [ -n "$INGRESS_HOST" ] && [ -n "$PUBLIC_TLS_SECRET" ]; then
+        CURL_EXTRA="--resolve ${INGRESS_HOST}:443:${INGRESS_IP}"
+        if [ -n "$BUNDLE_DIR/certs/ca/ca.cer" ] && [ -r "$BUNDLE_DIR/certs/ca/ca.cer" ]; then
+            CURL_EXTRA="$CURL_EXTRA --cacert $BUNDLE_DIR/certs/ca/ca.cer"
+        else
+            CURL_EXTRA="$CURL_EXTRA -k"
+        fi
+        echo "  Access URL:  https://${INGRESS_HOST}/ (-> ${INGRESS_IP})"
+        smoke "https://${INGRESS_HOST}/registry/rest/v1/registry-center/agent-cards" "registry"
+        smoke "https://${INGRESS_HOST}/api/orchestrate/rest/v1/orchestrate/agent-cards" "orchestration"
+        smoke "https://${INGRESS_HOST}/api/registry/rest/v1/registry-center/agent-cards" "registry-via-gateway"
+    else
+        echo "  Access URL:  http://${INGRESS_IP}/"
+        smoke "http://${INGRESS_IP}/registry/rest/v1/registry-center/agent-cards" "registry"
+        smoke "http://${INGRESS_IP}/api/orchestrate/rest/v1/orchestrate/agent-cards" "orchestration"
+        smoke "http://${INGRESS_IP}/api/registry/rest/v1/registry-center/agent-cards" "registry-via-gateway"
+    fi
 else
     NODE_PORT="$("$KUBECTL" -n "$K8S_NAMESPACE" get svc openan-frontend -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null)"
     NODE_IP="$("$KUBECTL" get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null)"

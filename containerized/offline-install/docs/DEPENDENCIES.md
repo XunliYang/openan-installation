@@ -21,6 +21,7 @@ The installer is deliberately split in two:
 | MetalLB | `deps/manifests/metallb-native.yaml` (image refs rewritten) |
 | Database (PostgreSQL 15 or MySQL 8.4.3, per `DB_TYPE`) | chart image, rewritten to `<registry>/library/postgres:15-alpine` or `<registry>/library/mysql:8.4.3` |
 | OpenAN app images | registry-center, orchestration-center, workflow-designer, openan-portal |
+| TLS certificates | `tool/gen_certs.py` (openssl CLI) generates a CA + per-service certs at install time into Secrets, unless operator Secrets are configured |
 
 Nothing above reaches the internet.
 
@@ -32,6 +33,14 @@ Nothing above reaches the internet.
 
 See [KUBEADM_CLUSTER.md](KUBEADM_CLUSTER.md). This is a hard prerequisite: the
 installer deploys *onto* a cluster, it does not create one.
+
+### 2.1b openssl and python3 on the install node (HTTPS default)
+
+In-cluster HTTPS is enabled by default. Unless you bring your own TLS Secrets
+(`RC_TLS_SECRET` / `OC_TLS_SECRET` / `INGRESS_CLIENT_SECRET`), the installer
+generates certificates with `tool/gen_certs.py`, which needs the `openssl`
+CLI and `python3` on the install node (both standard on supported Linux
+hosts; verified by `check-env.sh`).
 
 ### 2.2 containerd must trust the private registry (every node)
 

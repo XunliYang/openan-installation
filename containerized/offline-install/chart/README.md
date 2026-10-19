@@ -133,7 +133,7 @@ kubectl -n openan port-forward svc/openan-frontend 8080:80
 | `namespace` | Kubernetes namespace | `openan` |
 | `createNamespace` | Helm creates the namespace | `true` |
 | `database.type` | Database backend: `postgresql` or `mysql` | `postgresql` |
-| `https.enabled` | Serve registry/orchestration over HTTPS in-cluster | `false` |
+| `https.enabled` | Serve registry/orchestration over HTTPS in-cluster (installer default) | `false` |
 | `https.verifyClient` | Require client certificates (mTLS) on registry | `false` |
 
 ### PostgreSQL
@@ -203,6 +203,7 @@ kubectl -n openan port-forward svc/openan-frontend 8080:80
 | `registry.vectordb.port` | VectorDB port | `19530` |
 | `registry.tls.mode` | TLS mode: `auto` / `secret` / `off` | `auto` |
 | `registry.tls.existingSecret` | TLS Secret name | `""` |
+| `registry.ingressClientSecret` | Ingress upstream client material (tls.crt, tls.key, ca.crt) for backend verification/mTLS | `""` |
 | `registry.signing.mode` | Signing cert mode: `auto` / `secret` / `off` | `auto` |
 | `registry.signing.existingSecret` | Signing cert Secret name | `""` |
 | `registry.resources.requests` | Resource requests | `cpu: 250m, memory: 256Mi` |
@@ -221,6 +222,9 @@ kubectl -n openan port-forward svc/openan-frontend 8080:80
 | `orchestration.agentRegistryUrl` | Registry Center URL | `""` (auto-discovered) |
 | `orchestration.admin.initialPassword` | Initial admin password for portal login (empty = not injected) | `""` |
 | `orchestration.admin.existingSecret` | Existing Secret (key admin-password) | `""` |
+| `orchestration.tls.mode` | TLS mode: `auto` / `secret` / `off` (rendered when `https.enabled=true`) | `auto` |
+| `orchestration.tls.existingSecret` | TLS Secret name | `""` |
+| `orchestration.ingressClientSecret` | Ingress upstream client material (tls.crt, tls.key, ca.crt) for backend verification/mTLS | `""` |
 | `orchestration.llm.chat.model` | Chat model | `your-chat-model` |
 | `orchestration.llm.chat.url` | Chat API URL | `https://your-llm-provider.com/v1/chat/completions` |
 | `orchestration.llm.chat.apiKey` | Chat API Key | `your-api-key` |
@@ -257,6 +261,7 @@ kubectl -n openan port-forward svc/openan-frontend 8080:80
 | `ingress.enabled` | Enable Ingress | `true` |
 | `ingress.className` | Ingress Class | `nginx` |
 | `ingress.host` | Domain (empty for IP-based access) | `""` |
+| `ingress.backendVerifyServer` | Verify upstream RC/OC certificates (proxy-ssl-verify); requires `*.ingressClientSecret` | `false` |
 | `ingress.tls.enabled` | Enable TLS | `false` |
 | `ingress.tls.secretName` | TLS Secret name | `openan-tls` |
 
