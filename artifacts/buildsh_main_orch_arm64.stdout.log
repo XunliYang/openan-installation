@@ -1,0 +1,29 @@
+
+==========================================
+  OpenAN Platform Image Build
+==========================================
+
+  Orchestration release:    https://github.com/project-openan/orchestration-center/archive/main.tar.gz
+  Image registry:           ghcr.io
+  Image namespace:          xunliyang
+  Image tag:                main-20261019-arm64
+  Platforms:                linux/arm64
+  Push:                     true
+  Components:               orchestration-center workflow-designer 
+
+==========================================
+
+
+==========================================
+  Build completed!
+==========================================
+
+  Images:
+    - ghcr.io/xunliyang/orchestration-center:main-20261019-arm64
+    - ghcr.io/xunliyang/workflow-designer:main-20261019-arm64
+
+  Deploy:
+    helm upgrade --install openan ./online-install/openan-chart -n openan --create-namespace -f /path/to/deployment.yaml \
+      --set orchestration.image.repository=ghcr.io/xunliyang/orchestration-center --set orchestration.image.tag=main-20261019-arm64 \
+      --set frontend.image.repository=ghcr.io/xunliyang/workflow-designer --set frontend.image.tag=main-20261019-arm64 \
+

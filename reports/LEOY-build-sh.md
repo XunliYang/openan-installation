@@ -76,3 +76,29 @@
 3. 失败项输出原文+根因+修复建议见 D1/D2。
 4. README 不一致清单见上。
 5. `python3 -m pytest tests/test_portal_release_image_build.py -q` → `11 passed`。
+
+## 追加：按指定版本构建（用户指定 source）
+
+用户指定三组件 source 后追加实测（非默认 v1.0.0；命令日志见 `artifacts/buildsh_v112_registry.log` 等）。
+
+| 组件 | 命令（source） | 镜像 tag | 结果 |
+|---|---|---|---|
+| registry-center | `./build.sh registry --source-ref v1.1.2 ...` | `registry-center:v1.1.2`（amd64+arm64） | ✅ 推送成功 |
+| orchestration-center | `./build.sh orchestration --source-ref main ...` | `orchestration-center:main-20261019`（amd64+arm64） | ✅ 推送成功 |
+| workflow-designer | （同一 orchestration 命令自动带上） | `workflow-designer:main-20261019` | ⚠️ amd64 QEMU 交叉构建 SIGSEGV，见下 |
+| openan-portal | v1.0.0 release artifact（portal 报告） | `openan-portal:v1.0.0`（amd64+arm64） | ✅ 已推送（前次） |
+
+推送回查 digest：
+
+| 镜像 | 平台 | digest |
+|---|---|---|
+| `registry-center:v1.1.2` | linux/amd64, linux/arm64 | `sha256:ec570031dc2fe82fb32baa6cb4f140335a5d7e32d25f5bd1849e484877de97d0` |
+| `orchestration-center:main-20261019` | linux/amd64, linux/arm64 | `sha256:3a715a7b27145aa90c76d042640f2047cc1039b4918b7ef6187a225938fc02e9` |
+| `workflow-designer:main-20261019-arm64` | linux/arm64 | `sha256:b6aca44c9da44163e2f9de5b4c7f905881870b819a7f09a7cd803f314bb7a80a` |
+
+### 追加发现 D3：workflow-designer amd64 交叉构建 SIGSEGV（QEMU 仿真缺陷，非源码）
+
+- 现象：`./build.sh orchestration --source-ref main`（默认双架构）中 workflow-designer amd64 构建 `#27 RUN npm run build` 退出码 139（SIGSEGV），整体 exit 1；arm64 阶段 `#21 RUN npm run build` **DONE 15.4s** 成功。
+- 定位：`npm run build`（vite/esbuild 前端构建）在 buildx 的 QEMU usermode 仿真（linux/amd64 跑在 aarch64 宿主）下段错误；原生 arm64 构建正常。属**构建环境（QEMU 仿真）限制，非 workflow-designer 源码缺陷**。
+- 验证：`./build.sh orchestration --source-ref main --platforms linux/arm64 --tag main-20261019-arm64` → 双组件 arm64 全部成功（exit 0），`workflow-designer:main-20261019-arm64` 已推送并 `imagetools inspect` 回查。
+- 影响：宿主为 aarch64 时，workflow-designer 的 amd64 交叉构建不可用；如需 amd64 镜像需在 amd64 原生机器/CI runner 上构建。orchestration-center 不受影响（Python 构建无此问题，双架构已推送成功）。
