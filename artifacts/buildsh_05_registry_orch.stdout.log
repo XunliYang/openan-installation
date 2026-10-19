@@ -1,0 +1,30 @@
+
+==========================================
+  OpenAN Platform Image Build
+==========================================
+
+  Registry Center release:  https://github.com/project-openan/registry-center/archive/v1.0.0.tar.gz
+  Orchestration release:    https://github.com/project-openan/orchestration-center/archive/v1.0.0.tar.gz
+  Image registry:           ghcr.io
+  Image namespace:          xunliyang
+  Image tag:                fix-stderr-test-20261018
+  Platforms:                linux/amd64,linux/arm64
+  Push:                     true
+  Components:               registry-center orchestration-center workflow-designer 
+
+==========================================
+
+
+==========================================
+  Build completed!
+==========================================
+
+  Images:
+    - ghcr.io/xunliyang/registry-center:fix-stderr-test-20261018
+    - ghcr.io/xunliyang/orchestration-center:fix-stderr-test-20261018
+
+  Deploy:
+    helm upgrade --install openan ./online-install/openan-chart -n openan --create-namespace -f /path/to/deployment.yaml \
+      --set registry.image.repository=ghcr.io/xunliyang/registry-center --set registry.image.tag=fix-stderr-test-20261018 \
+      --set orchestration.image.repository=ghcr.io/xunliyang/orchestration-center --set orchestration.image.tag=fix-stderr-test-20261018 \
+

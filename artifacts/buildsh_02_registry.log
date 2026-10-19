@@ -1,0 +1,135 @@
+=== CMD: bash containerized/build/build.sh registry --image-registry ghcr.io --namespace xunliyang --tag fix-stderr-test-20261018 ===
+=== exit=0 ===
+
+----- output -----
+[0;36m[STEP][0m Downloading registry-center from release...
+[0;32m[INFO][0m URL: https://github.com/project-openan/registry-center/archive/v1.0.0.tar.gz
+#=#=#                                                                         ##O#-#                                                                        ##O=#  #                                                                      #=#=-#  #                                                                      #=#=-#   #                                                                     #=#=- #   #                                                                    #=#=- #   #                                                                    #=O#-  #   #                                                                   #=O#-   #   #                                                            
+[0;32m[INFO][0m registry-center downloaded and extracted to /tmp/multica-task-899370835/openan-build.3ltJaCJ3/registry-center
+[0;32m[INFO][0m Registry Center source: /tmp/multica-task-899370835/openan-build.3ltJaCJ3/registry-center/registry-center-1.0.0/
+[0;36m[STEP][0m [1/1] Building Registry Center...
+#0 building with "multiarch-builder" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.58kB done
+#1 DONE 0.0s
+
+#2 [linux/amd64 internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 0.8s
+
+#3 [linux/arm64 internal] load metadata for docker.io/library/python:3.12-slim
+#3 DONE 0.8s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 223B done
+#4 DONE 0.0s
+
+#5 [linux/arm64 builder 1/4] FROM docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+#5 resolve docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 0.0s done
+#5 DONE 0.0s
+
+#6 [linux/amd64 builder 1/4] FROM docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+#6 resolve docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 7.78kB 0.0s done
+#7 DONE 0.0s
+
+#8 [linux/amd64 builder 2/4] RUN apt-get update && apt-get install -y --no-install-recommends     gcc     libc6-dev     libpq-dev     libssl-dev     libffi-dev     && rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [linux/amd64 stage-1 5/6] RUN useradd -m appuser     && ln -sf /opt/registry-center /opt/app     && mkdir -p /opt/registry-center/log /opt/registry-center/run /opt/registry-center/data     && mkdir -p /opt/registry-center/etc/ssl /opt/registry-center/etc/sign_cert     && chmod +x /opt/registry-center/bin/*.sh     && chown -R appuser:appuser /opt/registry-center /opt/venv
+#9 CACHED
+
+#10 [linux/amd64 stage-1 2/6] RUN apt-get update && apt-get install -y --no-install-recommends bash libpq5 && rm -rf /var/lib/apt/lists/*
+#10 CACHED
+
+#11 [linux/amd64 builder 4/4] RUN python3 -m venv /opt/venv --copies     && . /opt/venv/bin/activate     && pip install --no-cache-dir -r /tmp/requirements.txt     && rm -rf /tmp/requirements.txt /root/.cache/pip
+#11 CACHED
+
+#12 [linux/amd64 stage-1 4/6] COPY . /opt/registry-center/
+#12 CACHED
+
+#13 [linux/amd64 builder 3/4] COPY requirements.txt /tmp/requirements.txt
+#13 CACHED
+
+#14 [linux/amd64 stage-1 3/6] COPY --from=builder /opt/venv /opt/venv
+#14 CACHED
+
+#15 [linux/amd64 stage-1 6/6] WORKDIR /opt/registry-center
+#15 CACHED
+
+#16 [linux/arm64 builder 2/4] RUN apt-get update && apt-get install -y --no-install-recommends     gcc     libc6-dev     libpq-dev     libssl-dev     libffi-dev     && rm -rf /var/lib/apt/lists/*
+#16 CACHED
+
+#17 [linux/arm64 stage-1 2/6] RUN apt-get update && apt-get install -y --no-install-recommends bash libpq5 && rm -rf /var/lib/apt/lists/*
+#17 CACHED
+
+#18 [linux/arm64 stage-1 5/6] RUN useradd -m appuser     && ln -sf /opt/registry-center /opt/app     && mkdir -p /opt/registry-center/log /opt/registry-center/run /opt/registry-center/data     && mkdir -p /opt/registry-center/etc/ssl /opt/registry-center/etc/sign_cert     && chmod +x /opt/registry-center/bin/*.sh     && chown -R appuser:appuser /opt/registry-center /opt/venv
+#18 CACHED
+
+#19 [linux/arm64 builder 4/4] RUN python3 -m venv /opt/venv --copies     && . /opt/venv/bin/activate     && pip install --no-cache-dir -r /tmp/requirements.txt     && rm -rf /tmp/requirements.txt /root/.cache/pip
+#19 CACHED
+
+#20 [linux/arm64 stage-1 3/6] COPY --from=builder /opt/venv /opt/venv
+#20 CACHED
+
+#21 [linux/arm64 stage-1 4/6] COPY . /opt/registry-center/
+#21 CACHED
+
+#22 [linux/arm64 builder 3/4] COPY requirements.txt /tmp/requirements.txt
+#22 CACHED
+
+#23 [linux/arm64 stage-1 6/6] WORKDIR /opt/registry-center
+#23 CACHED
+
+#24 exporting to image
+#24 exporting layers done
+#24 exporting manifest sha256:747172db20669eb7ad69d5635b88a267df79e4575936778e72e14272b4476275
+#24 exporting manifest sha256:747172db20669eb7ad69d5635b88a267df79e4575936778e72e14272b4476275 0.0s done
+#24 exporting config sha256:29264b7f4c4e5d0f0da760619a59757c5833d2ae41bb52841587a25acd35d77d 0.0s done
+#24 exporting attestation manifest sha256:6f0ca20f46047b97f901e722035d4ee394406afe460665a8a103e0f305a33311 0.0s done
+#24 exporting manifest sha256:49c66a4efde04a3020d5c12e569300b81a1c342e42669dfe3200d0308cfd779c 0.0s done
+#24 exporting config sha256:f5d4fef87730c196641c7b959b77ec232fb79a1be5668e75271f79bc013ad573 0.0s done
+#24 exporting attestation manifest sha256:1b00d2bf134eb138cf402df4f48565ccd89197c7bb26749fea5f255fa2b1f347 0.0s done
+#24 exporting manifest list sha256:1ca54f91170f190e76c36b4f14b5a24c31e75ce4b9a6d6356493e36194474dfa 0.0s done
+#24 pushing layers
+#24 ...
+
+#25 [auth] xunliyang/registry-center:pull,push token for ghcr.io
+#25 DONE 0.0s
+
+#24 exporting to image
+#24 pushing layers 21.8s done
+#24 pushing manifest for ghcr.io/xunliyang/registry-center:fix-stderr-test-20261018@sha256:1ca54f91170f190e76c36b4f14b5a24c31e75ce4b9a6d6356493e36194474dfa
+#24 pushing manifest for ghcr.io/xunliyang/registry-center:fix-stderr-test-20261018@sha256:1ca54f91170f190e76c36b4f14b5a24c31e75ce4b9a6d6356493e36194474dfa 3.8s done
+#24 DONE 25.8s
+[0;32m[INFO][0m Done: ghcr.io/xunliyang/registry-center:fix-stderr-test-20261018
+
+==========================================
+  OpenAN Platform Image Build
+==========================================
+
+  Registry Center release:  https://github.com/project-openan/registry-center/archive/v1.0.0.tar.gz
+  Image registry:           ghcr.io
+  Image namespace:          xunliyang
+  Image tag:                fix-stderr-test-20261018
+  Platforms:                linux/amd64,linux/arm64
+  Push:                     true
+  Components:               registry-center 
+
+==========================================
+
+
+==========================================
+  Build completed!
+==========================================
+
+  Images:
+    - ghcr.io/xunliyang/registry-center:fix-stderr-test-20261018
+
+  Deploy:
+    helm upgrade --install openan ./online-install/openan-chart -n openan --create-namespace -f /path/to/deployment.yaml \
+      --set registry.image.repository=ghcr.io/xunliyang/registry-center --set registry.image.tag=fix-stderr-test-20261018 \
+

@@ -1,0 +1,40 @@
+=== CMD: bash containerized/build/build.sh --help ===
+OpenAN Platform - One-line Image Build
+
+Usage: ./build.sh [components] [options]
+
+Components (positional, specify any):
+  registry          Build Registry Center only
+  orchestration     Build Orchestration Center + Workflow Designer only
+  portal            Build OpenAN Portal only
+  (none)            Build all components
+
+Options:
+  --image-registry <url>     Image registry (default: ghcr.io)
+  --namespace <ns>           Image namespace (default: project-openan)
+  --tag <tag>                Image tag (overrides the tag derived from --source-ref)
+  --source-ref <ref>         Source Git ref (default: v1.0.0); when --tag is unset, 'main'
+                             derives tag main-YYYYMMDD and other refs become the tag
+  --registry-release <url>   Registry Center release tarball URL
+  --orchestration-release <url>  Orchestration Center release tarball URL
+  --registry-src <dir>       Local registry-center source dir (overrides remote download)
+  --orchestration-src <dir>  Local orchestration-center source dir (overrides remote download)
+  --portal-release <url>     OpenAN Portal release tarball URL
+  --portal-src <dir>         OpenAN Portal source directory (overrides --portal-release)
+  --platforms <platforms>    Target platforms (default: linux/amd64,linux/arm64)
+  --no-push                  Build local only (single-arch only)
+  --help                     Show help
+
+Examples:
+  ./build.sh                                                          # Build all components
+  ./build.sh registry                                                 # Build Registry Center only
+  ./build.sh orchestration                                            # Build Orchestration + Frontend only
+  ./build.sh portal                                                   # Build OpenAN Portal only
+  ./build.sh registry orchestration                                   # Build both, no portal
+  ./build.sh --tag v1.1.0                                             # Custom tag, build all
+  ./build.sh registry --image-registry harbor.example.com             # Private registry, registry only
+  ./build.sh orchestration --platforms linux/amd64 --no-push          # Local single-arch, orchestration only
+  ./build.sh --source-ref main                                        # Build main, tagged main-YYYYMMDD
+  ./build.sh --registry-src ~/src/registry-center --orchestration-src ~/src/orchestration-center
+  ./build.sh portal --portal-src ~/src/openan-portal                  # Portal from local source
+=== exit=0 ===

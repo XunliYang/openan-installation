@@ -1,0 +1,27 @@
+
+==========================================
+  OpenAN Platform Image Build
+==========================================
+
+  Registry Center release:  https://github.com/project-openan/registry-center/archive/v1.1.2.tar.gz
+  Image registry:           ghcr.io
+  Image namespace:          xunliyang
+  Image tag:                v1.1.2
+  Platforms:                linux/amd64,linux/arm64
+  Push:                     true
+  Components:               registry-center 
+
+==========================================
+
+
+==========================================
+  Build completed!
+==========================================
+
+  Images:
+    - ghcr.io/xunliyang/registry-center:v1.1.2
+
+  Deploy:
+    helm upgrade --install openan ./online-install/openan-chart -n openan --create-namespace -f /path/to/deployment.yaml \
+      --set registry.image.repository=ghcr.io/xunliyang/registry-center --set registry.image.tag=v1.1.2 \
+

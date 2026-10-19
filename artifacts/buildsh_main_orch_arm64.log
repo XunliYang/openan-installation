@@ -1,0 +1,224 @@
+CMD: bash containerized/build/build.sh orchestration --source-ref main --platforms linux/arm64 --tag main-20261019-arm64 --image-registry ghcr.io --namespace xunliyang
+exit: 0
+----- output (stderr) -----
+[0;36m[STEP][0m Downloading orchestration-center from release...
+[0;32m[INFO][0m URL: https://github.com/project-openan/orchestration-center/archive/main.tar.gz
+#=#=#                                                                         ##O#-#                                                                        ##O=#  #                                                                      #=#=-#  #                                                                      #=#=-#   #                                                                     #=#=- #   #                                                                 
+[0;32m[INFO][0m orchestration-center downloaded and extracted to /tmp/multica-task-2740817629/openan-build.bYJC5MT9/orchestration-center
+[0;32m[INFO][0m Orchestration Center source: /tmp/multica-task-2740817629/openan-build.bYJC5MT9/orchestration-center/orchestration-center-main/
+[0;36m[STEP][0m [1/2] Building Orchestration Center...
+#0 building with "multiarch-builder" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 3.55kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 ...
+
+#3 [auth] library/python:pull token for registry-1.docker.io
+#3 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 5.1s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 674B done
+#4 DONE 0.0s
+
+#5 [builder 1/4] FROM docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+#5 resolve docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 940.59kB 0.1s done
+#6 DONE 0.1s
+
+#7 [builder 4/4] RUN python3 -m venv /opt/venv --copies     && . /opt/venv/bin/activate     && pip install --no-cache-dir --default-timeout=180 --retries=10 -r /tmp/requirements.txt     && rm -rf /tmp/requirements.txt /root/.cache/pip
+#7 CACHED
+
+#8 [stage-1  6/17] COPY samples/workflow_templates/ /opt/orchestration-center/samples/workflow_templates/
+#8 CACHED
+
+#9 [stage-1 13/17] COPY etc/conf/db/ /opt/orchestration-center/etc/conf/db/
+#9 CACHED
+
+#10 [stage-1 10/17] COPY bin/ /opt/orchestration-center/bin/
+#10 CACHED
+
+#11 [stage-1  7/17] COPY host_agent/ /opt/orchestration-center/host_agent/
+#11 CACHED
+
+#12 [stage-1 11/17] COPY etc/conf/server.conf.example /opt/orchestration-center/etc/conf/server.conf
+#12 CACHED
+
+#13 [stage-1  9/17] COPY database/ /opt/orchestration-center/database/
+#13 CACHED
+
+#14 [stage-1 12/17] COPY etc/conf/server.properties etc/conf/log_config.conf /opt/orchestration-center/etc/conf/
+#14 CACHED
+
+#15 [stage-1  3/17] COPY --from=builder /opt/venv /opt/venv
+#15 CACHED
+
+#16 [stage-1  2/17] RUN apt-get update && apt-get install -y --no-install-recommends bash libpq5 curl && rm -rf /var/lib/apt/lists/*
+#16 CACHED
+
+#17 [stage-1  5/17] COPY samples/solution_packages/ /opt/orchestration-center/samples/solution_packages/
+#17 CACHED
+
+#18 [builder 3/4] COPY requirements.txt /tmp/requirements.txt
+#18 CACHED
+
+#19 [stage-1 16/17] RUN useradd --uid 10001 -m appuser     && mkdir -p /opt/orchestration-center/log /opt/orchestration-center/run /opt/orchestration-center/data     && mkdir -p /opt/orchestration-center/etc/ssl     && sed -i 's/\r$//' /opt/orchestration-center/bin/*.sh /opt/orchestration-center/docker-entrypoint.sh     && chmod +x /opt/orchestration-center/bin/*.sh /opt/orchestration-center/docker-entrypoint.sh     && chmod 0700 /opt/orchestration-center/etc/ssl      && chown -R appuser:appuser /opt/orchestration-center /opt/venv
+#19 CACHED
+
+#20 [stage-1 14/17] COPY etc/config/models.yaml.example /opt/orchestration-center/etc/config/models.yaml.example
+#20 CACHED
+
+#21 [builder 2/4] RUN apt-get update && apt-get install -y --no-install-recommends     gcc     libc6-dev     libpq-dev     libssl-dev     libffi-dev     && rm -rf /var/lib/apt/lists/*
+#21 CACHED
+
+#22 [stage-1 15/17] COPY docker-entrypoint.sh /opt/orchestration-center/docker-entrypoint.sh
+#22 CACHED
+
+#23 [stage-1  8/17] COPY common/ /opt/orchestration-center/common/
+#23 CACHED
+
+#24 [stage-1  4/17] COPY orchestrate/ /opt/orchestration-center/orchestrate/
+#24 CACHED
+
+#25 [stage-1 17/17] WORKDIR /opt/orchestration-center
+#25 CACHED
+
+#26 exporting to image
+#26 exporting layers done
+#26 exporting manifest sha256:204f09af910d7975b4f82f8ed81c37f78a7af841fe052285d548a02cc9f2af92 done
+#26 exporting config sha256:729c7dcb9c00c81ac764705745d6a1c9e83bb5190b3bc91fbc722d99adb38926 done
+#26 exporting attestation manifest sha256:9eef073c4372e4667fe961a9ba131fca60ac6d7d5b343a980aac89b4eb834b53 done
+#26 exporting manifest list sha256:9ddfa40e5e284baac0c6ecb1c4c67f4451ead02f18f271665e3b2c1cdc121740 done
+#26 pushing layers
+#26 ...
+
+#27 [auth] xunliyang/orchestration-center:pull,push token for ghcr.io
+#27 DONE 0.0s
+
+#26 exporting to image
+#26 pushing layers 3.3s done
+#26 pushing manifest for ghcr.io/xunliyang/orchestration-center:main-20261019-arm64@sha256:9ddfa40e5e284baac0c6ecb1c4c67f4451ead02f18f271665e3b2c1cdc121740
+#26 pushing manifest for ghcr.io/xunliyang/orchestration-center:main-20261019-arm64@sha256:9ddfa40e5e284baac0c6ecb1c4c67f4451ead02f18f271665e3b2c1cdc121740 2.3s done
+#26 DONE 5.6s
+[0;32m[INFO][0m Done: ghcr.io/xunliyang/orchestration-center:main-20261019-arm64
+[0;36m[STEP][0m [2/2] Building Workflow Designer...
+#0 building with "multiarch-builder" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.86kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:20-slim
+#2 ...
+
+#3 [auth] library/nginx:pull token for registry-1.docker.io
+#3 DONE 0.0s
+
+#4 [auth] library/node:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [internal] load metadata for docker.io/library/nginx:1.27-alpine
+#5 DONE 1.3s
+
+#2 [internal] load metadata for docker.io/library/node:20-slim
+#2 DONE 1.6s
+
+#6 [internal] load .dockerignore
+#6 transferring context: 98B done
+#6 DONE 0.0s
+
+#7 [stage-1 1/5] FROM docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+#7 resolve docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 0.0s done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
+#8 resolve docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 0.0s done
+#8 DONE 0.0s
+
+#9 [internal] load build context
+#9 transferring context: 1.08MB 0.1s done
+#9 DONE 0.1s
+
+#10 [stage-1 3/5] COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+#10 CACHED
+
+#11 [builder 3/6] COPY package.json package-lock.json ./
+#11 CACHED
+
+#12 [builder 5/6] COPY . .
+#12 CACHED
+
+#13 [builder 2/6] WORKDIR /app
+#13 CACHED
+
+#14 [stage-1 2/5] COPY --from=builder /app/dist /usr/share/nginx/html
+#14 CACHED
+
+#15 [stage-1 4/5] COPY 15-openan-backend.envsh /docker-entrypoint.d/15-openan-backend.envsh
+#15 CACHED
+
+#16 [builder 6/6] RUN npm run build
+#16 CACHED
+
+#17 [builder 4/6] RUN npm ci
+#17 CACHED
+
+#18 [stage-1 5/5] RUN sed -i 's/\r$//' /docker-entrypoint.d/15-openan-backend.envsh     && chmod 0755 /docker-entrypoint.d/15-openan-backend.envsh
+#18 CACHED
+
+#19 exporting to image
+#19 exporting layers 0.1s done
+#19 exporting manifest sha256:bc4a4cd61f48db868042a5bb2cfc23eae517bb72fb6d833a2e92f01788deeb23 done
+#19 exporting config sha256:11da38c7bd72d6f327d283fbfdc1e76b42790a59a7bbe198a183693ece172a81 done
+#19 exporting attestation manifest sha256:fd8a3fe16ea94cd93f61e3f6e09cf35ebfaf3e9bdc8be94b0803662c982b4da1 done
+#19 exporting manifest list sha256:b6aca44c9da44163e2f9de5b4c7f905881870b819a7f09a7cd803f314bb7a80a done
+#19 pushing layers
+#19 ...
+
+#20 [auth] xunliyang/workflow-designer:pull,push token for ghcr.io
+#20 DONE 0.0s
+
+#19 exporting to image
+#19 pushing layers 7.7s done
+#19 pushing manifest for ghcr.io/xunliyang/workflow-designer:main-20261019-arm64@sha256:b6aca44c9da44163e2f9de5b4c7f905881870b819a7f09a7cd803f314bb7a80a
+#19 pushing manifest for ghcr.io/xunliyang/workflow-designer:main-20261019-arm64@sha256:b6aca44c9da44163e2f9de5b4c7f905881870b819a7f09a7cd803f314bb7a80a 2.4s done
+#19 DONE 10.3s
+[0;32m[INFO][0m Done: ghcr.io/xunliyang/workflow-designer:main-20261019-arm64
+----- output (stdout) -----
+
+==========================================
+  OpenAN Platform Image Build
+==========================================
+
+  Orchestration release:    https://github.com/project-openan/orchestration-center/archive/main.tar.gz
+  Image registry:           ghcr.io
+  Image namespace:          xunliyang
+  Image tag:                main-20261019-arm64
+  Platforms:                linux/arm64
+  Push:                     true
+  Components:               orchestration-center workflow-designer 
+
+==========================================
+
+
+==========================================
+  Build completed!
+==========================================
+
+  Images:
+    - ghcr.io/xunliyang/orchestration-center:main-20261019-arm64
+    - ghcr.io/xunliyang/workflow-designer:main-20261019-arm64
+
+  Deploy:
+    helm upgrade --install openan ./online-install/openan-chart -n openan --create-namespace -f /path/to/deployment.yaml \
+      --set orchestration.image.repository=ghcr.io/xunliyang/orchestration-center --set orchestration.image.tag=main-20261019-arm64 \
+      --set frontend.image.repository=ghcr.io/xunliyang/workflow-designer --set frontend.image.tag=main-20261019-arm64 \
+

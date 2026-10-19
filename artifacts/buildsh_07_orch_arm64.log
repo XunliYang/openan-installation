@@ -1,0 +1,81 @@
+=== CMD: bash containerized/build/build.sh orchestration --platforms linux/arm64 --image-registry ghcr.io --namespace xunliyang --tag fix-stderr-test-arm64-20261018 ===
+=== exit=0 ===
+
+----- output -----
+[0;36m[STEP][0m Downloading orchestration-center from release...
+[0;32m[INFO][0m URL: https://github.com/project-openan/orchestration-center/archive/v1.0.0.tar.gz
+#=#=#                                                                         ##O#-#                                                                        ##O=#  #                                                                      #                                                                          2.7%######################                                                    31.4%######################################################################## 100.0%
+[0;32m[INFO][0m orchestration-center downloaded and extracted to /tmp/multica-task-899370835/openan-build.TfysP1P4/orchestration-center
+[0;32m[INFO][0m Orchestration Center source: /tmp/multica-task-899370835/openan-build.TfysP1P4/orchestration-center/orchestration-center-1.0.0/
+[0;36m[STEP][0m [1/1] Building Orchestration Center...
+#0 building with "multiarch-builder" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.54kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 1.3s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 285B 0.0s done
+#3 DONE 0.0s
+
+#4 [linux/arm64 builder 1/4] FROM docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+#4 resolve docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 1.40MB 0.2s done
+#5 DONE 0.2s
+
+#6 [linux/arm64 stage-1 6/6] WORKDIR /opt/orchestration-center
+#6 CACHED
+
+#7 exporting to image
+#7 exporting layers done
+#7 exporting manifest sha256:e5ab7a077bb010b2c8c27d292771ea0060595664dec2e25e7343f8c7b1fca33c done
+#7 exporting config sha256:3bf5258ca34303e3221deedfe2956834ac36f8e4ef1fee50936f76a8c7e68a17 done
+#7 exporting attestation manifest sha256:94047b92c4b59a76cfc9938b976018ab9044dd92e41c755ae5027d75e86f2f73
+#7 exporting attestation manifest sha256:94047b92c4b59a76cfc9938b976018ab9044dd92e41c755ae5027d75e86f2f73 done
+#7 exporting manifest list sha256:54b24edac4e1ae22880e7e98bf2e976b986fb3a0cedf27bd4c1358a8a9c4d3d1 done
+#7 pushing layers
+#7 ...
+
+#8 [auth] xunliyang/orchestration-center:pull,push token for ghcr.io
+#8 DONE 0.0s
+
+#7 exporting to image
+#7 pushing layers 30.2s done
+#7 pushing manifest for ghcr.io/xunliyang/orchestration-center:fix-stderr-test-arm64-20261018@sha256:54b24edac4e1ae22880e7e98bf2e976b986fb3a0cedf27bd4c1358a8a9c4d3d1
+#7 pushing manifest for ghcr.io/xunliyang/orchestration-center:fix-stderr-test-arm64-20261018@sha256:54b24edac4e1ae22880e7e98bf2e976b986fb3a0cedf27bd4c1358a8a9c4d3d1 2.2s done
+#7 DONE 32.4s
+[0;32m[INFO][0m Done: ghcr.io/xunliyang/orchestration-center:fix-stderr-test-arm64-20261018
+[1;33m[WARN][0m Workflow Designer Dockerfile not found, skipping
+
+==========================================
+  OpenAN Platform Image Build
+==========================================
+
+  Orchestration release:    https://github.com/project-openan/orchestration-center/archive/v1.0.0.tar.gz
+  Image registry:           ghcr.io
+  Image namespace:          xunliyang
+  Image tag:                fix-stderr-test-arm64-20261018
+  Platforms:                linux/arm64
+  Push:                     true
+  Components:               orchestration-center workflow-designer 
+
+==========================================
+
+
+==========================================
+  Build completed!
+==========================================
+
+  Images:
+    - ghcr.io/xunliyang/orchestration-center:fix-stderr-test-arm64-20261018
+
+  Deploy:
+    helm upgrade --install openan ./online-install/openan-chart -n openan --create-namespace -f /path/to/deployment.yaml \
+      --set orchestration.image.repository=ghcr.io/xunliyang/orchestration-center --set orchestration.image.tag=fix-stderr-test-arm64-20261018 \
+

@@ -1,0 +1,3 @@
+=== CMD: bash containerized/build/build.sh --tag ===
+[0;31m[ERROR][0m --tag requires a value
+=== exit=2 ===

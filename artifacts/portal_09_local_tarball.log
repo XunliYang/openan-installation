@@ -1,0 +1,74 @@
+=== CMD: env SKIP_CHECKSUM=1 DIST_TARBALL=/tmp/openan-fixtures/openan-portal-dist.tar.gz REGISTRY=ghcr.io/xunliyang TAG=v1.0.0-fixstderr PUSH=0 PLATFORMS=linux/arm64 bash containerized/build/portal/build-portal-image.sh ===
+=== exit=0 ===
+
+----- full output (stderr) -----
+
+==========================================
+  OpenAN Portal Image Build (release)
+==========================================
+  Release tag:      v1.0.0-fixstderr
+  Image:            ghcr.io/xunliyang/openan-portal:v1.0.0-fixstderr
+  Platforms:        linux/arm64
+  Push:             0
+  nginx templates:  /root/multica_workspaces/leoyy6-c077c09ea391/leoy-155-8352c781af96/workdir/openan-installation/containerized/build/portal
+==========================================
+
+[0;36m==>[0m build context: /tmp/multica-task-1515706564/openan-portal-ctx.D8znVOck
+[0;36m==>[0m using local tarball: /tmp/openan-fixtures/openan-portal-dist.tar.gz
+[0;36m==>[0m copied default.conf.template
+[0;36m==>[0m copied 15-openan-backends.envsh
+[0;36m==>[0m buildx builder: default-builder
+[0;36m==>[0m building ...
+#0 building with "default-builder" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.26kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/nginx:1.27-alpine
+#2 DONE 0.3s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/7] FROM docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+#4 resolve docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 7.76kB done
+#5 DONE 0.0s
+
+#6 [4/7] COPY plugins/   /usr/share/nginx/html/plugins/
+#6 CACHED
+
+#7 [2/7] COPY index.html /usr/share/nginx/html/
+#7 CACHED
+
+#8 [3/7] COPY assets/    /usr/share/nginx/html/assets/
+#8 CACHED
+
+#9 [5/7] COPY default.conf.template    /etc/nginx/templates/default.conf.template
+#9 CACHED
+
+#10 [6/7] COPY 15-openan-backends.envsh /docker-entrypoint.d/15-openan-backends.envsh
+#10 CACHED
+
+#11 [7/7] RUN sed -i 's/\r$//' /docker-entrypoint.d/15-openan-backends.envsh     && chmod 0755 /docker-entrypoint.d/15-openan-backends.envsh     && sed -i 's/^user /#user /' /etc/nginx/nginx.conf     && touch /var/run/nginx.pid     && chown -R 101:0 /var/cache/nginx /var/run/nginx.pid /etc/nginx     && chmod -R g+w /var/cache/nginx /var/run/nginx.pid /etc/nginx     && rm -f /usr/share/nginx/html/50x.html
+#11 CACHED
+
+#12 exporting to docker image format
+#12 exporting layers done
+#12 exporting manifest sha256:b655759bee061ca41acdf45c4f75128f8782f8bd83696bfa31efd6ff8481e86c 0.0s done
+#12 exporting config sha256:08d6cb8993a52eff1c5672e0bc3d890fdfa0686ab5688f39c5362192ccb7a22e done
+#12 sending tarball
+#12 sending tarball 0.5s done
+#12 DONE 0.5s
+
+#13 importing to docker
+#13 DONE 0.0s
+
+==========================================
+[0;32m ok [0m built locally: ghcr.io/xunliyang/openan-portal:v1.0.0-fixstderr
+[0;32m ok [0m Done.

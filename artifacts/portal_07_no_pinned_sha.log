@@ -1,0 +1,22 @@
+=== CMD: env REGISTRY=ghcr.io/xunliyang TAG=v9.9.9 bash containerized/build/portal/build-portal-image.sh -n ===
+
+==========================================
+  OpenAN Portal Image Build (release)
+==========================================
+  Release tag:      v9.9.9
+  Image:            ghcr.io/xunliyang/openan-portal:v9.9.9
+  Platforms:        linux/amd64,linux/arm64
+  Push:             1
+  nginx templates:  /root/multica_workspaces/leoyy6-c077c09ea391/leoy-155-8352c781af96/workdir/openan-installation/containerized/build/portal
+==========================================
+
+[0;36m==>[0m DRY RUN — nothing will be built or pushed
+[0;36m==>[0m build context: /tmp/multica-task-1515706564/openan-portal-ctx.XZ8vrHhT
+[0;36m==>[0m downloading https://github.com/project-openan/openan-portal/releases/download/v9.9.9/openan-portal-dist.tar.gz
+[1;33mwarn[0m no pinned sha256 for tag v9.9.9 — skipping verification
+[0;36m==>[0m would copy /root/multica_workspaces/leoyy6-c077c09ea391/leoy-155-8352c781af96/workdir/openan-installation/containerized/build/portal/default.conf.template
+[0;36m==>[0m would copy /root/multica_workspaces/leoyy6-c077c09ea391/leoy-155-8352c781af96/workdir/openan-installation/containerized/build/portal/15-openan-backends.envsh
+[0;36m==>[0m buildx builder: default-builder
+[0;36m==>[0m would run: docker buildx build --builder default-builder --platform linux/amd64,linux/arm64 --provenance=false --sbom=false --label org.opencontainers.image.source=https://github.com/project-openan/openan-portal --label org.opencontainers.image.version=v9.9.9 -t ghcr.io/xunliyang/openan-portal:v9.9.9 -f /tmp/multica-task-1515706564/openan-portal-ctx.XZ8vrHhT/Dockerfile --push /tmp/multica-task-1515706564/openan-portal-ctx.XZ8vrHhT
+[0;32m ok [0m dry run complete
+=== exit=0 ===

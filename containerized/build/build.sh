@@ -347,7 +347,7 @@ fi
 if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ]; then
     TOTAL=$((TOTAL + 1))
 fi
-if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ] && [ -d "$OC_SRC/workflow-designer" ]; then
+if [ "$BUILD_ORCHESTRATION" = true ] && [ -n "$OC_SRC" ] && [ -f "$OC_SRC/workflow-designer/Dockerfile" ]; then
     TOTAL=$((TOTAL + 1))
 fi
 if [ "$BUILD_PORTAL" = true ] && [ -n "$PORTAL_SOURCE_DIR" ]; then
