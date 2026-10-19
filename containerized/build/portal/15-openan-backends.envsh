@@ -1,0 +1,25 @@
+#!/bin/sh
+# Compose the backend base URLs consumed by default.conf.template, unless the
+# deployer already provided them. This file is SOURCED by the nginx image
+# entrypoint (name pattern *.envsh) before 20-envsubst-on-templates.sh runs,
+# so the variables exported here are visible to envsubst.
+#
+# Component defaults match the in-cluster service names used by the OpenAN
+# deployment, so the container starts with zero configuration inside
+# Kubernetes/OpenShift. Override either a component or the full URL at
+# container start:
+#   docker run -e BACKEND_HOST=192.168.1.10 ...         (component override)
+#   docker run -e BACKEND_URL=http://gw.example.com ... (full URL override)
+#
+# NOTE: no `set -eu` here — this file is sourced into the entrypoint's shell
+# and must not tighten its options.
+
+: "${REGISTRY_HOST:=registry-center}"
+: "${REGISTRY_PORT:=5000}"
+: "${REGISTRY_SCHEME:=http}"
+: "${BACKEND_HOST:=orchestration-center}"
+: "${BACKEND_PORT:=5001}"
+: "${BACKEND_SCHEME:=http}"
+
+export REGISTRY_URL="${REGISTRY_URL:-${REGISTRY_SCHEME}://${REGISTRY_HOST}:${REGISTRY_PORT}}"
+export BACKEND_URL="${BACKEND_URL:-${BACKEND_SCHEME}://${BACKEND_HOST}:${BACKEND_PORT}}"
