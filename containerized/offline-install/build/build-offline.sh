@@ -14,16 +14,19 @@
 #       --registry-src ~/src/registry-center \
 #       --orchestration-src ~/src/orchestration-center
 #   ./build-offline.sh --app-source tars --app-tars-dir ~/prebuilt
+#   ./build-offline.sh --tag v1.0.0 --registry-tag v1.2.0 --app-source pull
 #
 # Options:
-#   --tag <tag>                 app image tag (overrides the tag derived from --source-ref)
+#   --tag <tag>                 app image tag for all components (overrides tags derived from --source-ref)
+#   --registry-tag <tag>        registry-center image tag (overrides --tag)
+#   --orchestration-tag <tag>   orchestration-center + workflow-designer tag (overrides --tag)
+#   --portal-tag <tag>          openan-portal tag (overrides --tag)
 #   --source-ref <ref>          Source Git ref; when --tag is unset, 'main' -> main-YYYYMMDD,
 #                               any other ref becomes the tag (default v1.0.0)
 #   --app-registry <host/ns>    upstream app registry (default ghcr.io/project-openan)
 #   --app-source pull|build|tars
 #   --registry-src <dir>        registry-center source dir (with Dockerfile) for --app-source build
 #   --orchestration-src <dir>   orchestration-center source dir for --app-source build
-#   --portal-src <dir>          openan-portal source (with Dockerfile) for --app-source build
 #   --registry-release <url>    remote registry-center source tarball (used when no --registry-src)
 #   --orchestration-release <url> remote orchestration-center source tarball (used when no --orchestration-src)
 #   --app-tars-dir <dir>        directory of pre-built <base>-<arch>.tar for --app-source tars
@@ -67,11 +70,13 @@ METALLB_VERSION="v0.16.1"
 TAG="v1.0.0"
 TAG_EXPLICIT=false
 SOURCE_REF="v1.0.0"
+REGISTRY_TAG=""
+ORCHESTRATION_TAG=""
+PORTAL_TAG=""
 APP_REGISTRY="ghcr.io/project-openan"
 APP_SOURCE="pull"
 REGISTRY_SRC=""
 ORCHESTRATION_SRC=""
-PORTAL_SRC=""
 REGISTRY_RELEASE=""
 ORCHESTRATION_RELEASE=""
 APP_TARS_DIR=""
@@ -82,11 +87,13 @@ KEEP_IMAGES="false"
 while [ $# -gt 0 ]; do
     case "$1" in
         --tag)               TAG="$2"; TAG_EXPLICIT=true; shift 2 ;;
+        --registry-tag)      REGISTRY_TAG="$2"; shift 2 ;;
+        --orchestration-tag) ORCHESTRATION_TAG="$2"; shift 2 ;;
+        --portal-tag)        PORTAL_TAG="$2"; shift 2 ;;
         --app-registry)      APP_REGISTRY="$2"; shift 2 ;;
         --app-source)        APP_SOURCE="$2"; shift 2 ;;
         --registry-src)      REGISTRY_SRC="$2"; shift 2 ;;
         --orchestration-src) ORCHESTRATION_SRC="$2"; shift 2 ;;
-        --portal-src)         PORTAL_SRC="$2"; shift 2 ;;
         --source-ref)        SOURCE_REF="$2"; shift 2 ;;
         --registry-release)  REGISTRY_RELEASE="$2"; shift 2 ;;
         --orchestration-release) ORCHESTRATION_RELEASE="$2"; shift 2 ;;
@@ -116,10 +123,12 @@ done
 docker buildx version >/dev/null 2>&1 || { log_error "docker buildx is required"; exit 1; }
 
 # --- Layout -------------------------------------------------------------------
-APP_REGISTRY_CENTER_REF="$APP_REGISTRY/registry-center:$TAG"
-APP_ORCHESTRATION_CENTER_REF="$APP_REGISTRY/orchestration-center:$TAG"
-APP_WORKFLOW_DESIGNER_REF="$APP_REGISTRY/workflow-designer:$TAG"
-APP_PORTAL_REF="$APP_REGISTRY/openan-portal:$TAG"
+# Per-component tags: --registry-tag/--orchestration-tag/--portal-tag override
+# the global --tag for that component; unset components fall back to --tag.
+APP_REGISTRY_CENTER_REF="$APP_REGISTRY/registry-center:${REGISTRY_TAG:-$TAG}"
+APP_ORCHESTRATION_CENTER_REF="$APP_REGISTRY/orchestration-center:${ORCHESTRATION_TAG:-$TAG}"
+APP_WORKFLOW_DESIGNER_REF="$APP_REGISTRY/workflow-designer:${ORCHESTRATION_TAG:-$TAG}"
+APP_PORTAL_REF="$APP_REGISTRY/openan-portal:${PORTAL_TAG:-$TAG}"
 
 mkdir -p "$OUT_DIR"
 BUNDLE="$(cd "$OUT_DIR" && pwd)/openan-offline-$TAG"
@@ -222,10 +231,10 @@ case "$APP_SOURCE" in
         save_image "$APP_PORTAL_REF" "portal"
         ;;
     build)
-        # A component's source is a local --*-src dir when given, otherwise a
-        # remote tarball (explicit --*-release URL, or the GitHub archive for
-        # --source-ref) is downloaded and extracted. Portal uses --portal-src
-        # only (local path, optional).
+        # RC and OC are built from source (local --*-src or remote tarball).
+        # Portal is NOT built from source here — it uses a different build
+        # pipeline (containerized/build/portal/); the offline builder pulls
+        # the portal image from the registry (or accepts it via --app-source tars).
         resolve_src() {
             local local_dir="$1" url="$2" name="$3"
             if [ -n "$local_dir" ]; then
@@ -253,9 +262,6 @@ case "$APP_SOURCE" in
         fi
         REGISTRY_SRC="$(resolve_src "$REGISTRY_SRC" "${REGISTRY_RELEASE:-$RC_URL}" "registry-center")" || exit 1
         ORCHESTRATION_SRC="$(resolve_src "$ORCHESTRATION_SRC" "${ORCHESTRATION_RELEASE:-$OC_URL}" "orchestration-center")" || exit 1
-        if [ -n "$PORTAL_SRC" ]; then
-            PORTAL_SRC="$(resolve_abs "$PORTAL_SRC")" || { log_error "--portal-src path not found: $PORTAL_SRC"; exit 1; }
-        fi
         for a in "${ARCHS[@]}"; do
             log_info "  build registry-center ($a)"
             docker buildx build --platform "linux/${a}" --load -t "$APP_REGISTRY_CENTER_REF" "$REGISTRY_SRC" || exit 1
@@ -270,15 +276,12 @@ case "$APP_SOURCE" in
             else
                 log_warn "  no workflow-designer/Dockerfile — skipping"
             fi
-            if [ -n "$PORTAL_SRC" ]; then
-                log_info "  build portal ($a)"
-                docker buildx build --platform "linux/${a}" --load -t "$APP_PORTAL_REF" "$PORTAL_SRC" || exit 1
-                docker save -o "$BUNDLE/images/portal-${a}.tar" "$APP_PORTAL_REF"
-            else
-                log_warn "  --portal-src not given - portal image not built; bundle only supports FRONTEND_TYPE=workflow-designer"
-            fi
         done
         rm -rf "$BUILD_TMP"
+        # Portal: pull from the registry, not from source (decoupled build).
+        log_step "Pulling portal image from registry"
+        save_image "$APP_PORTAL_REF" "portal" || \
+            log_warn "portal image unavailable; bundle only supports FRONTEND_TYPE=workflow-designer"
         ;;
     tars)
         [ -d "$APP_TARS_DIR" ] || { log_error "--app-tars-dir is required for --app-source tars"; exit 1; }
