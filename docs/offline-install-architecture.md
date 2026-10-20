@@ -75,7 +75,7 @@ graph TB
         end
     end
 
-    OP -->|http(s)://&lt;LB IP or NodePort&gt;| IG
+    OP -->|"http(s)://LB IP or NodePort"| IG
     IG --> ING_FE & ING_ORC & ING_RC
     ING_FE --> FE
     ING_ORC --> OC
@@ -290,7 +290,7 @@ other.
 flowchart TD
     D1[1. Built-in defaults<br/>install.sh defaults block] -->|overwritten by| C1
     C1[2. config.env via --config<br/>load_config sources the file] -->|overwritten by| P1
-    P1[3. Interactive prompts &#91;1/7&#93;<br/>only without --config AND without --yes] --> V1
+    P1["3. Interactive prompts [1/7]<br/>only without --config and without --yes"] --> V1
     V1[4. Validation gates<br/>required passwords, namespace/pool/host formats] --> DER
     DER[5. Derived values, only when empty<br/>REGISTRY_NODE, REGISTRY_NODE_IP,<br/>STORAGE_NODE, REG_HOST, TLS secret names] --> SAVE
     SAVE[6. save_config<br/>effective config persisted to config.env]
