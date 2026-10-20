@@ -6,8 +6,10 @@
 
 - Linux or macOS with internet access (application images and the pinned infrastructure manifests are fetched online)
 - A Kubernetes cluster (v1.25+) reachable with `kubectl`
-- Helm 3.19+ and python3
-- No host tools are auto-installed; the installer never modifies the OS
+- Helm 3.14+ (verified with 3.14.2; the chart uses no newer features) and python3
+- A default StorageClass for the in-cluster SQL and runtime claims — clusters without one can accept the wizard's local hostPath fallback (evaluation, single-node)
+- No host tool is installed without asking: missing kubectl/helm (and Docker for source builds on Linux) can be auto-installed after an explicit interactive confirmation using the official installers; python3 and Docker Desktop stay manual
+- The interactive wizard reads secrets from the terminal (getpass); run `./install.sh` from a real TTY. CI and automation use `./install.sh --values` with pre-created Secrets
 
 ## Step 1: Interactive install
 
@@ -16,14 +18,16 @@ cd containerized/online-install
 ./install.sh
 ```
 
-The installer orchestrates six phases (`./install.sh --help` shows the short flow):
+The installer orchestrates four phases (`./install.sh --help` shows the short
+flow). Release and namespace default to `openan` without prompts (override
+with `--release`/`--namespace`); building from source is flag-driven, not a
+prompt (`--tag` with `--registry-release` and `--orchestration-release`,
+`docker login` to the target registry first).
 
-- **[1/6] Preflight** — checks kubectl, helm and python3, verifies the cluster is reachable and prints the kubectl client version.
-- **[2/6] Targets** — asks for the Helm release name and namespace (both default to `openan`).
-- **[3/6] Images** — the image tag is required and has no default (old `v1.0.0` images are not compatible with the current chart; see the deployment contract). Building from source needs the two organization source archive URLs at accepted revisions (registry-center and orchestration-center) and pushes images — `docker login` to the target registry first; answer no to reuse an already-pushed tag.
-- **[4/6] Infrastructure** — when MetalLB and ingress-nginx are both detected, the phase is skipped; otherwise it can install the pinned MetalLB v0.16.1 and ingress-nginx controller-v1.15.1 manifests, then prompt for a MetalLB IP pool on bare metal (e.g. `192.168.1.200-192.168.1.250`, leave empty to skip).
-- **[5/6] Application** — the guided wizard (configure.py) asks for components, SQL hosting (in-cluster PostgreSQL evaluation default / external SQL), models (generated from chat LLM answers with a connectivity probe / existing ConfigMaps), signing (auto demo / existing Secret) and the initial admin password (12+ characters with lower/upper/digit/special classes; asked when orchestration is selected). Secrets go only to Kubernetes Secrets via kubectl stdin; the wizard writes just the non-secret `deployment.generated.json` and never overwrites existing files or Secrets. If a run fails halfway, reconcile the created Secrets/ConfigMaps and continue with `--values` for upgrades.
-- **[6/6] Deploy** — lints the chart against the generated values, runs `helm upgrade --install --wait` and prints the access URL. Log in with the admin account configured in the wizard.
+- **[1/4] Preflight** — checks kubectl, helm and python3, verifies the cluster is reachable, prints the kubectl client version and the release/namespace in use. Missing kubectl/helm are offered for automatic installation (official installers, explicit confirmation only; python3 stays manual).
+- **[2/4] Infrastructure** — when MetalLB and ingress-nginx are both detected, the phase is skipped; otherwise it can install the pinned MetalLB v0.16.1 and ingress-nginx controller-v1.15.1 manifests, then prompt for a MetalLB IP pool on bare metal (e.g. `192.168.1.200-192.168.1.250`, leave empty to skip).
+- **[3/4] Application** — the guided wizard (configure.py) asks for components, the application image tag (no default: old `v1.0.0` images are not compatible with the current chart; one shared tag, or per-component registry/orchestration/frontend tags), models (generated from chat LLM answers with a connectivity probe / existing ConfigMaps), signing (auto demo / existing Secret) and the initial admin password (8+ characters with lower/upper/digit/special classes; asked when orchestration is selected). SQL, storage and the Ingress host are not asked: evaluation always uses in-cluster PostgreSQL; storage picks the cluster's default StorageClass and falls back automatically to node-pinned local hostPath PVs (single-node) when none exists; the Ingress host is the empty catch-all for direct LB-IP access (host-based routing and HTTPS require reviewed values; Kubernetes rejects IP hosts). Secrets go only to Kubernetes Secrets via kubectl stdin; the wizard writes just the non-secret `deployment.generated.json` and never overwrites existing files or Secrets. Failures print the concrete reason (never secret values). If a run fails halfway, reconcile the created Secrets/ConfigMaps and continue with `--values` for upgrades.
+- **[4/4] Deploy** — prints a non-secret deployment summary (release/namespace, components, image tags, SQL, storage, models, signing, ingress host) and asks for confirmation before running `helm upgrade --install --wait`; cancelling keeps the generated values and the Secrets/ConfigMaps the wizard already created (it is not transactional). When orchestration is selected, the installer also offers to start the **agent examples server** (demo agents) inside the orchestration-center pod: `samples/start_agents_server.py` via `kubectl exec`, health-checked on port 8903, log at `/tmp/agents-server.log` (answer no to skip; it is a demo convenience, not a chart resource, and does not survive pod restarts). Log in with the admin account configured in the wizard.
 
 ## Step 2: Verify deployment
 
@@ -43,7 +47,7 @@ The LoadBalancer IP is preferred:
 kubectl -n ingress-nginx get svc ingress-nginx-controller   # EXTERNAL-IP
 ```
 
-Open `http://<EXTERNAL-IP>/` (the installer also prints the wizard hostname — point DNS or an `/etc/hosts` entry for it at that IP). Without a LoadBalancer IP the installer prints the NodePort fallback:
+Open `http://<EXTERNAL-IP>/` (the wizard fixes the Ingress host to the empty catch-all, so no DNS setup is needed; host-based routing requires reviewed values). Without a LoadBalancer IP the installer prints the NodePort fallback:
 
 ```bash
 NODE_PORT=$(kubectl -n openan get svc openan-frontend -o jsonpath='{.spec.ports[0].nodePort}')
@@ -55,7 +59,7 @@ Log in with the admin account configured in the wizard and change the password i
 
 ## HTTPS deployment
 
-1. **MetalLB pool first**: a routable IP range must exist (the same IPAddressPool offered in phase [4/6]) so the ingress gets a stable IP; point DNS or an `/etc/hosts` entry at it.
+1. **MetalLB pool first**: a routable IP range must exist (the same IPAddressPool offered in phase [2/4]) so the ingress gets a stable IP; point DNS or an `/etc/hosts` entry at it.
 2. **Generate certificates** (certificate tool provided by a separate PR):
 
    ```bash
@@ -105,3 +109,10 @@ With Python/PyYAML/pytest, Helm and Bash installed, run `python -m pytest tests/
 Missing tools explicitly skip related tests; render passes are not container/cluster passes.
 CI separately builds the real Compose matrix. See [acceptance and troubleshooting](../TRANSPORT_DEPLOYMENT.md#acceptance-and-troubleshooting)
 for auth/TLS/SQL/PVC and frontend diagnosis. Single-instance upgrades briefly interrupt service.
+
+Reinstalling over leftover local storage keeps old data: a retained `openan-postgres-pv`
+with stale `pgdata` makes in-cluster SQL keep the OLD database passwords (the postgres
+socket still connects, but TCP fails with `password authentication failed`). Answer yes
+to "Remove persistent data" in `uninstall.sh` — it detects and cleans every OpenAN PV's
+hostPath data — or manually remove `/data/openan-*` on the node. The wizard also warns
+about leftover PVs before you configure storage.

@@ -1,0 +1,82 @@
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+# Evaluation defaults: in-cluster PostgreSQL, HTTP, portal frontend.
+# Fill in secrets via Secrets (see configure.py or create manually), then:
+#   helm install openan ./openan-chart -n openan --create-namespace -f example.values.yaml
+#
+# Production: copy this file, switch to external SQL, enable TLS, and
+# reference pre-created Secrets. See docs/online-install-architecture.md for details.
+
+namespace: openan
+
+# In-cluster PostgreSQL (evaluation default)
+postgresql:
+  enabled: true
+  # Use postgresql.existingSecret for production (key: postgres-password)
+  existingSecret: openan-pg
+
+database:
+  type: postgresql
+
+# Registry Center
+registry:
+  enabled: true
+  image:
+    tag: tested-source-build  # REQUIRED: no default; old v1.0.0 images are NOT compatible with this chart
+  runtimeSecret: openan-rc-runtime
+  credentialSecret: openan-rc-credentials
+  modelsConfigMap: openan-rc-models
+  signing:
+    mode: auto  # demo; use "secret" for production
+  replicas: 1
+  resources:
+    requests: { cpu: 250m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+
+# Orchestration Center
+orchestration:
+  enabled: true
+  image:
+    tag: tested-source-build  # REQUIRED: no default; per-component tags may differ
+  runtimeSecret: openan-oc-runtime
+  modelsConfigMap: openan-oc-models
+  replicas: 1
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: 1000m, memory: 1Gi }
+
+# Frontend (portal by default)
+frontend:
+  type: portal  # portal | workflow-designer
+  enabled: true
+  image:
+    tag: tested-source-build  # REQUIRED: no default
+  replicas: 2
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+
+# Bare-metal clusters without a StorageClass (single-node evaluation) can
+# uncomment this block instead of provisioning storage: it creates the shared
+# openan-local StorageClass and node-pinned hostPath PVs for all claims.
+# postgresql:
+#   storage:
+#     createStorageClass: true
+#     storageClassName: openan-local
+#     createPV: true
+#     useHostPath: true
+#     nodeName: node-1
+# registry:
+#   persistence: { storageClassName: openan-local, createPV: true, useHostPath: true, nodeName: node-1 }
+# orchestration:
+#   persistence: { storageClassName: openan-local, createPV: true, useHostPath: true, nodeName: node-1 }
+
+# Ingress
+ingress:
+  enabled: true
+  className: nginx
+  host: ""  # empty = IP-based access; set a DNS name for host-based routing
+  tls:
+    enabled: false  # evaluation; enable for HTTPS
+    secretName: openan-tls

@@ -7,6 +7,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 import yaml
@@ -135,9 +136,8 @@ def test_wizard_never_overwrites_an_existing_secret(monkeypatch):
 
 def test_wizard_generated_values_contain_references_not_credentials(tmp_path, monkeypatch):
     module = wizard()
-    answers = iter(["all", "tested", "external", "mysql", "sql.example", "3306", "registry_db", "orch_db",
-                    "registry_user", "orch_user", "existing", "rc-models", "oc-models", "secret",
-                    "signing", "openan.example"])
+    answers = iter(["all", "tested", "shared", "existing", "rc-models", "oc-models", "secret",
+                    "signing"])
     monkeypatch.setattr(module, "ask", lambda _: next(answers))
     monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
     monkeypatch.setattr(module, "secret_input", lambda _: "SyntheticSecret9!")
@@ -151,7 +151,9 @@ def test_wizard_generated_values_contain_references_not_credentials(tmp_path, mo
     token = saved["openan-oc-runtime"]["REGISTRY_ACCESS_TOKEN"]
     assert token not in output.read_text(encoding="utf-8")
     assert "token_hash=" in saved["openan-rc-credentials"]["integration_credentials.conf"]
-    assert values["database"]["registry"]["name"] != values["database"]["orchestration"]["name"]
+    # SQL is not asked: evaluation always uses in-cluster PostgreSQL
+    assert values["postgresql"] == {"enabled": True, "existingSecret": "openan-pg"}
+    assert values["database"] == {"type": "postgresql"}
 
 
 def test_offline_k8s_entrypoints_are_not_sealed():
@@ -166,7 +168,7 @@ def test_offline_k8s_entrypoints_are_not_sealed():
 
 def test_wizard_in_cluster_default_values_shape(tmp_path, monkeypatch):
     module = wizard()
-    answers = iter(["all", "in-cluster", "existing", "rc-models", "oc-models", "auto", "openan.example"])
+    answers = iter(["all", "shared", "existing", "rc-models", "oc-models", "auto"])
     monkeypatch.setattr(module, "ask", lambda _: next(answers))
     monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
     monkeypatch.setattr(module, "secret_input", lambda _: "SyntheticSecret9!")
@@ -180,16 +182,20 @@ def test_wizard_in_cluster_default_values_shape(tmp_path, monkeypatch):
     assert values["postgresql"] == {"enabled": True, "existingSecret": "openan-pg"}
     assert values["database"] == {"type": "postgresql"}
     assert values["registry"]["signing"] == {"mode": "auto"}
+    # Not asked anymore: evaluation always uses the catch-all host (LB-IP access)
+    assert values["ingress"] == {"host": ""}
     assert saved["openan-pg"] == {"postgres-password": "SyntheticSecret9!"}
     assert "SyntheticSecret9!" not in text
 
 
 def test_wizard_generate_models_keeps_keys_only_in_runtime_secrets(tmp_path, monkeypatch):
     module = wizard()
-    answers = iter(["all", "in-cluster", "generate", "auto", "openan.example",
+    answers = iter(["all", "shared", "generate",
                     "rc-model-id", "https://llm.example/v1/chat/completions",
-                    "oc-model-id", "https://llm.example/v1/chat/completions"])
-    secrets = iter(["PgSecret9!", "rc-llm-key", "oc-llm-key", "AdminPassw0rd!xy"])
+                    "no",
+                    "oc-model-id", "https://llm.example/v1/chat/completions",
+                    "auto"])
+    secrets = iter(["rc-llm-key", "oc-llm-key", "PgSecret9!", "AdminPassw0rd!xy"])
     monkeypatch.setattr(module, "ask", lambda _: next(answers))
     monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
     monkeypatch.setattr(module, "secret_input", lambda _: next(secrets))
@@ -265,9 +271,8 @@ bash "$@"
 
 def test_wizard_rejects_missing_public_dependencies_before_secrets(tmp_path, monkeypatch):
     module = wizard()
-    answers = iter(["all", "tested", "external", "mysql", "sql.example", "3306", "registry_db", "orch_db",
-                    "registry_user", "orch_user", "existing", "rc-models", "oc-models", "secret",
-                    "signing", "openan.example"])
+    answers = iter(["all", "tested", "shared", "existing", "rc-models", "oc-models", "secret",
+                    "signing"])
     monkeypatch.setattr(module, "ask", lambda _: next(answers))
     monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
     monkeypatch.setattr(module.subprocess, "run", lambda command, **kw: subprocess.CompletedProcess(command, 1, "", ""))
@@ -283,3 +288,113 @@ def test_compose_and_helm_static_asset_policy_agree():
     assert "gzip on;" in config and "^/assets/" in config
     assert "immutable" in config and "no-store" in config
     assert 'add_header X-XSS-Protection' not in config
+
+
+def test_wizard_local_storage_fallback_values(tmp_path, monkeypatch):
+    module = wizard()
+    answers = iter(["all", "shared", "existing", "rc-models", "oc-models", "auto"])
+    monkeypatch.setattr(module, "ask", lambda _: next(answers))
+    monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
+    # No default StorageClass and a detectable node: the fallback engages
+    # automatically (no storage question anymore).
+    monkeypatch.setattr(module, "first_node", lambda: "node-1")
+    monkeypatch.setattr(module, "secret_input", lambda _: "SyntheticSecret9!")
+    saved = {}
+    monkeypatch.setattr(module, "create_secret", lambda ns, name, data: saved.update({name: data}))
+    monkeypatch.setattr(module, "create_configmap", lambda ns, name, data: None)
+    monkeypatch.setattr(module.subprocess, "run", lambda command, **kw: subprocess.CompletedProcess(command, 0, "", ""))
+    output = tmp_path / "values.json"
+    module.configure("openan", "openan", output, tag="tested")
+    values = json.loads(output.read_text(encoding="utf-8"))
+    assert values["postgresql"]["storage"] == {"createStorageClass": True, "storageClassName": "openan-local",
+                                               "createPV": True, "useHostPath": True, "nodeName": "node-1"}
+    for component in ("registry", "orchestration"):
+        assert values[component]["persistence"] == {"storageClassName": "openan-local", "createPV": True,
+                                                    "useHostPath": True, "nodeName": "node-1"}
+
+
+def test_wizard_per_component_image_tags(tmp_path, monkeypatch):
+    module = wizard()
+    answers = iter(["all", "per-component", "existing", "rc-models", "oc-models", "auto"])
+    component_tags = iter(["v1.1.2", "main-20261019", "v1.0.0"])
+    monkeypatch.setattr(module, "ask", lambda _: next(answers))
+    monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
+    monkeypatch.setattr(module, "ask_default", lambda label, default: next(component_tags))
+    monkeypatch.setattr(module, "secret_input", lambda _: "SyntheticSecret9!")
+    monkeypatch.setattr(module, "create_secret", lambda *args: None)
+    monkeypatch.setattr(module, "create_configmap", lambda *args: None)
+    monkeypatch.setattr(module.subprocess, "run", lambda command, **kw: subprocess.CompletedProcess(command, 0, "", ""))
+    output = tmp_path / "values.json"
+    module.configure("openan", "openan", output, tag="base")
+    values = json.loads(output.read_text(encoding="utf-8"))
+    assert values["registry"]["image"]["tag"] == "v1.1.2"
+    assert values["orchestration"]["image"]["tag"] == "main-20261019"
+    assert values["frontend"]["image"]["tag"] == "v1.0.0"
+
+
+def test_wizard_failure_prints_concrete_reason_without_traceback(tmp_path):
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "containerized/online-install/configure.py"),
+         "--namespace", "openan", "--release", "openan", "--output", str(tmp_path / "values.json")],
+        input="", capture_output=True, text=True, encoding="utf-8", timeout=30)
+    assert result.returncode == 2
+    assert "Configuration failed:" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_uninstall_detects_all_openan_pvs_and_grouped_hostpath_cleanup():
+    # Regression: uninstall used to recognize only openan-postgres-pv and scan
+    # a single hostPath; manually created rc/oc PVs were never cleaned.
+    text = (ROOT / "containerized/online-install/uninstall.sh").read_text(encoding="utf-8")
+    assert "app.kubernetes.io/part-of=openan" in text
+    assert "{.spec.volumeName}" in text
+    for pv in ("openan-postgres-pv", "openan-rc-pv", "openan-oc-pv"):
+        assert pv in text
+    assert "clean_hostpath_node" in text
+
+
+def test_uninstall_accepts_release_and_namespace_overrides():
+    # install.sh defaults release/namespace but allows --release/--namespace;
+    # the uninstaller must accept the same overrides or it cannot find them.
+    text = (ROOT / "containerized/online-install/uninstall.sh").read_text(encoding="utf-8")
+    assert "--namespace" in text and "--release" in text
+    assert 'CONFIG_NAMESPACE="' in text and 'CONFIG_RELEASE_NAME="' in text
+
+
+def test_install_nodeport_fallback_uses_the_frontend_service():
+    # Regression: the fallback queried the legacy "workflow-designer" Service,
+    # but both frontend types deploy as openan-frontend — the NodePort lookup
+    # always failed.
+    text = (ROOT / "containerized/online-install/install.sh").read_text(encoding="utf-8")
+    assert "get svc openan-frontend" in text
+    assert "get svc workflow-designer" not in text
+
+
+def test_install_offers_agent_examples_server_interactively():
+    # Demo agents (samples/start_agents_server.py) run in the orchestration
+    # pod on request, mirroring the offline installer; the offer is
+    # interactive-only (--values mode never starts it) and health-checked.
+    text = (ROOT / "containerized/online-install/install.sh").read_text(encoding="utf-8")
+    assert "start_agents_server.py" in text
+    assert "Start the agent examples server" in text
+    assert "127.0.0.1:8903/health" in text
+    values_mode = text.split("Interactive mode")[0]
+    assert "start_agents_server.py" not in values_mode
+
+
+def test_install_auto_install_and_deploy_gate_are_interactive_only():
+    # Missing kubectl/helm (and Docker for builds) can be auto-installed via
+    # official installers behind an explicit confirmation, and the deploy is
+    # gated by a non-secret summary — but never in --values/CI mode.
+    text = (ROOT / "containerized/online-install/install.sh").read_text(encoding="utf-8")
+    assert "Install missing tools automatically" in text
+    assert "https://dl.k8s.io/release" in text
+    assert "get-helm-3" in text
+    assert "get.docker.com" in text
+    assert "Deploy with this configuration?" in text
+    assert "python3 must be installed manually" in text
+    values_mode = text.split("Interactive mode")[0]
+    assert "dl.k8s.io" not in values_mode
+    assert "get-helm-3" not in values_mode
+    assert "get.docker.com" not in values_mode
+    assert "Deploy with this configuration?" not in values_mode
