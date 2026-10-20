@@ -138,14 +138,35 @@ def probe_llm(model, url, api_key):
         return False
 
 
-def models_yaml(model, url):
-    """chat-only models.yaml; the API key is referenced by env name, never inlined."""
-    return ("models:\n"
-            "  chat:\n"
-            "    provider: openai_compatible\n"
-            f"    model: {json.dumps(model)}\n"
-            f"    url: {json.dumps(url)}\n"
-            "    api_key_env: LLM_CHAT_API_KEY\n")
+def models_yaml(chat, embed=None, rerank=None):
+    """models.yaml for chat plus optional embed/rerank; keys referenced by
+    env name, never inlined (embed drives semantic search/retrieval)."""
+    def block(capability, model, url):
+        return (f"  {capability}:\n"
+                "    provider: openai_compatible\n"
+                f"    model: {json.dumps(model)}\n"
+                f"    url: {json.dumps(url)}\n"
+                f"    api_key_env: LLM_{capability.upper()}_API_KEY\n")
+    text = "models:\n" + block("chat", chat[0], chat[1])
+    for capability, config in (("embed", embed), ("rerank", rerank)):
+        if config:
+            text += block(capability, config[0], config[1])
+    return text
+
+
+def ask_optional(label):
+    value = input(label + " [empty to skip]: ").strip()
+    return value
+
+
+def collect_optional_model(component, capability):
+    """Optional embed/rerank model: model id, URL and API key."""
+    model = ask_optional(f"{component} {capability} model id")
+    if not model:
+        return None
+    url = ask(f"{component} {capability} model URL (e.g. https://api.example.com/v1/{capability}s)")
+    api_key = secret_input(f"{component} {capability} API key")
+    return model, url, api_key
 
 
 def collect_llm(component):
@@ -154,10 +175,15 @@ def collect_llm(component):
         url = ask(f"{component} chat URL (e.g. https://api.example.com/v1/chat/completions)")
         api_key = secret_input(f"{component} chat API key")
         if probe_llm(model, url, api_key):
-            return model, url, api_key
-        if input("  Continue anyway? [y/N]: ").strip().lower() == "y":
-            return model, url, api_key
-    raise ValueError(f"LLM configuration for {component} abandoned after 3 attempts")
+            break
+        if input("  Continue anyway? [y/N]: ").strip().lower() != "y":
+            continue
+        break
+    else:
+        raise ValueError(f"LLM configuration for {component} abandoned after 3 attempts")
+    return {"chat": (model, url, api_key),
+            "embed": collect_optional_model(component, "embed"),
+            "rerank": collect_optional_model(component, "rerank")}
 
 
 def choose_components():
@@ -217,6 +243,7 @@ def configure(namespace, release, output, tag=None):
 
     # --- 3. LLM (ask once, offer to reuse) ---------------------------------
     llm = {}
+    a2at = None
     models_mode = choose("models.yaml source", ["generate", "existing"], "generate")
     models_ref = {}
     if models_mode == "existing":
@@ -231,6 +258,14 @@ def configure(namespace, release, output, tag=None):
                 llm[other] = collect_llm(other)
             else:
                 llm[other] = llm[first]
+    if components["orchestration"]:
+        # A2A-T SDK negotiation LLM (workflow execution), independent of
+        # models.yaml: env-based, provider stays "openai" per upstream docs.
+        a2at_model = ask_optional("A2A-T SDK negotiation model (workflow execution)")
+        if a2at_model:
+            a2at_url = ask("A2A-T SDK base URL (e.g. https://api.example.com/v1)")
+            a2at_key = secret_input("A2A-T SDK API key")
+            a2at = {"model": a2at_model, "baseUrl": a2at_url, "key": a2at_key}
 
     # --- 4. Signing (auto default, one question) ----------------------------
     signing_ref = None
@@ -291,22 +326,32 @@ def configure(namespace, release, output, tag=None):
     create_secret(namespace, prefix + "pg", {"postgres-password": in_cluster_password})
     if models_mode == "generate":
         for component in enabled:
-            model, url, _ = llm[component]
             name = prefix + ("rc-models" if component == "registry" else "oc-models")
-            create_configmap(namespace, name, {"models.yaml": models_yaml(model, url)})
+            create_configmap(namespace, name,
+                             {"models.yaml": models_yaml(llm[component]["chat"],
+                                                         llm[component]["embed"],
+                                                         llm[component]["rerank"])})
             models_ref[component] = name
 
     rc_runtime = {"INTEGRATION_TOKEN_HMAC_KEY": hmac_key, "INTEGRATION_FINGERPRINT_KEY": fingerprint} \
         if components["registry"] else None
     if rc_runtime is not None and models_mode == "generate" and components["registry"]:
-        rc_runtime["LLM_CHAT_API_KEY"] = llm["registry"][2]
+        rc_runtime["LLM_CHAT_API_KEY"] = llm["registry"]["chat"][2]
+        for capability in ("embed", "rerank"):
+            if llm["registry"][capability]:
+                rc_runtime[f"LLM_{capability.upper()}_API_KEY"] = llm["registry"][capability][2]
     oc_runtime = {}
     if admin is not None:
         oc_runtime["OC_ADMIN_INITIAL_PASSWORD"] = admin
         if components["registry"]:
             oc_runtime["REGISTRY_ACCESS_TOKEN"] = token
         if models_mode == "generate" and components["orchestration"]:
-            oc_runtime["LLM_CHAT_API_KEY"] = llm["orchestration"][2]
+            oc_runtime["LLM_CHAT_API_KEY"] = llm["orchestration"]["chat"][2]
+            for capability in ("embed", "rerank"):
+                if llm["orchestration"][capability]:
+                    oc_runtime[f"LLM_{capability.upper()}_API_KEY"] = llm["orchestration"][capability][2]
+    if a2at:
+        oc_runtime["A2AT_LLM_API_KEY"] = a2at["key"]
     if rc_runtime is not None:
         create_secret(namespace, prefix + "rc-runtime", rc_runtime)
         create_secret(namespace, prefix + "rc-credentials", {"integration_credentials.conf": credential})
@@ -342,6 +387,10 @@ def configure(namespace, release, output, tag=None):
                                    "image": {"tag": tags["orchestration"]}}
         if agent_registry_url:
             values["orchestration"]["agentRegistryUrl"] = agent_registry_url
+        if a2at:
+            values["orchestration"]["a2atLlm"] = {"provider": "openai",
+                                                  "model": a2at["model"],
+                                                  "baseUrl": a2at["baseUrl"]}
         if storage_node is not None:
             values["orchestration"]["persistence"] = {
                 "storageClassName": local_storage_class, "createPV": True,

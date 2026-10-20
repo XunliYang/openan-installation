@@ -156,6 +156,34 @@ def test_signing_names_and_full_model_mount():
     assert set(models["models"]) == {"chat", "embed", "rerank"}
 
 
+def test_orchestration_a2at_sdk_llm_renders():
+    docs = render({"orchestration.a2atLlm.provider": "openai",
+                   "orchestration.a2atLlm.model": "negotiate",
+                   "orchestration.a2atLlm.baseUrl": "https://api.example.com/v1"})
+    env = docs["orchestration-center-config"]["data"]
+    assert env["A2AT_LLM_PROVIDER"] == "openai"
+    assert env["A2AT_LLM_MODEL"] == "negotiate"
+    assert env["A2AT_LLM_BASE_URL"] == "https://api.example.com/v1"
+    # unset by default: the SDK stays unconfigured unless the values are set
+    default = render()["orchestration-center-config"]["data"]
+    assert "A2AT_LLM_MODEL" not in default
+
+
+def test_orchestration_embed_rerank_models_render():
+    docs = render({"orchestration.llm.embed.model": "emb",
+                   "orchestration.llm.embed.url": "https://llm.example/v1/embeddings",
+                   "orchestration.llm.rerank.model": "rr",
+                   "orchestration.llm.rerank.url": "https://llm.example/v1/rerank"})
+    models = yaml.safe_load(docs["orchestration-center-models"]["data"]["models.yaml"])
+    assert set(models["models"]) == {"chat", "embed", "rerank"}
+    assert models["models"]["embed"]["api_key_env"] == "LLM_EMBED_API_KEY"
+
+
+def test_a2at_env_cannot_be_shadowed_via_extra_env():
+    error = render({"orchestration.extraEnv.A2AT_LLM_MODEL": "x"}, success=False)
+    assert "a2atLlm values" in error
+
+
 @pytest.mark.parametrize("verify_server", [False, True])
 @pytest.mark.parametrize("mtls", [False, True])
 def test_registry_trust_and_client_identity_are_independent(verify_server, mtls):

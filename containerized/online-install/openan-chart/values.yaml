@@ -181,7 +181,8 @@ orchestration:
   port: 5001
   # Registry Center URL (auto-discovered if registry.enabled=true)
   agentRegistryUrl: ""
-  # LLM configuration for orchestration-center
+  # LLM configuration for orchestration-center (embed drives workflow
+  # semantic retrieval; rerank is optional for top-N retrieval).
   llm:
     chat:
       model: "your-chat-model"
@@ -189,6 +190,24 @@ orchestration:
       apiKey: ""
       existingSecret: ""
       existingSecretKey: "orchestration-llm-chat-api-key"
+    embed:
+      model: ""
+      url: ""
+      apiKey: ""
+      existingSecret: ""
+      existingSecretKey: "orchestration-llm-embed-api-key"
+    rerank:
+      model: ""
+      url: ""
+      apiKey: ""
+      existingSecret: ""
+      existingSecretKey: "orchestration-llm-rerank-api-key"
+  # A2A-T SDK LLM used by workflow negotiation/execution — independent of
+  # llm.chat. The API key belongs in runtimeSecret as A2AT_LLM_API_KEY.
+  a2atLlm:
+    provider: ""  # keep "openai": other names are backend-only registrations
+    model: ""
+    baseUrl: ""
   # Resource limits
   resources:
     requests:

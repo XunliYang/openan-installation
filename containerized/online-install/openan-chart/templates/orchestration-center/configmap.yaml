@@ -17,6 +17,15 @@ data:
   # The Ingress/client proxy certificate identifies the proxy, not its caller.
   # Use frontend accounts, never the proxy certificate as caller identity.
   ORCH_EXTERNAL_AUTH_MODE: "user"
+  {{- with .Values.orchestration.a2atLlm.provider }}
+  A2AT_LLM_PROVIDER: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.orchestration.a2atLlm.model }}
+  A2AT_LLM_MODEL: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.orchestration.a2atLlm.baseUrl }}
+  A2AT_LLM_BASE_URL: {{ . | quote }}
+  {{- end }}
   ORCH_PUBLIC_SCHEME: {{ include "openan.publicScheme" . | quote }}
   AGENT_REGISTRY_URL: {{ include "openan.registryUrl" . | quote }}
   {{- if .Values.orchestration.registryClientSecret }}
