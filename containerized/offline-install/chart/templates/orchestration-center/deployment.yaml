@@ -12,6 +12,8 @@ metadata:
     {{- include "openan.orchestration.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.orchestration.replicas }}
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "openan.orchestration.selectorLabels" . | nindent 6 }}
@@ -20,6 +22,8 @@ spec:
       labels:
         {{- include "openan.orchestration.selectorLabels" . | nindent 8 }}
     spec:
+      securityContext:
+        fsGroup: 10001
       terminationGracePeriodSeconds: 120
       affinity:
         podAntiAffinity:
@@ -31,6 +35,15 @@ spec:
                   {{- include "openan.orchestration.selectorLabels" . | nindent 18 }}
               topologyKey: kubernetes.io/hostname
       initContainers:
+        - name: prepare-runtime
+          image: "{{ .Values.orchestration.image.repository }}:{{ .Values.orchestration.image.tag }}"
+          command: ["python", "-c", "from pathlib import Path; [Path('/runtime', p).mkdir(mode=0o770, exist_ok=True) for p in ('data', 'log')]"]
+          securityContext:
+            runAsUser: 10001
+            runAsGroup: 10001
+          volumeMounts:
+            - name: runtime
+              mountPath: /runtime
         # The image ships only etc/conf/db_config.json.template while the
         # entrypoint edits etc/conf/db_config.json in place. Copy the whole
         # etc tree onto a writable emptyDir so the entrypoint can write.
@@ -60,6 +73,10 @@ spec:
         envFrom:
         - configMapRef:
             name: orchestration-center-config
+        {{- if .Values.orchestration.runtimeSecret }}
+        - secretRef:
+            name: {{ .Values.orchestration.runtimeSecret }}
+        {{- end }}
         env:
         - name: DB_PASSWORD
           {{- if and (ne (include "openan.dbType" .) "mysql") .Values.postgresql.existingSecret }}
@@ -87,18 +104,14 @@ spec:
         {{- end }}
         - name: LLM_CONFIG_FILE
           value: /opt/orchestration-center/etc/config/models.yaml
-        {{- if .Values.orchestration.llm.chat.apiKey }}
-        - name: LLM_CHAT_API_KEY
+        {{- range $cap, $model := .Values.orchestration.llm }}
+        {{- if and $model.model (not $model.keyless) (or $model.apiKey $model.existingSecret) }}
+        - name: LLM_{{ upper $cap }}_API_KEY
           valueFrom:
             secretKeyRef:
-              name: orchestration-center-secret
-              key: llm-chat-api-key
-        {{- else if .Values.orchestration.llm.chat.existingSecret }}
-        - name: LLM_CHAT_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Values.orchestration.llm.chat.existingSecret }}
-              key: {{ .Values.orchestration.llm.chat.existingSecretKey }}
+              name: {{ default "orchestration-center-secret" $model.existingSecret }}
+              key: {{ ternary $model.existingSecretKey (printf "llm-%s-api-key" $cap) (not (empty $model.existingSecret)) }}
+        {{- end }}
         {{- end }}
         {{- if .Values.orchestration.llm.embed.apiKey }}
         - name: LLM_EMBED_API_KEY
@@ -135,6 +148,12 @@ spec:
         resources:
           {{- toYaml .Values.orchestration.resources | nindent 10 }}
         volumeMounts:
+        - name: runtime
+          mountPath: /opt/orchestration-center/data
+          subPath: data
+        - name: runtime
+          mountPath: /opt/orchestration-center/log
+          subPath: log
         - name: etc-dir
           mountPath: /opt/orchestration-center/etc
         - name: models-config
@@ -163,11 +182,14 @@ spec:
         {{- end }}
         {{- end }}
       volumes:
+      - name: runtime
+        persistentVolumeClaim:
+          claimName: {{ default "orchestration-center-runtime" .Values.orchestration.persistence.existingClaim }}
       - name: etc-dir
         emptyDir: {}
       - name: models-config
         configMap:
-          name: orchestration-center-models
+          name: {{ default "orchestration-center-models" .Values.orchestration.modelsConfigMap }}
       {{- if and .Values.https.enabled (ne .Values.orchestration.tls.mode "off") }}
       - name: tls-certs
         secret:

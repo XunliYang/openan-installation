@@ -2,7 +2,7 @@
 # All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-{{- if .Values.orchestration.enabled }}
+{{- if and .Values.orchestration.enabled (not .Values.orchestration.modelsConfigMap) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -14,23 +14,17 @@ data:
   models.yaml: |
     # Generated from chart values; secrets are referenced by env var, never inlined.
     models:
-      chat:
-        provider: openai_compatible
-        model: {{ .Values.orchestration.llm.chat.model }}
-        url: {{ .Values.orchestration.llm.chat.url }}
-        api_key_env: LLM_CHAT_API_KEY
-    {{- with .Values.orchestration.llm.embed.model }}
-      embed:
-        provider: openai_compatible
-        model: {{ $.Values.orchestration.llm.embed.model }}
-        url: {{ $.Values.orchestration.llm.embed.url }}
-        api_key_env: LLM_EMBED_API_KEY
-    {{- end }}
-    {{- with .Values.orchestration.llm.rerank.model }}
-      rerank:
-        provider: openai_compatible
-        model: {{ $.Values.orchestration.llm.rerank.model }}
-        url: {{ $.Values.orchestration.llm.rerank.url }}
-        api_key_env: LLM_RERANK_API_KEY
-    {{- end }}
+      {{- range $cap, $model := .Values.orchestration.llm }}
+      {{- if $model.model }}
+      {{ $cap }}:
+        provider: {{ default "openai_compatible" $model.provider | quote }}
+        model: {{ $model.model | quote }}
+        url: {{ $model.url | quote }}
+        {{- if not $model.keyless }}
+        api_key_env: LLM_{{ upper $cap }}_API_KEY
+        {{- end }}
+        timeout: {{ default 60 $model.timeout }}
+        verify_ssl: {{ if hasKey $model "verifySsl" }}{{ $model.verifySsl }}{{ else }}true{{ end }}
+      {{- end }}
+      {{- end }}
 {{- end }}

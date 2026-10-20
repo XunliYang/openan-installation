@@ -201,8 +201,30 @@ registry:
 # Orchestration Center Configuration (Optional)
 # =============================================================================
 orchestration:
+  modelsConfigMap: ""  # Existing complete models.yaml; bypass the shortcuts below.
+  runtimeSecret: ""  # Optional model-provider credentials for an external model file.
+  persistence:
+    existingClaim: ""
+    size: 10Gi
+    storageClassName: ""
+  # Vector retrieval policy — requires an OC image with RETRIEVAL_* deployment
+  # alias support (orchestration-center #179 or later); older images silently
+  # ignore these keys and the feature stays off.
+  retrieval:
+    vector:
+      enabled: false
+      topK: 5
+      minScore: 0
+      rerank: false
+      llmFinal: true
+      strict: false
+      indexFile: data/vector_index/psop_vectors.json
+    llm:
+      thinking: true
   # Set to false to skip orchestration-center deployment
   enabled: true
+  # Pinned to 1: file-backed runtime state (the data/ PVC) is not shareable
+  # across replicas; scale-out needs shared storage and a storage review first.
   replicas: 1
   image:
     repository: ghcr.io/project-openan/orchestration-center
@@ -247,12 +269,14 @@ orchestration:
       apiKey: ""
       existingSecret: ""
       existingSecretKey: "orchestration-llm-embed-api-key"
+      keyless: false
     rerank:
       model: ""
       url: ""
       apiKey: ""
       existingSecret: ""
       existingSecretKey: "orchestration-llm-rerank-api-key"
+      keyless: false
   # Resource limits
   resources:
     requests:

@@ -75,7 +75,7 @@ spec:
               key: db-password
               {{- end }}
         {{- range $cap, $model := $c.llm }}
-        {{- if or $model.existingSecret $model.apiKey }}
+        {{- if and $model.model (not $model.keyless) (or $model.existingSecret $model.apiKey) }}
         - name: LLM_{{ upper $cap }}_API_KEY
           valueFrom:
             secretKeyRef:

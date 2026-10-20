@@ -16,7 +16,9 @@ data:
         provider: {{ default "openai_compatible" $model.provider | quote }}
         model: {{ $model.model | quote }}
         url: {{ $model.url | quote }}
+        {{- if not $model.keyless }}
         api_key_env: LLM_{{ upper $cap }}_API_KEY
+        {{- end }}
         timeout: {{ default 60 $model.timeout }}
         verify_ssl: {{ if hasKey $model "verifySsl" }}{{ $model.verifySsl }}{{ else }}true{{ end }}
       {{- end }}

@@ -1,0 +1,9 @@
+{{/* Copyright (c) 2026 Huawei Technologies Co., Ltd. SPDX-License-Identifier: Apache-2.0 */}}
+{{- if .Values.orchestration.enabled }}
+{{- if or (ne (toString .Values.orchestration.replicas) "1") .Values.orchestration.hpa.enabled }}
+{{- fail "OC runtime files and sessions require one replica with HPA disabled" }}
+{{- end }}
+{{- if and (not .Values.orchestration.persistence.existingClaim) (not .Values.orchestration.persistence.size) }}
+{{- fail "orchestration.persistence.size is required" }}
+{{- end }}
+{{- end }}

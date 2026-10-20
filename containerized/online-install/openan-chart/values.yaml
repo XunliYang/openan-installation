@@ -147,6 +147,20 @@ registry:
 # Orchestration Center Configuration (Optional)
 # =============================================================================
 orchestration:
+  # Vector retrieval policy — requires an OC image with RETRIEVAL_* deployment
+  # alias support (orchestration-center #179 or later); older images silently
+  # ignore these keys and the feature stays off.
+  retrieval:
+    vector:
+      enabled: false
+      topK: 5
+      minScore: 0
+      rerank: false
+      llmFinal: true
+      strict: false
+      indexFile: data/vector_index/psop_vectors.json
+    llm:
+      thinking: true
   ingressClientSecret: ""
   runtimeSecret: ""  # ENV: OC_ADMIN_INITIAL_PASSWORD, REGISTRY_ACCESS_TOKEN, model secrets
   extraEnv: {}  # Non-secret ORCH_* settings
@@ -196,12 +210,14 @@ orchestration:
       apiKey: ""
       existingSecret: ""
       existingSecretKey: "orchestration-llm-embed-api-key"
+      keyless: false
     rerank:
       model: ""
       url: ""
       apiKey: ""
       existingSecret: ""
       existingSecretKey: "orchestration-llm-rerank-api-key"
+      keyless: false
   # A2A-T SDK LLM used by workflow negotiation/execution — independent of
   # llm.chat. The API key belongs in runtimeSecret as A2AT_LLM_API_KEY.
   a2atLlm:
