@@ -1,0 +1,27 @@
+{{/* Copyright (c) 2026 Huawei Technologies Co., Ltd. SPDX-License-Identifier: Apache-2.0 */}}
+{{- if .Values.orchestration.enabled }}
+{{- $c := .Values.orchestration }}
+{{- $v := $c.retrieval.vector }}
+{{- range $key := list "enabled" "rerank" "llmFinal" "strict" }}
+{{- if not (kindIs "bool" (index $v $key)) }}{{ fail (printf "orchestration.retrieval.vector.%s must be boolean" $key) }}{{ end }}
+{{- end }}
+{{- if not (kindIs "bool" $c.retrieval.llm.thinking) }}{{ fail "orchestration.retrieval.llm.thinking must be boolean" }}{{ end }}
+{{- if or (not (regexMatch "^[0-9]+$" (toString $v.topK))) (lt (int $v.topK) 1) }}{{ fail "orchestration.retrieval.vector.topK must be a positive integer" }}{{ end }}
+{{- if not (regexMatch "^-?([0-9]+([.][0-9]*)?|[.][0-9]+)$" (toString $v.minScore)) }}{{ fail "orchestration.retrieval.vector.minScore must be finite numeric" }}{{ end }}
+{{- if not (hasPrefix "data/" $v.indexFile) }}{{ fail "retrieval indexFile must stay under the persistent data/ directory" }}{{ end }}
+{{- if has ".." (splitList "/" $v.indexFile) }}{{ fail "retrieval indexFile must not traverse outside data/" }}{{ end }}
+{{- if not $c.modelsConfigMap }}
+{{- range $cap, $model := $c.llm }}
+{{- if $model.model }}
+{{- if not $model.url }}{{ fail (printf "orchestration.llm.%s.url is required" $cap) }}{{ end }}
+{{- if not (has (default "openai_compatible" $model.provider) (list "openai_compatible" "openai")) }}{{ fail "use modelsConfigMap for provider/auth extensions" }}{{ end }}
+{{- if and $model.keyless (or $model.apiKey $model.existingSecret) }}{{ fail "keyless model must not also specify apiKey/existingSecret" }}{{ end }}
+{{- if and $model.existingSecret (not $model.existingSecretKey) }}{{ fail "model existingSecretKey is required" }}{{ end }}
+{{- end }}
+{{- end }}
+{{- if $v.enabled }}
+{{- if not $c.llm.embed.model }}{{ fail "enabled vector retrieval requires orchestration.llm.embed or modelsConfigMap" }}{{ end }}
+{{- if and $v.rerank (not $c.llm.rerank.model) }}{{ fail "enabled rerank requires orchestration.llm.rerank or modelsConfigMap" }}{{ end }}
+{{- end }}
+{{- end }}
+{{- end }}

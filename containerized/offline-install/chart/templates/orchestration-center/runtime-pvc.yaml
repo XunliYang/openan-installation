@@ -1,0 +1,20 @@
+{{/* Copyright (c) 2026 Huawei Technologies Co., Ltd. SPDX-License-Identifier: Apache-2.0 */}}
+{{- if and .Values.orchestration.enabled (not .Values.orchestration.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: orchestration-center-runtime
+  namespace: {{ .Values.namespace }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- if eq .Values.orchestration.persistence.storageClassName "-" }}
+  storageClassName: ""
+  {{- else if .Values.orchestration.persistence.storageClassName }}
+  storageClassName: {{ .Values.orchestration.persistence.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.orchestration.persistence.size | quote }}
+{{- end }}

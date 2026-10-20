@@ -8,3 +8,15 @@ models:
     model: replace-with-model-id
     url: https://model.example.invalid/v1/chat/completions
     api_key_env: LLM_CHAT_API_KEY
+# Add these to the OC file before enabling vector recall/rerank. They are optional
+# for the default catalog-only mode. For keyless endpoints omit api_key_env.
+#  embed:
+#    provider: openai_compatible
+#    model: your-embedding-model
+#    url: https://model.example.invalid/v1/embeddings
+#    api_key_env: LLM_EMBED_API_KEY
+#  rerank:
+#    provider: openai_compatible
+#    model: your-rerank-model
+#    url: https://model.example.invalid/v1/rerank
+#    api_key_env: LLM_RERANK_API_KEY

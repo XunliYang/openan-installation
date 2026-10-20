@@ -136,7 +136,7 @@ def test_models_yaml_mounted_for_both_services():
     assert "api_key_env: LLM_EMBED_API_KEY" in rc_models
     assert "apiKey" not in rc_models  # secrets never in the ConfigMap
     oc_models = docs["ConfigMap/orchestration-center-models"]["data"]["models.yaml"]
-    assert "model: m-orch" in oc_models
+    assert yaml.safe_load(oc_models)["models"]["chat"]["model"] == "m-orch"
     assert "embed:" not in oc_models  # OC embed is opt-in (unset in this render)
     rc_spec = docs["Deployment/registry-center"]["spec"]["template"]["spec"]
     rc_mounts = rc_spec["containers"][0]["volumeMounts"]
@@ -156,8 +156,11 @@ def test_orchestration_embed_rerank_llm_renders():
                    "orchestration.llm.rerank.model": "m-oc-rerank",
                    "orchestration.llm.rerank.url": "http://llm/v1/rerank"})
     oc_models = docs["ConfigMap/orchestration-center-models"]["data"]["models.yaml"]
-    assert "model: m-oc-embed" in oc_models and "api_key_env: LLM_EMBED_API_KEY" in oc_models
-    assert "model: m-oc-rerank" in oc_models and "api_key_env: LLM_RERANK_API_KEY" in oc_models
+    oc_capabilities = yaml.safe_load(oc_models)["models"]
+    assert oc_capabilities["embed"]["model"] == "m-oc-embed"
+    assert oc_capabilities["embed"]["api_key_env"] == "LLM_EMBED_API_KEY"
+    assert oc_capabilities["rerank"]["model"] == "m-oc-rerank"
+    assert oc_capabilities["rerank"]["api_key_env"] == "LLM_RERANK_API_KEY"
     config = docs["ConfigMap/orchestration-center-config"]["data"]
     assert config["LLM_EMBED_MODEL"] == "m-oc-embed"
     assert config["LLM_RERANK_URL"] == "http://llm/v1/rerank"

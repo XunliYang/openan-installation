@@ -705,7 +705,7 @@ emit_db_storage() {
     fi
     echo "orchestration:"
     echo "  enabled: true"
-    echo "  replicas: 2"
+    echo "  replicas: 1"
     echo "  image:"
     echo "    repository: ${REG_HOST}/$(REF_REPO "$ORCHESTRATION_CENTER_IMAGE")"
     echo "    tag: $(REF_TAG "$ORCHESTRATION_CENTER_IMAGE")"

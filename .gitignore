@@ -20,3 +20,4 @@ containerized/offline-install-compose/compose/data/
 containerized/offline-install-compose/pki/
 containerized/offline-install-compose/integration_credentials.conf
 containerized/offline-install-compose/*models.yaml
+.pytest-tmp/

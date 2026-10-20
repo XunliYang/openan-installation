@@ -11,6 +11,14 @@ metadata:
   labels:
     {{- include "openan.orchestration.labels" . | nindent 4 }}
 data:
+  RETRIEVAL_VECTOR_ENABLED: {{ .Values.orchestration.retrieval.vector.enabled | quote }}
+  RETRIEVAL_VECTOR_TOP_K: {{ .Values.orchestration.retrieval.vector.topK | quote }}
+  RETRIEVAL_VECTOR_MIN_SCORE: {{ .Values.orchestration.retrieval.vector.minScore | quote }}
+  RETRIEVAL_VECTOR_RERANK: {{ .Values.orchestration.retrieval.vector.rerank | quote }}
+  RETRIEVAL_VECTOR_LLM_FINAL: {{ .Values.orchestration.retrieval.vector.llmFinal | quote }}
+  RETRIEVAL_VECTOR_STRICT: {{ .Values.orchestration.retrieval.vector.strict | quote }}
+  RETRIEVAL_VECTOR_INDEX_FILE: {{ .Values.orchestration.retrieval.vector.indexFile | quote }}
+  RETRIEVAL_LLM_THINKING: {{ .Values.orchestration.retrieval.llm.thinking | quote }}
   # db_config.json — the image only ships db_config.json.template and the
   # entrypoint expects the rendered file to exist; provide it via ConfigMap.
   db_config.json: |
