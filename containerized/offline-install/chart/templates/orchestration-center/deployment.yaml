@@ -100,6 +100,32 @@ spec:
               name: {{ .Values.orchestration.llm.chat.existingSecret }}
               key: {{ .Values.orchestration.llm.chat.existingSecretKey }}
         {{- end }}
+        {{- if .Values.orchestration.llm.embed.apiKey }}
+        - name: LLM_EMBED_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: orchestration-center-secret
+              key: llm-embed-api-key
+        {{- else if .Values.orchestration.llm.embed.existingSecret }}
+        - name: LLM_EMBED_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.orchestration.llm.embed.existingSecret }}
+              key: {{ .Values.orchestration.llm.embed.existingSecretKey }}
+        {{- end }}
+        {{- if .Values.orchestration.llm.rerank.apiKey }}
+        - name: LLM_RERANK_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: orchestration-center-secret
+              key: llm-rerank-api-key
+        {{- else if .Values.orchestration.llm.rerank.existingSecret }}
+        - name: LLM_RERANK_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.orchestration.llm.rerank.existingSecret }}
+              key: {{ .Values.orchestration.llm.rerank.existingSecretKey }}
+        {{- end }}
         startupProbe:
           {{- toYaml .Values.orchestration.startupProbe | nindent 10 }}
         livenessProbe:
@@ -120,6 +146,22 @@ spec:
           mountPath: /opt/orchestration-center/etc/ssl
           readOnly: true
         {{- end }}
+        {{- if and .Values.https.enabled .Values.orchestration.registryClientSecret }}
+        - name: registry-tls
+          mountPath: /opt/orchestration-center/etc/registry_tls/trust.cer
+          subPath: trust.cer
+          readOnly: true
+        {{- if .Values.https.verifyClient }}
+        - name: registry-tls
+          mountPath: /opt/orchestration-center/etc/registry_tls/client.cer
+          subPath: client.cer
+          readOnly: true
+        - name: registry-tls
+          mountPath: /opt/orchestration-center/etc/registry_tls/client_key.pem
+          subPath: client_key.pem
+          readOnly: true
+        {{- end }}
+        {{- end }}
       volumes:
       - name: etc-dir
         emptyDir: {}
@@ -134,5 +176,10 @@ spec:
           {{- else }}
           secretName: {{ .Values.orchestration.tls.existingSecret }}
           {{- end }}
+      {{- end }}
+      {{- if and .Values.https.enabled .Values.orchestration.registryClientSecret }}
+      - name: registry-tls
+        secret:
+          secretName: {{ .Values.orchestration.registryClientSecret }}
       {{- end }}
 {{- end }}

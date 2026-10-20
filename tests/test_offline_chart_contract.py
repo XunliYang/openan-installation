@@ -137,7 +137,7 @@ def test_models_yaml_mounted_for_both_services():
     assert "apiKey" not in rc_models  # secrets never in the ConfigMap
     oc_models = docs["ConfigMap/orchestration-center-models"]["data"]["models.yaml"]
     assert "model: m-orch" in oc_models
-    assert "embed:" not in oc_models  # OC values have no embed block
+    assert "embed:" not in oc_models  # OC embed is opt-in (unset in this render)
     rc_spec = docs["Deployment/registry-center"]["spec"]["template"]["spec"]
     rc_mounts = rc_spec["containers"][0]["volumeMounts"]
     assert any(m["mountPath"] == "/opt/registry-center/etc/config/models.yaml" and m["subPath"] == "models.yaml" for m in rc_mounts)
@@ -146,6 +146,71 @@ def test_models_yaml_mounted_for_both_services():
     assert any(m["mountPath"] == "/opt/orchestration-center/etc/config/models.yaml" and m["subPath"] == "models.yaml" for m in oc_mounts)
     oc_env = {e["name"]: e.get("value", "") for e in oc_spec["containers"][0]["env"]}
     assert oc_env["LLM_CONFIG_FILE"] == "/opt/orchestration-center/etc/config/models.yaml"
+
+
+def test_orchestration_embed_rerank_llm_renders():
+    # OC embed drives workflow semantic retrieval; rerank is optional.
+    docs = render({"orchestration.llm.embed.model": "m-oc-embed",
+                   "orchestration.llm.embed.url": "http://llm/v1/embeddings",
+                   "orchestration.llm.embed.apiKey": "oc-embed-key",
+                   "orchestration.llm.rerank.model": "m-oc-rerank",
+                   "orchestration.llm.rerank.url": "http://llm/v1/rerank"})
+    oc_models = docs["ConfigMap/orchestration-center-models"]["data"]["models.yaml"]
+    assert "model: m-oc-embed" in oc_models and "api_key_env: LLM_EMBED_API_KEY" in oc_models
+    assert "model: m-oc-rerank" in oc_models and "api_key_env: LLM_RERANK_API_KEY" in oc_models
+    config = docs["ConfigMap/orchestration-center-config"]["data"]
+    assert config["LLM_EMBED_MODEL"] == "m-oc-embed"
+    assert config["LLM_RERANK_URL"] == "http://llm/v1/rerank"
+    secret = docs["Secret/orchestration-center-secret"]["stringData"]
+    assert secret["llm-embed-api-key"] == "oc-embed-key"
+    assert "llm-rerank-api-key" not in secret  # no rerank apiKey set
+    oc_env = {e["name"]: e.get("value", e.get("valueFrom", {}).get("secretKeyRef", {}).get("key", ""))
+              for e in docs["Deployment/orchestration-center"]["spec"]["template"]["spec"]["containers"][0]["env"]}
+    assert oc_env["LLM_EMBED_API_KEY"] == "llm-embed-api-key"
+
+
+def test_orchestration_verifies_registry_tls():
+    docs = render({"https.enabled": True,
+                   "orchestration.tls.mode": "secret", "orchestration.tls.existingSecret": "oc-tls",
+                   "orchestration.clientVerifyServer": True,
+                   "orchestration.registryClientSecret": "oc-registry-client"})
+    config = docs["ConfigMap/orchestration-center-config"]["data"]
+    assert config["ORCH_CLIENT_VERIFY_SERVER"] == "true"
+    assert config["REGISTRY_CA_FILE"] == "/opt/orchestration-center/etc/registry_tls/trust.cer"
+    assert "REGISTRY_CLIENT_CERT" not in config  # client cert only for registry mTLS
+    spec = docs["Deployment/orchestration-center"]["spec"]["template"]["spec"]
+    volumes = {v["name"]: v for v in spec["volumes"]}
+    assert volumes["registry-tls"]["secret"]["secretName"] == "oc-registry-client"
+    mounts = [m["mountPath"] for m in spec["containers"][0]["volumeMounts"]]
+    assert "/opt/orchestration-center/etc/registry_tls/trust.cer" in mounts
+    # mTLS: client material mounted and env-pointed when the registry requires it
+    # (https.verifyClient also makes the RC ingress require its client secret)
+    mtls = render({"https.enabled": True, "https.verifyClient": True,
+                   "registry.ingressClientSecret": "ingress-client",
+                   "orchestration.registryClientSecret": "oc-registry-client",
+                   "orchestration.clientVerifyServer": True})
+    config = mtls["ConfigMap/orchestration-center-config"]["data"]
+    assert config["REGISTRY_CLIENT_CERT"] == "/opt/orchestration-center/etc/registry_tls/client.cer"
+    spec = mtls["Deployment/orchestration-center"]["spec"]["template"]["spec"]
+    mounts = [m["mountPath"] for m in spec["containers"][0]["volumeMounts"]]
+    assert "/opt/orchestration-center/etc/registry_tls/client_key.pem" in mounts
+    # default render: verification off, no client material
+    default = render()
+    config = default["ConfigMap/orchestration-center-config"]["data"]
+    assert config["ORCH_CLIENT_VERIFY_SERVER"] == "false"
+    assert "REGISTRY_CA_FILE" not in config
+
+
+def test_installer_security_contract():
+    # Security batch: strict mode, no default DB password, credentials only as
+    # Secret references (never inlined into the generated values file).
+    text = (ROOT / "containerized/offline-install/scripts/install.sh").read_text(encoding="utf-8")
+    assert "set -euo pipefail" in text
+    assert "openan-db-password" not in text
+    assert "initialPassword" not in text
+    assert "existingSecret: openan-db-credentials" in text
+    assert "existingSecret: openan-admin" in text
+    assert "create_secret_from_pairs" in text  # stdin JSON, never argv
 
 
 def test_frontend_image_override_beats_type_default():

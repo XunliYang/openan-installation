@@ -225,10 +225,16 @@ kubectl -n openan port-forward svc/openan-frontend 8080:80
 | `orchestration.tls.mode` | TLS mode: `auto` / `secret` / `off` (rendered when `https.enabled=true`) | `auto` |
 | `orchestration.tls.existingSecret` | TLS Secret name | `""` |
 | `orchestration.ingressClientSecret` | Ingress upstream client material (tls.crt, tls.key, ca.crt) for backend verification/mTLS | `""` |
+| `orchestration.clientVerifyServer` | Verify the registry server certificate on OC->RC outbound TLS | `false` |
+| `orchestration.registryClientSecret` | OC->RC client material: trust.cer (+ client.cer, client_key.pem for mTLS) | `""` |
 | `orchestration.llm.chat.model` | Chat model | `your-chat-model` |
 | `orchestration.llm.chat.url` | Chat API URL | `https://your-llm-provider.com/v1/chat/completions` |
 | `orchestration.llm.chat.apiKey` | Chat API Key | `your-api-key` |
 | `orchestration.llm.chat.existingSecret` | Reference existing Secret | `""` |
+| `orchestration.llm.embed.model` | Embed model (workflow semantic retrieval) | `""` |
+| `orchestration.llm.embed.url` | Embed API URL | `""` |
+| `orchestration.llm.rerank.model` | Rerank model (optional, top-N retrieval) | `""` |
+| `orchestration.llm.rerank.url` | Rerank API URL | `""` |
 | `orchestration.hpa.enabled` | Enable HPA | `false` |
 | `orchestration.hpa.minReplicas` | Minimum replicas | `1` |
 | `orchestration.hpa.maxReplicas` | Maximum replicas | `10` |

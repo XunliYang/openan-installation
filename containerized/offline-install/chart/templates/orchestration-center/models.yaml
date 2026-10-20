@@ -19,4 +19,18 @@ data:
         model: {{ .Values.orchestration.llm.chat.model }}
         url: {{ .Values.orchestration.llm.chat.url }}
         api_key_env: LLM_CHAT_API_KEY
+    {{- with .Values.orchestration.llm.embed.model }}
+      embed:
+        provider: openai_compatible
+        model: {{ $.Values.orchestration.llm.embed.model }}
+        url: {{ $.Values.orchestration.llm.embed.url }}
+        api_key_env: LLM_EMBED_API_KEY
+    {{- end }}
+    {{- with .Values.orchestration.llm.rerank.model }}
+      rerank:
+        provider: openai_compatible
+        model: {{ $.Values.orchestration.llm.rerank.model }}
+        url: {{ $.Values.orchestration.llm.rerank.url }}
+        api_key_env: LLM_RERANK_API_KEY
+    {{- end }}
 {{- end }}

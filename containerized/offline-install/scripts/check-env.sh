@@ -168,6 +168,12 @@ check_k8s() {
         fail "ctr not found — containerd is required (see docs/KUBEADM_CLUSTER.md)"
     fi
 
+    if have curl; then
+        pass "curl: $(curl --version 2>/dev/null | head -1 | awk '{print $1, $2}')"
+    else
+        fail "curl not found — required for registry readiness checks and API smoke tests"
+    fi
+
     section "Cluster"
     if kubectl cluster-info >/dev/null 2>&1; then
         pass "cluster reachable"

@@ -147,6 +147,8 @@ load_config() {
 
 save_config() {
     local file="$1"
+    # umask 077 in a subshell: private at creation, not after a world-readable write
+    (umask 077
     {
         echo "# OpenAN offline installation config (generated $(date -u +%Y-%m-%dT%H:%M:%SZ))"
         echo "K8S_NAMESPACE=\"${K8S_NAMESPACE}\""
@@ -163,6 +165,7 @@ save_config() {
         echo "RC_TLS_SECRET=\"${RC_TLS_SECRET}\""
         echo "OC_TLS_SECRET=\"${OC_TLS_SECRET}\""
         echo "INGRESS_CLIENT_SECRET=\"${INGRESS_CLIENT_SECRET}\""
+        echo "REGISTRY_CLIENT_SECRET=\"${REGISTRY_CLIENT_SECRET}\""
         echo "PUBLIC_TLS_SECRET=\"${PUBLIC_TLS_SECRET}\""
         echo "DB_TYPE=\"${DB_TYPE}\""
         echo "DB_PASSWORD=\"${DB_PASSWORD}\""
@@ -188,6 +191,7 @@ save_config() {
         echo "REGISTRY_SIGNATURE_VALIDATION_ENABLED=\"${REGISTRY_SIGNATURE_VALIDATION_ENABLED}\""
         echo "START_AGENTS_SERVER=\"${START_AGENTS_SERVER}\""
     } >"$file"
+    )
     chmod 600 "$file"
     log_info "Wrote config to $file"
 }

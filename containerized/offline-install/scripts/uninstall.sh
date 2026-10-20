@@ -99,9 +99,10 @@ uninstall_k8s() {
     fi
 
     # ------------------------------------------------------------------
-    # 2b. Installer-generated TLS Secrets (labeled openan-offline-installer)
+    # 2b. Installer-generated Secrets (labeled openan-offline-installer)
     # ------------------------------------------------------------------
-    for secret in openan-rc-tls openan-oc-tls openan-ingress-client openan-public-tls; do
+    for secret in openan-rc-tls openan-oc-tls openan-ingress-client openan-public-tls \
+                  openan-registry-client openan-db-credentials openan-admin openan-llm-keys; do
         if [ "$("$KUBECTL" -n "$ns" get secret "$secret" -o jsonpath='{.metadata.labels.openan-offline-installer}' 2>/dev/null)" = "true" ]; then
             "$KUBECTL" -n "$ns" delete secret "$secret" --ignore-not-found --timeout=60s 2>/dev/null || true
             log_info "Deleted generated TLS Secret: $secret"

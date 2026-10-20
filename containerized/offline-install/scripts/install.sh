@@ -15,7 +15,7 @@
 #   scripts/install.sh --config config.env   # non-interactive
 #   scripts/install.sh --config config.env --yes --skip-check
 
-set -o pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUNDLE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -28,7 +28,8 @@ ASSUME_YES="false"
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --config)     CONFIG_FILE="$2"; shift 2 ;;
+        --config)     [ $# -ge 2 ] || { log_error "--config requires a file argument"; exit 2; }
+                      CONFIG_FILE="$2"; shift 2 ;;
         --yes|-y)     ASSUME_YES="true"; shift ;;
         --skip-check) SKIP_CHECK="true"; shift ;;
         -h|--help)    sed -n '2,18p' "$0"; exit 0 ;;
@@ -55,6 +56,9 @@ HTTPS_VERIFY_CLIENT="false"
 RC_TLS_SECRET=""
 OC_TLS_SECRET=""
 INGRESS_CLIENT_SECRET=""
+# Optional OC->RC client material (trust.cer + client.cer/client_key.pem for
+# mTLS); empty in generate mode = auto-created as openan-registry-client.
+REGISTRY_CLIENT_SECRET=""
 PUBLIC_TLS_SECRET=""
 STORAGE_MODE="auto"
 STORAGE_CLASS=""
@@ -62,7 +66,9 @@ STORAGE_SIZE="20Gi"
 HOSTPATH="/data/openan-postgres"
 STORAGE_NODE=""
 DB_TYPE="mysql"
-DB_PASSWORD="openan-db-password"
+# Required: no default password. 8+ characters (the database init script
+# seeds the application users with this value).
+DB_PASSWORD=""
 REGISTRY_CENTER_IMAGE="project-openan/registry-center:v1.0.0"
 ORCHESTRATION_CENTER_IMAGE="project-openan/orchestration-center:v1.0.0"
 WORKFLOW_DESIGNER_IMAGE="project-openan/workflow-designer:v1.0.0"
@@ -81,7 +87,10 @@ LLM_VALIDATE="false"
 REGISTRY_SIGNATURE_VALIDATION_ENABLED="false"
 START_AGENTS_SERVER="false"
 
-[ -n "$CONFIG_FILE" ] && load_config "$CONFIG_FILE"
+if [ -n "$CONFIG_FILE" ]; then
+    [ -r "$CONFIG_FILE" ] || { log_error "Config file not readable: $CONFIG_FILE"; exit 2; }
+    load_config "$CONFIG_FILE"
+fi
 
 # --- Normalize booleans (config values are free-text strings) -----------------
 normalize_bool() {
@@ -112,7 +121,7 @@ case "$DB_TYPE" in
     *) log_error "Invalid DB_TYPE: $DB_TYPE (use postgresql|mysql)"; exit 2 ;;
 esac
 
-ARCH="$(detect_arch)"
+ARCH="$(detect_arch || true)"
 [ -n "$ARCH" ] || { log_error "unsupported architecture: $(uname -m)"; exit 1; }
 
 # --- Tool resolution (prefer bundled binaries) -------------------------------
@@ -139,9 +148,15 @@ log_info "helm:    $HELM"
 # ---------------------------------------------------------------------------
 if [ "$ASSUME_YES" != "true" ] && [ -z "$CONFIG_FILE" ]; then
     log_step "[1/7] Configuration"
+    prompt_bool() {  # <current-value> <prompt> -> prints true/false
+        if ask_yes_no "$2" "$([ "$1" = "true" ] && echo yes || echo no)"; then
+            echo "true"
+        else
+            echo "false"
+        fi
+    }
     K8S_NAMESPACE="$(ask_input "  Kubernetes namespace" "$K8S_NAMESPACE")"
-    INSTALL_METALLB_ANS="$(ask_input "  Install MetalLB for LoadBalancer? (true/false)" "$INSTALL_METALLB")"
-    INSTALL_METALLB="$INSTALL_METALLB_ANS"
+    INSTALL_METALLB="$(prompt_bool "$INSTALL_METALLB" "  Install MetalLB for LoadBalancer?")"
     if [ "$INSTALL_METALLB" = "true" ]; then
         METALLB_POOL="$(ask_input "  MetalLB IP pool (e.g. 192.168.1.200-192.168.1.250)" "$METALLB_POOL")"
     fi
@@ -163,7 +178,7 @@ if [ "$ASSUME_YES" != "true" ] && [ -z "$CONFIG_FILE" ]; then
         HTTPS_ENABLED="false"
     fi
     DB_TYPE="$(ask_choice "  Database backend:" "mysql" "postgresql")"
-    DB_PASSWORD="$(ask_input_secret "  Database password" "$DB_PASSWORD")"
+    DB_PASSWORD="$(ask_input_secret "  Database password (8+ characters)" "")"
     REGISTRY_CHAT_MODEL="$(ask_input "  Registry Center chat model" "$REGISTRY_CHAT_MODEL")"
     REGISTRY_CHAT_URL="$(ask_input "  Registry Center chat URL" "$REGISTRY_CHAT_URL")"
     if [ -n "$REGISTRY_CHAT_URL" ]; then
@@ -174,12 +189,10 @@ if [ "$ASSUME_YES" != "true" ] && [ -z "$CONFIG_FILE" ]; then
     if [ -n "$ORCH_CHAT_URL" ]; then
         ORCH_CHAT_APIKEY="$(ask_input_secret "  Orchestration Center API key" "")"
     fi
-    LLM_VALIDATE_ANS="$(ask_input "  Validate LLM connectivity now? (true/false)" "$LLM_VALIDATE")"
-    LLM_VALIDATE="$LLM_VALIDATE_ANS"
+    LLM_VALIDATE="$(prompt_bool "$LLM_VALIDATE" "  Validate LLM connectivity now?")"
     FRONTEND_TYPE="$(ask_choice "  Frontend:" "portal" "workflow-designer")"
     OC_ADMIN_PASSWORD="$(ask_input_secret "  OC admin password (portal login)" "$OC_ADMIN_PASSWORD")"
-    START_AGENTS_ANS="$(ask_input "  Start the sample agents server in orchestration-center? (true/false)" "$START_AGENTS_SERVER")"
-    START_AGENTS_SERVER="$START_AGENTS_ANS"
+    START_AGENTS_SERVER="$(prompt_bool "$START_AGENTS_SERVER" "  Start the sample agents server in orchestration-center?")"
 fi
 
 if [ -z "$OC_ADMIN_PASSWORD" ]; then
@@ -188,11 +201,43 @@ if [ -z "$OC_ADMIN_PASSWORD" ]; then
     exit 2
 fi
 
+# --- Validation (after prompts: interactive answers override config.env) -----
+if [ -n "$INGRESS_HOST" ]; then
+    if printf '%s' "$INGRESS_HOST" | grep -Eq '^[0-9.]+$' || printf '%s' "$INGRESS_HOST" | grep -q ':'; then
+        log_error "INGRESS_HOST must be a DNS name, not an IP address (Kubernetes rejects IP hosts; leave empty for direct IP access)"
+        exit 2
+    fi
+fi
+if [ -z "$DB_PASSWORD" ]; then
+    log_error "DB_PASSWORD is required (config.env or the interactive prompt); there is no default."
+    exit 2
+fi
+if [ "${#DB_PASSWORD}" -lt 8 ]; then
+    log_error "DB_PASSWORD must be at least 8 characters"
+    exit 2
+fi
+if ! printf '%s' "$K8S_NAMESPACE" | grep -Eq '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$' || [ "${#K8S_NAMESPACE}" -gt 63 ]; then
+    log_error "K8S_NAMESPACE must be a lowercase DNS label (a-z, 0-9, '-'), max 63 characters"
+    exit 2
+fi
+if [ "$INSTALL_METALLB" = "true" ] && [ -n "$METALLB_POOL" ]; then
+    pool_ok="true"
+    IFS=','
+    for token in $METALLB_POOL; do
+        printf '%s' "$token" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}(-[0-9]{1,3}(\.[0-9]{1,3}){3}|/[0-9]{1,2})?$' || pool_ok="false"
+    done
+    unset IFS
+    [ "$pool_ok" = "true" ] || {
+        log_error "METALLB_POOL must be IP ranges (a.b.c.d-a.b.c.d) and/or CIDRs (a.b.c.d/n), comma-separated"
+        exit 2
+    }
+fi
+
 if [ -z "$REGISTRY_NODE" ]; then
     REGISTRY_NODE="$(hostname | tr '[:upper:]' '[:lower:]')"
 fi
 if [ -z "$REGISTRY_NODE_IP" ]; then
-    REGISTRY_NODE_IP="$(default_ip)"
+    REGISTRY_NODE_IP="$(default_ip || true)"
 fi
 if [ -z "$STORAGE_NODE" ]; then
     STORAGE_NODE="$REGISTRY_NODE"
@@ -208,6 +253,8 @@ if [ "$SKIP_CHECK" != "true" ]; then
     # interactive mode (no --config file).
     export K8S_NAMESPACE INSTALL_REGISTRY REGISTRY_NODE REGISTRY_NODE_IP \
         REGISTRY_NODEPORT INSTALL_METALLB METALLB_POOL INGRESS_HOST \
+        HTTPS_ENABLED HTTPS_VERIFY_CLIENT \
+        RC_TLS_SECRET OC_TLS_SECRET INGRESS_CLIENT_SECRET REGISTRY_CLIENT_SECRET \
         STORAGE_MODE STORAGE_CLASS STORAGE_SIZE HOSTPATH STORAGE_NODE \
         DB_TYPE FRONTEND_TYPE OC_ADMIN_PASSWORD REGISTRY_CHAT_URL LLM_VALIDATE
     check_args=()
@@ -219,6 +266,19 @@ if [ "$SKIP_CHECK" != "true" ]; then
     fi
 else
     log_warn "Skipping environment check (--skip-check)"
+fi
+
+# --- REGISTRY_NODE must match an actual Kubernetes node name ------------------
+# The in-cluster registry and hostPath storage pin to this node; a hostname
+# that differs from the node name (case, FQDN) leaves them unschedulable.
+if node_list="$("$KUBECTL" get nodes -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)"; then
+    if ! printf '%s\n' "$node_list" | tr ' ' '\n' | grep -qx "$REGISTRY_NODE"; then
+        log_error "REGISTRY_NODE '$REGISTRY_NODE' is not a Kubernetes node name (hostname case mismatch?)."
+        log_error "Available nodes: $node_list"
+        exit 1
+    fi
+else
+    log_warn "Cannot list nodes to validate REGISTRY_NODE ('$REGISTRY_NODE')"
 fi
 
 # ---------------------------------------------------------------------------
@@ -398,7 +458,7 @@ if [ "$INSTALL_METALLB" = "true" ]; then
         "$KUBECTL" apply -f /tmp/openan-metallb.yaml >/dev/null || { log_error "MetalLB apply failed"; exit 1; }
         "$KUBECTL" -n metallb-system rollout status deploy/metallb-controller --timeout=180s || true
         for _ in $(seq 1 24); do
-            "$KUBECTL" get crd ipaddresspools.metallb.io >/dev/null 2>&1 && break
+            "$KUBECTL" get crd ipaddresspools.metallb.io >/dev/null 2>&1 && break || true
             sleep 5
         done
     fi
@@ -452,8 +512,8 @@ if "$KUBECTL" get svc -n ingress-nginx ingress-nginx-controller >/dev/null 2>&1;
     if [ "$INSTALL_METALLB" = "true" ] || [ "$svc_type" = "LoadBalancer" ]; then
         log_info "Waiting for a LoadBalancer IP..."
         for _ in $(seq 1 36); do
-            INGRESS_IP="$("$KUBECTL" get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)"
-            [ -n "$INGRESS_IP" ] && break
+            INGRESS_IP="$("$KUBECTL" get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)"
+            [ -n "$INGRESS_IP" ] && break || true
             sleep 5
         done
     fi
@@ -514,6 +574,13 @@ if [ "$HTTPS_ENABLED" = "true" ]; then
             "tls.crt=$CERT_DIR/ingress-client/tls.crt" \
             "tls.key=$CERT_DIR/ingress-client/tls.key" \
             "ca.crt=$CERT_DIR/ca/ca.cer"
+        if [ -z "$REGISTRY_CLIENT_SECRET" ]; then
+            REGISTRY_CLIENT_SECRET="openan-registry-client"
+            create_secret_from_files "$REGISTRY_CLIENT_SECRET" \
+                "trust.cer=$CERT_DIR/ca/ca.cer" \
+                "client.cer=$CERT_DIR/ingress-client/tls.crt" \
+                "client_key.pem=$CERT_DIR/ingress-client/tls.key"
+        fi
         if [ -n "$INGRESS_HOST" ]; then
             PUBLIC_TLS_SECRET="openan-public-tls"
             if "$KUBECTL" -n "$K8S_NAMESPACE" get secret "$PUBLIC_TLS_SECRET" >/dev/null 2>&1; then
@@ -526,6 +593,41 @@ if [ "$HTTPS_ENABLED" = "true" ]; then
         fi
         log_info "TLS Secrets ready (ingress verifies backends against the shared CA)"
     fi
+fi
+
+# Secrets travel via stdin JSON (kubectl create -f -), never argv or disk.
+create_secret_from_pairs() {
+    local name="$1"; shift
+    if "$KUBECTL" -n "$K8S_NAMESPACE" get secret "$name" >/dev/null 2>&1; then
+        log_info "Secret $name already exists, reusing"
+        return 0
+    fi
+    printf '%s\n' "$@" | python3 -c '
+import base64, json, sys
+data = {}
+for line in sys.stdin:
+    key, sep, value = line.rstrip("\n").partition("=")
+    if sep and key:
+        data[key] = base64.b64encode(value.encode()).decode()
+document = {"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
+            "metadata": {"namespace": sys.argv[1], "name": sys.argv[2],
+                         "labels": {"openan-offline-installer": "true"}},
+            "data": data}
+print(json.dumps(document))' "$K8S_NAMESPACE" "$name" | "$KUBECTL" create -f - >/dev/null
+}
+
+# Credentials as Kubernetes Secrets; the generated values file carries
+# references only (no secrets in config.values.yaml or Helm release data).
+create_secret_from_pairs "openan-db-credentials" \
+    "postgres-password=${DB_PASSWORD}" \
+    "mysql-root-password=${DB_PASSWORD}"
+create_secret_from_pairs "openan-admin" \
+    "admin-password=${OC_ADMIN_PASSWORD}"
+LLM_PAIRS=()
+[ -n "$REGISTRY_CHAT_APIKEY" ] && LLM_PAIRS+=("registry-chat=${REGISTRY_CHAT_APIKEY}")
+[ -n "$ORCH_CHAT_APIKEY" ] && LLM_PAIRS+=("orch-chat=${ORCH_CHAT_APIKEY}")
+if [ ${#LLM_PAIRS[@]} -gt 0 ]; then
+    create_secret_from_pairs "openan-llm-keys" "${LLM_PAIRS[@]}"
 fi
 
 VALUES="$BUNDLE_DIR/config.values.yaml"
@@ -546,6 +648,7 @@ emit_db_storage() {
     fi
 }
 
+(umask 077
 {
     echo "namespace: ${K8S_NAMESPACE}"
     echo "database:"
@@ -556,9 +659,10 @@ emit_db_storage() {
     echo "postgresql:"
     if [ "$DB_TYPE" = "mysql" ]; then
         echo "  enabled: false"
+        echo "  existingSecret: openan-db-credentials"
     else
         echo "  enabled: true"
-        echo "  password: \"${DB_PASSWORD}\""
+        echo "  existingSecret: openan-db-credentials"
         echo "  image: \"${REG_HOST}/${POSTGRES_IMAGE}\""
         emit_db_storage "$HOSTPATH"
     fi
@@ -568,11 +672,12 @@ emit_db_storage() {
         MYSQL_HOSTPATH="${HOSTPATH}"
         [ "$MYSQL_HOSTPATH" = "/data/openan-postgres" ] && MYSQL_HOSTPATH="/data/openan-mysql"
         echo "  enabled: true"
-        echo "  password: \"${DB_PASSWORD}\""
+        echo "  existingSecret: openan-db-credentials"
         echo "  image: \"${REG_HOST}/${MYSQL_IMAGE}\""
         emit_db_storage "$MYSQL_HOSTPATH"
     else
         echo "  enabled: false"
+        echo "  existingSecret: openan-db-credentials"
     fi
     echo "registry:"
     echo "  enabled: true"
@@ -593,7 +698,10 @@ emit_db_storage() {
         echo "    chat:"
         echo "      model: \"${REGISTRY_CHAT_MODEL}\""
         echo "      url: \"${REGISTRY_CHAT_URL}\""
-        echo "      apiKey: \"${REGISTRY_CHAT_APIKEY}\""
+        if [ -n "$REGISTRY_CHAT_APIKEY" ]; then
+            echo "      existingSecret: openan-llm-keys"
+            echo "      existingSecretKey: registry-chat"
+        fi
     fi
     echo "orchestration:"
     echo "  enabled: true"
@@ -603,19 +711,28 @@ emit_db_storage() {
     echo "    tag: $(REF_TAG "$ORCHESTRATION_CENTER_IMAGE")"
     echo "    pullPolicy: IfNotPresent"
     echo "  admin:"
-    echo "    initialPassword: \"${OC_ADMIN_PASSWORD}\""
+    echo "    existingSecret: openan-admin"
     if [ "$HTTPS_ENABLED" = "true" ]; then
         echo "  tls:"
         echo "    mode: secret"
         echo "    existingSecret: \"${OC_TLS_SECRET}\""
         echo "  ingressClientSecret: \"${INGRESS_CLIENT_SECRET}\""
+        if [ -n "$REGISTRY_CLIENT_SECRET" ]; then
+            echo "  clientVerifyServer: true"
+            echo "  registryClientSecret: \"${REGISTRY_CLIENT_SECRET}\""
+        else
+            echo "  clientVerifyServer: false"
+        fi
     fi
     if [ -n "$ORCH_CHAT_MODEL" ]; then
         echo "  llm:"
         echo "    chat:"
         echo "      model: \"${ORCH_CHAT_MODEL}\""
         echo "      url: \"${ORCH_CHAT_URL}\""
-        echo "      apiKey: \"${ORCH_CHAT_APIKEY}\""
+        if [ -n "$ORCH_CHAT_APIKEY" ]; then
+            echo "      existingSecret: openan-llm-keys"
+            echo "      existingSecretKey: orch-chat"
+        fi
     fi
     echo "frontend:"
     echo "  enabled: true"
@@ -643,6 +760,7 @@ emit_db_storage() {
         fi
     fi
 } >"$VALUES"
+)
 chmod 600 "$VALUES"
 
 if "$HELM" status openan -n "$K8S_NAMESPACE" >/dev/null 2>&1; then
@@ -666,11 +784,11 @@ log_step "[7/7] Verifying deployment"
 SELFCHECK="ok"
 log_info "Waiting for pods to become ready..."
 for _ in $(seq 1 60); do
-    not_ready="$("$KUBECTL" -n "$K8S_NAMESPACE" get pods --no-headers 2>/dev/null | grep -Evc "Running|Completed")"
-    [ "$not_ready" = "0" ] && break
+    not_ready="$("$KUBECTL" -n "$K8S_NAMESPACE" get pods --no-headers 2>/dev/null | grep -Evc "Running|Completed" || true)"
+    [ "$not_ready" = "0" ] && break || true
     sleep 5
 done
-"$KUBECTL" -n "$K8S_NAMESPACE" get pods
+"$KUBECTL" -n "$K8S_NAMESPACE" get pods || true
 
 if "$KUBECTL" -n "$K8S_NAMESPACE" get pods --no-headers 2>/dev/null | grep -Evq "Running|Completed"; then
     log_error "Some pods are not Running"
@@ -678,13 +796,13 @@ if "$KUBECTL" -n "$K8S_NAMESPACE" get pods --no-headers 2>/dev/null | grep -Evq 
 fi
 
 # Registry catalog
-catalog="$(curl -sf -m 5 "http://${REG_HOST}/v2/_catalog" 2>/dev/null)"
+catalog="$(curl -sf -m 5 "http://${REG_HOST}/v2/_catalog" 2>/dev/null || true)"
 if [ -n "$catalog" ]; then log_info "Registry catalog: $catalog"; else log_warn "Registry catalog unreachable"; fi
 
 # Optional demo agents server
 if [ "$START_AGENTS_SERVER" = "true" ]; then
     log_info "Starting agent examples server (optional)..."
-    ORCH_POD="$("$KUBECTL" -n "$K8S_NAMESPACE" get pods -l app=orchestration-center -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)"
+    ORCH_POD="$("$KUBECTL" -n "$K8S_NAMESPACE" get pods -l app=orchestration-center -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
     if [ -n "$ORCH_POD" ]; then
         "$KUBECTL" exec "$ORCH_POD" -n "$K8S_NAMESPACE" -- /bin/sh -c \
             "cd /opt/orchestration-center && PYTHONPATH=/opt/orchestration-center nohup python3 samples/start_agents_server.py > /tmp/agents-server.log 2>&1 &" 2>/dev/null \
@@ -698,7 +816,7 @@ smoke() {
     local url="$1" name="$2"
     local code
     # CURL_EXTRA carries --resolve/--cacert (or -k) for public HTTPS
-    code="$(curl $CURL_EXTRA -s -o /dev/null -w '%{http_code}' -m 10 "$url" 2>/dev/null)"
+    code="$(curl $CURL_EXTRA -s -o /dev/null -w '%{http_code}' -m 10 "$url" 2>/dev/null || true)"
     if [ "$code" -ge 200 ] 2>/dev/null && [ "$code" -lt 500 ] 2>/dev/null; then
         log_info "smoke $name: HTTP $code"
     else
@@ -727,8 +845,8 @@ if [ -n "$INGRESS_IP" ]; then
         smoke "http://${INGRESS_IP}/api/registry/rest/v1/registry-center/agent-cards" "registry-via-gateway"
     fi
 else
-    NODE_PORT="$("$KUBECTL" -n "$K8S_NAMESPACE" get svc openan-frontend -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null)"
-    NODE_IP="$("$KUBECTL" get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null)"
+    NODE_PORT="$("$KUBECTL" -n "$K8S_NAMESPACE" get svc openan-frontend -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || true)"
+    NODE_IP="$("$KUBECTL" get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)"
     echo "  Access URL (NodePort): http://${NODE_IP}:${NODE_PORT}/"
 fi
 echo ""

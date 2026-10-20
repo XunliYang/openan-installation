@@ -227,7 +227,13 @@ orchestration:
   # mTLS: Secret with tls.crt, tls.key, ca.crt (required when
   # ingress.backendVerifyServer=true or https.verifyClient=true).
   ingressClientSecret: ""
-  # LLM configuration for orchestration-center
+  # OC->RC outbound TLS: verify the registry server certificate and present
+  # a client certificate when the registry requires mTLS. Secret with
+  # trust.cer (+ client.cer, client_key.pem when https.verifyClient=true).
+  clientVerifyServer: false
+  registryClientSecret: ""
+  # LLM configuration for orchestration-center (embed drives workflow
+  # semantic retrieval; rerank is optional for top-N retrieval).
   llm:
     chat:
       model: "your-chat-model"
@@ -235,6 +241,18 @@ orchestration:
       apiKey: "your-api-key"
       existingSecret: ""
       existingSecretKey: "orchestration-llm-chat-api-key"
+    embed:
+      model: ""
+      url: ""
+      apiKey: ""
+      existingSecret: ""
+      existingSecretKey: "orchestration-llm-embed-api-key"
+    rerank:
+      model: ""
+      url: ""
+      apiKey: ""
+      existingSecret: ""
+      existingSecretKey: "orchestration-llm-rerank-api-key"
   # Resource limits
   resources:
     requests:

@@ -261,7 +261,7 @@ flowchart TD
 
 ## 5. Configuration Contract
 
-### 5.1 config.env (33 keys)
+### 5.1 config.env (38 keys)
 
 Grouped summary (authoritative list: `config.env.example`):
 
@@ -272,24 +272,68 @@ Grouped summary (authoritative list: `config.env.example`):
 | Infra add-ons | `INSTALL_METALLB`, `METALLB_POOL`, `INGRESS_HOST` |
 | Frontend | `FRONTEND_TYPE` (`portal` default) |
 | Access control | `OC_ADMIN_PASSWORD` (required) |
-| Transport security | `HTTPS_ENABLED` (default true), `HTTPS_VERIFY_CLIENT`, `RC_TLS_SECRET`, `OC_TLS_SECRET`, `INGRESS_CLIENT_SECRET` |
+| Transport security | `HTTPS_ENABLED` (default true), `HTTPS_VERIFY_CLIENT`, `RC_TLS_SECRET`, `OC_TLS_SECRET`, `INGRESS_CLIENT_SECRET`, `REGISTRY_CLIENT_SECRET` (optional OC→RC), `PUBLIC_TLS_SECRET` |
 | Storage | `STORAGE_MODE`, `STORAGE_CLASS`, `STORAGE_SIZE`, `HOSTPATH`, `STORAGE_NODE` |
-| Database | `DB_TYPE`, `DB_PASSWORD` |
+| Database | `DB_TYPE`, `DB_PASSWORD` (required, 8+) |
 | Images | `REGISTRY_CENTER_IMAGE`, `ORCHESTRATION_CENTER_IMAGE`, `WORKFLOW_DESIGNER_IMAGE`, `PORTAL_IMAGE`, `POSTGRES_IMAGE`, `MYSQL_IMAGE` (registry-relative) |
 | LLM | `REGISTRY_CHAT_{MODEL,URL,APIKEY}`, `ORCH_CHAT_{MODEL,URL,APIKEY}`, `LLM_VALIDATE` |
 | Misc | `REGISTRY_SIGNATURE_VALIDATION_ENABLED` (false — plain-HTTP topology, unsigned cards), `START_AGENTS_SERVER` |
 
-### 5.2 Secret reference model
+### 5.2 Parameter resolution and override order
 
-The chart renders `stringData` Secrets (`registry-center-secret`,
-`orchestration-center-secret`, `orchestration-center-admin`) from the
-generated values; every one has an `existingSecret` escape hatch
+Parameters resolve in **two independent layers**; neither interacts with the
+other.
+
+**Layer 1 — the installer** (`install.sh`, highest priority last):
+
+```mermaid
+flowchart TD
+    D1[1. Built-in defaults<br/>install.sh defaults block] -->|overwritten by| C1
+    C1[2. config.env via --config<br/>load_config sources the file] -->|overwritten by| P1
+    P1[3. Interactive prompts &#91;1/7&#93;<br/>only without --config AND without --yes] --> V1
+    V1[4. Validation gates<br/>required passwords, namespace/pool/host formats] --> DER
+    DER[5. Derived values, only when empty<br/>REGISTRY_NODE, REGISTRY_NODE_IP,<br/>STORAGE_NODE, REG_HOST, TLS secret names] --> SAVE
+    SAVE[6. save_config<br/>effective config persisted to config.env]
+```
+
+- Interactive answers beat `config.env`, which beats the built-in defaults.
+- Mode switches: `--config <file>` makes the file the sole source (prompts
+  are skipped); `--yes` skips prompts and auto-confirms every question;
+  neither flag given runs the interactive wizard.
+- Environment variables do **not** participate: the defaults block assigns
+  every key, overwriting anything exported in the shell. Secrets enter via
+  `config.env` or the masked interactive prompts only.
+- The effective values are exported to `check-env.sh` (which itself prefers
+  exported env over its own defaults, then re-reads `--config` if given).
+
+**Layer 2 — inside the service containers** (upstream contract, highest
+priority last):
+
+```text
+server.conf  ->  server.properties  ->  REGISTRY_* / ORCH_* environment
+```
+
+Duplicate keys warn; the later-loaded source wins. In this deployment the
+environment comes from the chart ConfigMaps (rendered from the generated
+values) plus Secrets consumed via `secretKeyRef`/`envFrom`, so the chain
+effectively is: **installer config → generated values → ConfigMap env →
+overrides the image's built-in `server.conf`/`server.properties` defaults**.
+The standalone `.env` file is not mounted in containers (and environment
+variables take precedence over it upstream anyway).
+
+### 5.3 Secret reference model
+
+The installer-generated values reference Secrets exclusively
+(`openan-db-credentials`, `openan-admin`, `openan-llm-keys`, the TLS set of
+§5.4) — no secret is ever inlined. The chart itself retains the direct-helm
+escape hatches for every credential
 (`postgresql/mysql.existingSecret`, `*.llm.*.existingSecret`,
 `orchestration.admin.existingSecret`, `registry.tls/signing.existingSecret`,
-`orchestration.tls.existingSecret`). models.yaml ConfigMaps reference env
-names only (`api_key_env`) — keys are never inlined.
+`orchestration.tls.existingSecret`), plus `stringData` rendering from plain
+values for operators driving the chart without the installer. models.yaml
+ConfigMaps reference env names only (`api_key_env`) — keys are never inlined.
 
-### 5.3 PKI
+### 5.4 PKI
 
 No certificates ship in the bundle. **HTTPS is the default** (`HTTPS_ENABLED`
 defaults to `true`): the installer generates a self-signed CA plus
@@ -303,13 +347,17 @@ contract) and stores them as installer-labeled Secrets:
 | `openan-rc-tls` | `server.cer`, `server_key.pem`, `trust.cer`, `cert_pwd` | RC `tls-certs` volume (`mode=secret`) |
 | `openan-oc-tls` | same | OC `tls-certs` volume (`mode=secret`) |
 | `openan-ingress-client` | `tls.crt`, `tls.key`, `ca.crt` | ingress `proxy-ssl-verify` (+ mTLS client material) |
+| `openan-registry-client` | `trust.cer`, `client.cer`, `client_key.pem` | OC→RC outbound verification (`clientVerifyServer`) |
 | `openan-public-tls` (when `INGRESS_HOST` set) | `tls.crt`, `tls.key` | public ingress TLS termination |
 
 The ingress **always verifies backend server certificates** against the
 shared CA (`proxy-ssl-verify: on` + `proxy-ssl-secret`, SNI pinned per
-service). Operator-provided certificates are supported by pre-creating the
+service), and OC verifies the registry's server certificate on its outbound
+connection (`orchestration.clientVerifyServer` + `registryClientSecret`).
+Operator-provided certificates are supported by pre-creating the
 Secrets and setting `RC_TLS_SECRET` / `OC_TLS_SECRET` /
-`INGRESS_CLIENT_SECRET` together. JWS signing material stays on the chart's
+`INGRESS_CLIENT_SECRET` together (`REGISTRY_CLIENT_SECRET` optional). JWS
+signing material stays on the chart's
 `auto` mode (Helm `genCA`/`genSignedCert`, 3650 days, `lookup` reuse). One
 interface contract: `REGISTRY_JWK_PRIVATE_KEY_PASSWORD` is set to `""` in
 auto mode because an empty `cert_pwd` *file* reads as `b''` and crashes the
@@ -323,7 +371,9 @@ httpGet probes present no client certificate.
 | Control | Implementation |
 |---------|----------------|
 | Secret input | Masked char-by-char read from `/dev/tty` (interactive) |
-| Secret at rest | `config.env` + `config.values.yaml`, chmod 600, gitignored |
+| Secret at rest | `config.env` (umask 077 at creation); generated values file contains **references only**; installer-created Secrets labeled `openan-offline-installer` for uninstall cleanup |
+| Required credentials | `OC_ADMIN_PASSWORD` and `DB_PASSWORD` (8+ chars, no defaults) are hard gates; validated input includes namespace (DNS label), MetalLB pool format and INGRESS_HOST (DNS names only) |
+| Shell hardening | `set -euo pipefail`; every best-effort probe is `|| true`-guarded so failures surface instead of being swallowed |
 | Registry transport | Plain HTTP by necessity (air-gapped); trust is a documented per-node containerd prerequisite |
 | In-cluster service TLS | Default on: `tool/gen_certs.py` (openssl) → installer-labeled Secrets; ingress verifies backends (`proxy-ssl-verify`); operator Secrets supported |
 | Admin bootstrap | `OC_ADMIN_PASSWORD` required at the gate; seeds OC `admin` |
