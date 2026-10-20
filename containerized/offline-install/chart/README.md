@@ -17,7 +17,7 @@ Helm Chart for deploying the OpenAN platform on Kubernetes.
 
 ## Prerequisites
 
-- Kubernetes 1.34+
+- Kubernetes 1.33+ (v1.33 verified in the field; the bundled kubectl is v1.34 and works against it)
 - Helm 3.19+
 - Ingress Controller (Nginx) for external access
 
@@ -65,25 +65,37 @@ openan-chart/
 
 ### Install
 
-```bash
-# Default configuration from values.yaml
-helm install openan ./openan-chart -n openan --create-namespace
+`helm upgrade --install` is the standard entry point (idempotent: installs
+the release when absent, applies the values when present):
 
-# Custom configuration
-helm install openan ./openan-chart -n openan --create-namespace -f values-custom.yaml
+```bash
+# Recommended: start from the commented template — it references the
+# Secrets the platform needs and points every image at your registry.
+# Replace <REG_HOST> with your registry host:port first.
+cp example.values.yaml values-custom.yaml
+helm upgrade --install openan ./openan-chart -n openan --create-namespace \
+    -f values-custom.yaml
+
+# Default configuration from values.yaml
+helm upgrade --install openan ./openan-chart -n openan --create-namespace
 
 # Command-line overrides
-helm install openan ./openan-chart -n openan --create-namespace \
+helm upgrade --install openan ./openan-chart -n openan --create-namespace \
   --set postgresql.password=your-password \
   --set registry.llm.chat.apiKey=sk-xxx \
   --set orchestration.llm.chat.apiKey=sk-yyy
 
 # Custom image registry
-helm install openan ./openan-chart -n openan --create-namespace \
+helm upgrade --install openan ./openan-chart -n openan --create-namespace \
   --set registry.image.repository=harbor.example.com/openan/registry-center \
   --set orchestration.image.repository=harbor.example.com/openan/orchestration-center \
   --set frontend.image.repository=harbor.example.com/openan/openan-portal
 ```
+
+> Pure-Helm deployments from an offline bundle still require the
+> prerequisites `install.sh` would handle: a reachable image registry,
+> ingress-nginx (IngressClass `nginx`) and the referenced Secrets — see the
+> header of [example.values.yaml](../example.values.yaml).
 
 ### Verify
 
@@ -276,20 +288,20 @@ kubectl -n openan port-forward svc/openan-frontend 8080:80
 ### Production
 
 ```bash
-helm install openan-prod ./openan-chart --namespace openan-prod --create-namespace -f values-prod.yaml
+helm upgrade --install openan-prod ./openan-chart --namespace openan-prod --create-namespace -f values-prod.yaml
 ```
 
 ### Registry Only
 
 ```bash
-helm install openan ./openan-chart -n openan --create-namespace \
+helm upgrade --install openan ./openan-chart -n openan --create-namespace \
   --set orchestration.enabled=false --set frontend.enabled=false
 ```
 
 ### External Database
 
 ```bash
-helm install openan ./openan-chart -n openan --create-namespace \
+helm upgrade --install openan ./openan-chart -n openan --create-namespace \
   --set postgresql.enabled=false \
   --set postgresql.externalHost=db.example.com \
   --set postgresql.password=your-password
@@ -298,7 +310,7 @@ helm install openan ./openan-chart -n openan --create-namespace \
 ### MySQL Backend
 
 ```bash
-helm install openan ./openan-chart -n openan --create-namespace \
+helm upgrade --install openan ./openan-chart -n openan --create-namespace \
   --set database.type=mysql \
   --set mysql.enabled=true \
   --set postgresql.enabled=false \

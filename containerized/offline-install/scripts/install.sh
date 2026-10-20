@@ -6,7 +6,7 @@
 #
 # OpenAN offline installer (Kubernetes).
 #
-# Assumes a Kubernetes cluster (kubeadm, v1.34+) is already running and that
+# Assumes a Kubernetes cluster (kubeadm, v1.33+) is already running and that
 # this script is executed on a node with kubectl access and a working containerd
 # (root). It never uses the internet and never edits the OS or container runtime
 # configuration.
@@ -799,15 +799,40 @@ fi
 catalog="$(curl -sf -m 5 "http://${REG_HOST}/v2/_catalog" 2>/dev/null || true)"
 if [ -n "$catalog" ]; then log_info "Registry catalog: $catalog"; else log_warn "Registry catalog unreachable"; fi
 
-# Optional demo agents server
+# Optional demo agents server: verify the sample exists in the image first,
+# then start it and health-check it — never report success on a swallowed error.
 if [ "$START_AGENTS_SERVER" = "true" ]; then
-    log_info "Starting agent examples server (optional)..."
+    log_step "Starting agent examples server"
     ORCH_POD="$("$KUBECTL" -n "$K8S_NAMESPACE" get pods -l app=orchestration-center -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
-    if [ -n "$ORCH_POD" ]; then
+    if [ -z "$ORCH_POD" ]; then
+        log_warn "No orchestration-center pod found; skipping the agents server"
+    elif ! "$KUBECTL" exec "$ORCH_POD" -n "$K8S_NAMESPACE" -- /bin/sh -c \
+            "test -f /opt/orchestration-center/samples/start_agents_server.py" 2>/dev/null; then
+        log_warn "samples/start_agents_server.py is absent from the orchestration-center image"
+        log_warn "The agents server cannot start (check the image build); continuing without it"
+    elif "$KUBECTL" exec "$ORCH_POD" -n "$K8S_NAMESPACE" -- /bin/sh -c \
+            "cd /opt/orchestration-center && PYTHONPATH=/opt/orchestration-center nohup python3 samples/start_agents_server.py > /tmp/agents-server.log 2>&1 &"; then
+        log_info "Agents server starting in $ORCH_POD; waiting for port 8903..."
+        agents_ok="false"
+        for _ in $(seq 1 12); do
+            if "$KUBECTL" exec "$ORCH_POD" -n "$K8S_NAMESPACE" -- /bin/sh -c \
+                    "curl -sf http://127.0.0.1:8903/health > /dev/null" 2>/dev/null; then
+                agents_ok="true"
+                break
+            fi
+            sleep 5
+        done
+        if [ "$agents_ok" = "true" ]; then
+            log_info "Agent examples server healthy (port 8903)"
+        else
+            log_error "Agents server did not become healthy within 60s; last log lines:"
+            "$KUBECTL" exec "$ORCH_POD" -n "$K8S_NAMESPACE" -- /bin/sh -c \
+                "tail -n 20 /tmp/agents-server.log 2>/dev/null" || true
+        fi
+    else
+        log_error "Failed to start the agents server in $ORCH_POD; last log lines:"
         "$KUBECTL" exec "$ORCH_POD" -n "$K8S_NAMESPACE" -- /bin/sh -c \
-            "cd /opt/orchestration-center && PYTHONPATH=/opt/orchestration-center nohup python3 samples/start_agents_server.py > /tmp/agents-server.log 2>&1 &" 2>/dev/null \
-            && log_info "Agents server start requested (verify with: kubectl exec $ORCH_POD -n $K8S_NAMESPACE -- cat /tmp/agents-server.log)" \
-            || log_warn "Could not start the agents server (python3/curl may be absent in the image)"
+            "cat /tmp/agents-server.log 2>/dev/null || tail -n 20 /tmp/agents-server.log 2>/dev/null" || true
     fi
 fi
 

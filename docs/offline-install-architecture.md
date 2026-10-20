@@ -20,7 +20,7 @@ runs through an in-cluster `registry:2` populated with the bundled
 
 ### Scope
 
-- Target: a running kubeadm-style cluster (v1.34+ per `chart/Chart.yaml`
+- Target: a running kubeadm-style cluster (v1.33+ per `chart/Chart.yaml`
   `kubeVersion`), reachable with `kubectl` from the install node, with
   `ctr` access to the node containerd.
 - Installs MetalLB and ingress-nginx from **pinned manifests inside the

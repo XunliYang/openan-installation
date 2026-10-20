@@ -1,0 +1,142 @@
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+# Pure-Helm deployment from an unpacked offline bundle (no install.sh).
+#
+# Prerequisites the installer would otherwise handle:
+#   1. The image registry at <REG_HOST> below is reachable and already
+#      contains all images (the installer's `scripts/push-images.sh`, or
+#      pushes of your own). Replace every <REG_HOST> with your registry
+#      host:port (e.g. 192.168.1.10:30500).
+#   2. ingress-nginx (IngressClass `nginx`) is installed — from
+#      deps/manifests/ingress-nginx.yaml with image refs rewritten to
+#      <REG_HOST>/ingress-nginx/.
+#   3. The Secrets referenced below exist in the target namespace:
+#        openan-db-credentials  keys: postgres-password, mysql-root-password
+#        openan-admin           key:  admin-password
+#        openan-llm-keys        keys: registry-chat, orch-chat (per model)
+#        openan-rc-tls          keys: server.cer, server_key.pem, trust.cer, cert_pwd
+#        openan-oc-tls          keys: server.cer, server_key.pem, trust.cer, cert_pwd
+#        openan-ingress-client  keys: tls.crt, tls.key, ca.crt
+#        openan-registry-client keys: trust.cer, client.cer, client_key.pem
+#      `tool/gen_certs.py --out <dir>` generates the TLS material;
+#      `kubectl create secret generic ... --from-file=...` creates the Secrets.
+#
+# Deploy:
+#   helm upgrade --install openan ./chart -n openan --create-namespace \
+#       -f example.values.yaml
+#
+# config.env -> this file: every chart-expressible installer key maps here —
+#   K8S_NAMESPACE -> namespace                DB_TYPE/DB_PASSWORD -> database.type + *.existingSecret
+#   INGRESS_HOST -> ingress.host              *_IMAGE -> *.image.repository/tag
+#   FRONTEND_TYPE -> frontend.type            *_CHAT_{MODEL,URL,APIKEY} -> *.llm.chat.*
+#   HTTPS_* / *_TLS_SECRET -> https.* / *.tls.existingSecret / ingressClientSecret
+#   STORAGE_* -> mysql|postgresql.storage.*   OC_ADMIN_PASSWORD -> orchestration.admin.existingSecret
+# Installer-only keys with NO chart equivalent stay prerequisites:
+#   INSTALL_REGISTRY / REGISTRY_NODE* (registry bootstrap), INSTALL_METALLB /
+#   METALLB_POOL (infra), LLM_VALIDATE (pre-install probe), START_AGENTS_SERVER
+#   (post-install demo, kubectl exec based).
+
+namespace: openan
+
+database:
+  type: mysql  # mysql (bundled) or postgresql
+
+https:
+  enabled: true
+  verifyClient: false  # mTLS on the registry listener (kubelet probes present no client cert)
+
+postgresql:
+  enabled: false
+  existingSecret: openan-db-credentials  # key: postgres-password
+  image: "<REG_HOST>/library/postgres:15-alpine"  # used when database.type=postgresql
+
+mysql:
+  enabled: true
+  existingSecret: openan-db-credentials  # key: mysql-root-password
+  image: "<REG_HOST>/library/mysql:8.4.3"
+  storage:
+    size: 20Gi
+    storageClassName: ""  # cluster default StorageClass
+    # No StorageClass? Node-pinned hostPath fallback (single-node):
+    # createStorageClass: true
+    # createPV: true
+    # useHostPath: true
+    # hostPath: "/data/openan-mysql"
+    # nodeName: node185
+
+registry:
+  enabled: true
+  replicas: 2
+  image:
+    repository: <REG_HOST>/project-openan/registry-center
+    tag: v1.0.0  # match the bundle's deps/image-tags.env
+    pullPolicy: IfNotPresent
+  signatureValidationEnabled: false
+  tls:
+    mode: secret
+    existingSecret: openan-rc-tls
+  ingressClientSecret: openan-ingress-client
+  signing:
+    mode: auto  # Helm-generated JWS material, reused across upgrades
+  llm:
+    chat:
+      model: "your-chat-model"
+      url: "https://your-llm-provider.com/v1/chat/completions"
+      existingSecret: openan-llm-keys
+      existingSecretKey: registry-chat
+    # embed:
+    #   model: "your-embed-model"
+    #   url: "https://your-llm-provider.com/v1/embeddings"
+    #   existingSecret: openan-llm-keys
+    #   existingSecretKey: registry-embed
+    # rerank:
+    #   model: "your-rerank-model"
+    #   url: "https://your-llm-provider.com/v1/rerank"
+
+orchestration:
+  enabled: true
+  replicas: 1
+  image:
+    repository: <REG_HOST>/project-openan/orchestration-center
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+  admin:
+    existingSecret: openan-admin  # key: admin-password
+  tls:
+    mode: secret
+    existingSecret: openan-oc-tls
+  ingressClientSecret: openan-ingress-client
+  clientVerifyServer: true
+  registryClientSecret: openan-registry-client
+  llm:
+    chat:
+      model: "your-chat-model"
+      url: "https://your-llm-provider.com/v1/chat/completions"
+      existingSecret: openan-llm-keys
+      existingSecretKey: orch-chat
+    # embed drives workflow semantic retrieval:
+    # embed:
+    #   model: "your-embed-model"
+    #   url: "https://your-llm-provider.com/v1/embeddings"
+
+frontend:
+  enabled: true
+  type: portal  # portal | workflow-designer
+  replicas: 2
+  image:
+    repository: <REG_HOST>/project-openan/openan-portal
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+    # frontend.type=workflow-designer instead uses:
+    #   repository: <REG_HOST>/project-openan/workflow-designer
+  nodePort: 30191
+
+ingress:
+  enabled: true
+  className: nginx
+  host: ""  # DNS name for host-based routing; empty = direct IP access
+  backendVerifyServer: true  # proxy-ssl-verify against the shared CA
+  tls:
+    enabled: false  # public TLS termination (requires host + secretName)
+    secretName: openan-public-tls

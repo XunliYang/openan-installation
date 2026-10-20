@@ -37,26 +37,36 @@ cd containerized/offline-install/build
 # Build app images from local source
 ./build-offline.sh --tag v1.0.0 --app-source build \
     --registry-src ~/src/registry-center \
-    --orchestration-src ~/src/orchestration-center \
-    --portal-src ~/src/openan-portal
+    --orchestration-src ~/src/orchestration-center
+
+# Mix component versions in one bundle (per-component tags)
+./build-offline.sh --tag v1.0.0 --app-source pull \
+    --registry-tag v1.1.2 --orchestration-tag main-20261019
 
 # Reuse pre-built tars
 ./build-offline.sh --tag v1.0.0 --app-source tars --app-tars-dir ~/prebuilt
 ```
 
+Portal is **never built from source here** — it has a separate pipeline
+(`containerized/build/portal/`) and is pulled (or loaded from the tars dir);
+a missing portal image downgrades the bundle to `FRONTEND_TYPE=workflow-designer`.
+
 ## Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--tag <tag>` | derived from `--source-ref` | App image tag |
+| `--tag <tag>` | derived from `--source-ref` | Global app image tag (also names the bundle) |
+| `--registry-tag <tag>` | falls back to `--tag` | Tag for registry-center only |
+| `--orchestration-tag <tag>` | falls back to `--tag` | Tag for orchestration-center **and** workflow-designer |
+| `--portal-tag <tag>` | falls back to `--tag` | Tag for the optional portal image |
 | `--source-ref <ref>` | `v1.0.0` | Source Git ref; `main` → `main-YYYYMMDD`, other refs become the tag |
 | `--app-registry <host/ns>` | `ghcr.io/project-openan` | Upstream app registry |
 | `--app-source` | `pull` | `pull` \| `build` \| `tars` |
 | `--registry-src <dir>` | — | registry-center source dir (with Dockerfile) |
-| `--orchestration-src <dir>` | — | orchestration-center source dir |
-| `--portal-src <dir>` | — | openan-portal source dir (optional; absent → designer-only bundle) |
+| `--orchestration-src <dir>` | — | orchestration-center source dir (needs `workflow-designer/Dockerfile`) |
 | `--registry-release <url>` | GitHub archive | Remote registry-center source tarball |
 | `--orchestration-release <url>` | GitHub archive | Remote orchestration-center source tarball |
+| `--app-tars-dir <dir>` | — | Pre-built per-arch image tars (required with `--app-source tars`) |
 | `--platforms <list>` | `linux/amd64,linux/arm64` | Target architectures |
 | `--out <dir>` | `./dist` | Output directory |
 | `--keep-images` | off | Do not delete pulled images afterwards |
