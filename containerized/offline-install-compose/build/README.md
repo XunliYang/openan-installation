@@ -33,26 +33,35 @@ cd containerized/offline-install-compose/build
 # Build app images from local or remote source
 ./build-offline.sh --tag v1.0.0 --app-source build \
     --registry-src ~/src/registry-center \
-    --orchestration-src ~/src/orchestration-center \
-    --portal-src ~/src/openan-portal
+    --orchestration-src ~/src/orchestration-center
+
+# Mix component versions in one bundle (per-component tags)
+./build-offline.sh --tag v1.0.0 --app-source pull \
+    --registry-tag v1.1.2 --orchestration-tag main-20261019
 
 # Reuse pre-built tars
 ./build-offline.sh --tag v1.0.0 --app-source tars --app-tars-dir ~/prebuilt
 ```
 
+Portal is **never built from source here** — it has a separate pipeline
+(`containerized/build/portal/`) and is pulled (or loaded from the tars dir).
+
 ## Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--tag <tag>` | derived from `--source-ref` | App image tag |
-| `--source-ref <ref>` | `v1.0.0` | Source Git ref; `main` → `main-YYYYMMDD`, other refs become the tag |
+| `--tag <tag>` | derived from `--source-ref` | Global app image tag (also names the bundle) |
+| `--registry-tag <tag>` | falls back to `--tag` | Tag for registry-center only |
+| `--orchestration-tag <tag>` | falls back to `--tag` | Tag for orchestration-center **and** workflow-designer |
+| `--portal-tag <tag>` | falls back to `--tag` | Tag for the optional portal image |
+| `--source-ref <ref>` | — (required unless `--tag`) | Source Git ref; `main` → `main-YYYYMMDD`, other refs become the tag |
 | `--app-registry <host/ns>` | `ghcr.io/project-openan` | Upstream app registry |
 | `--app-source` | `pull` | `pull` \| `build` \| `tars` |
 | `--registry-src <dir>` | — | Local registry-center source dir (overrides remote) |
-| `--orchestration-src <dir>` | — | Local orchestration-center source dir |
+| `--orchestration-src <dir>` | — | Local orchestration-center source dir (needs `workflow-designer/Dockerfile`) |
 | `--registry-release <url>` | GitHub archive | Remote registry-center source tarball |
 | `--orchestration-release <url>` | GitHub archive | Remote orchestration-center source tarball |
-| `--portal-src <dir>` | — | openan-portal source dir (optional) |
+| `--app-tars-dir <dir>` | — | Pre-built per-arch image tars (required with `--app-source tars`) |
 | `--platforms <list>` | `linux/amd64` | Target architectures (single-arch for Compose) |
 | `--out <dir>` | `./dist` | Output directory |
 

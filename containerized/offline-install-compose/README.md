@@ -1,5 +1,8 @@
 # OpenAN single-host offline Docker Compose
 
+Quick start: [QUICKSTART.md](QUICKSTART.md) · full configuration reference,
+HTTP/HTTPS/mTLS profiles and lifecycle below.
+
 One registry center, one orchestration center and one Nginx public entry.
 Application sessions, execution/runtime files and registry background jobs are
 not claimed to be distributed; this installer does not advertise HA. External

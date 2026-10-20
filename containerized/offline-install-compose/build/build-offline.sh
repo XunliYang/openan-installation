@@ -7,6 +7,7 @@ umask 077
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE="$(cd "$SCRIPT_DIR/.." && pwd)"
 TAG=""; SOURCE_REF=""; APP_REGISTRY="ghcr.io/project-openan"; APP_SOURCE="pull"
+REGISTRY_TAG=""; ORCHESTRATION_TAG=""; PORTAL_TAG=""
 REGISTRY_SRC=""; ORCHESTRATION_SRC=""; REGISTRY_RELEASE=""; ORCHESTRATION_RELEASE=""; APP_TARS_DIR=""
 PLATFORMS="linux/amd64"; OUT_DIR="$SCRIPT_DIR/dist"
 log_warn() { echo "[WARN] $1"; }
@@ -16,6 +17,9 @@ while [ $# -gt 0 ]; do
     fi
     case "$1" in
         --tag) TAG="$2"; shift 2 ;;
+        --registry-tag) REGISTRY_TAG="$2"; shift 2 ;;
+        --orchestration-tag) ORCHESTRATION_TAG="$2"; shift 2 ;;
+        --portal-tag) PORTAL_TAG="$2"; shift 2 ;;
         --source-ref) SOURCE_REF="$2"; shift 2 ;;
         --app-registry) APP_REGISTRY="$2"; shift 2 ;;
         --app-source) APP_SOURCE="$2"; shift 2 ;;
@@ -26,7 +30,7 @@ while [ $# -gt 0 ]; do
         --app-tars-dir) APP_TARS_DIR="$2"; shift 2 ;;
         --platforms) PLATFORMS="$2"; shift 2 ;;
         --out) OUT_DIR="$2"; shift 2 ;;
-        --help|-h) echo 'Use --source-ref <main|tag> [or --tag <tag>] --app-source pull|build|tars [--registry-src/--orchestration-src <dir> | --registry-release/--orchestration-release <url>] [--platforms linux/amd64,linux/arm64] [--out <dir>]'; exit 0 ;;
+        --help|-h) echo 'Use --source-ref <main|tag> [or --tag <tag>] [--registry-tag/--orchestration-tag/--portal-tag <tag>] --app-source pull|build|tars [--registry-src/--orchestration-src <dir> | --registry-release/--orchestration-release <url>] [--platforms linux/amd64,linux/arm64] [--out <dir>]'; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -40,6 +44,13 @@ if [ -z "$TAG" ] && [ -n "$SOURCE_REF" ]; then
     fi
 fi
 [[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo 'Explicit --tag or --source-ref <main|tag> required' >&2; exit 2; }
+# Per-component tags override the global tag for that component; unset
+# components fall back to it. --orchestration-tag covers orchestration-center
+# and workflow-designer (built from the same source tree).
+for component_tag in "$REGISTRY_TAG" "$ORCHESTRATION_TAG" "$PORTAL_TAG"; do
+    [ -n "$component_tag" ] || continue
+    [[ "$component_tag" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo 'Per-component tags must match [A-Za-z0-9_][A-Za-z0-9_.-]{0,127}' >&2; exit 2; }
+done
 [[ "$APP_REGISTRY" =~ ^[A-Za-z0-9][A-Za-z0-9./:_-]*$ ]] || { echo 'Invalid app registry' >&2; exit 2; }
 [[ "$APP_SOURCE" == pull || "$APP_SOURCE" == build || "$APP_SOURCE" == tars ]] || { echo 'Invalid app source' >&2; exit 2; }
 ARCHS=()
@@ -104,7 +115,7 @@ mkdir -p "$BUNDLE/docs"; cp "$SOURCE/docs/DEPENDENCIES.md" "$BUNDLE/docs/"
 # With umask077, cp produces0600. +x would produce0711, unreadable to the
 # unprivileged MySQL/PostgreSQL entrypoint user that runs these public scripts.
 chmod 0755 "$BUNDLE/scripts/"*.sh "$BUNDLE/compose/init/"*.sh
-RC="$APP_REGISTRY/registry-center:$TAG"; OC="$APP_REGISTRY/orchestration-center:$TAG"; UI="$APP_REGISTRY/workflow-designer:$TAG"; PORTAL="$APP_REGISTRY/openan-portal:$TAG"
+RC="$APP_REGISTRY/registry-center:${REGISTRY_TAG:-$TAG}"; OC="$APP_REGISTRY/orchestration-center:${ORCHESTRATION_TAG:-$TAG}"; UI="$APP_REGISTRY/workflow-designer:${ORCHESTRATION_TAG:-$TAG}"; PORTAL="$APP_REGISTRY/openan-portal:${PORTAL_TAG:-$TAG}"
 declare -A REFS=([registry-center]="$RC" [orchestration-center]="$OC" [workflow-designer]="$UI" [postgres]="postgres:15-alpine" [mysql]="mysql:8.4" [nginx]="nginx:1.27.5-alpine")
 for arch in "${ARCHS[@]}"; do
     for component in registry-center orchestration-center workflow-designer postgres mysql nginx; do
