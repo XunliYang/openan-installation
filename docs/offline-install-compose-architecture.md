@@ -54,7 +54,7 @@ graph TB
             DB[(openan-mysql / openan-postgres<br/>named volume)]
         end
 
-        RT[runtime/&lt;service&gt;/{data,log}<br/>bind mounts, UID 10001]
+        RT["runtime service data+log dirs<br/>bind mounts, UID 10001"]
         PKI[operator PKI dirs<br/>read-only binds]
     end
 

@@ -86,12 +86,13 @@ graph TB
 
     User -->|http/https| IG
     IG --> ING_FE & ING_ORC & ING_RC
-    ING_FE --> FE_P or FE_WD
+    ING_FE --> FE_P & FE_WD
     ING_ORC --> OC
     ING_RC --> RC
     FE_P -->|proxy /api/*| OC & RC
     FE_WD -->|proxy /api/orchestrate| OC
-    RC & OC --> PG or EXT_DB
+    RC & OC --> PG
+    RC & OC -.-> EXT_DB
 ```
 
 ### 2.2 Component inventory
