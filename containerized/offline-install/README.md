@@ -99,8 +99,16 @@ the same two databases, and points both applications at it
    manifest list** per component with the bundled `crane`, so a single tag
    serves both amd64 and arm64 nodes.
 4. Installs **MetalLB** (optional) and **ingress-nginx** offline.
-5. `helm install`s the chart from the bundled copy with a generated values file.
-6. **Self-checks**: pods ready, registry catalog reachable, API smoke tests.
+5. **Generates TLS certificates** by default (`tool/gen_certs.py`, openssl):
+   a CA plus per-service certs stored as Secrets; the ingress verifies
+   backend certificates against the shared CA, and OC verifies the registry's
+   certificate on its outbound connection. Operator-provided Secrets are
+   supported (`RC_TLS_SECRET` / `OC_TLS_SECRET` / `INGRESS_CLIENT_SECRET`,
+   optional `REGISTRY_CLIENT_SECRET`). Database, admin and LLM credentials
+   are created as Secrets (`openan-db-credentials`, `openan-admin`,
+   `openan-llm-keys`) and referenced — never inlined into the values file.
+6. `helm install`s the chart from the bundled copy with a generated values file.
+7. **Self-checks**: pods ready, registry catalog reachable, API smoke tests.
 
 ## Re-running and uninstalling
 

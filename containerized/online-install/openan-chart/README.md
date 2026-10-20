@@ -7,7 +7,7 @@ See [HTTP/HTTPS and database deployment contract](../../TRANSPORT_DEPLOYMENT.md)
 - HTTP and HTTPS-no-mTLS retain application authentication. TLS, signing and peer verification are independent controls.
 - Supply TLS Secrets created by enterprise PKI or the development certificate tool. Helm auto TLS keys are no longer supported.
 - Signing auto preserves deployed keys during upgrade; production uses an explicit signing Secret.
-- Models are mounted as a complete file. Existing model Secrets override inline values.
+- Models are mounted as a complete file. Existing model Secrets override inline values. The Orchestration Center additionally supports the A2A-T SDK negotiation LLM via `orchestration.a2atLlm` (provider/model/baseUrl; the API key lives in `runtimeSecret` as `A2AT_LLM_API_KEY`), independent of models.yaml.
 - `frontend.type` selects the unified entry: portal (default, listens on 8080) or workflow-designer (legacy, chart-managed nginx). `frontend.backendTls` and `frontend.nginxConfig` apply only to workflow-designer; both types deploy as openan-frontend resources (Deployment/Service/Ingress).
 - RC and OC each use one replica: RC event listeners/dispatchers and OC sessions are process-local. Extra replicas are rejected, not an HA option. Legacy vector-only RC mode cannot serve the complete SQL-backed API and is rejected.
 - Independent retained runtime PVCs hold each service's data and logs, even with external SQL. Both services use Recreate upgrades to avoid overlapping file writers; plan a maintenance window. See the deployment contract for existing claims and pre-upgrade backup/restore.

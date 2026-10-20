@@ -139,6 +139,7 @@ def test_wizard_generated_values_contain_references_not_credentials(tmp_path, mo
     answers = iter(["all", "tested", "shared", "existing", "rc-models", "oc-models", "secret",
                     "signing"])
     monkeypatch.setattr(module, "ask", lambda _: next(answers))
+    monkeypatch.setattr(module, "ask_optional", lambda label: "")
     monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
     monkeypatch.setattr(module, "secret_input", lambda _: "SyntheticSecret9!")
     saved = {}
@@ -170,6 +171,7 @@ def test_wizard_in_cluster_default_values_shape(tmp_path, monkeypatch):
     module = wizard()
     answers = iter(["all", "shared", "existing", "rc-models", "oc-models", "auto"])
     monkeypatch.setattr(module, "ask", lambda _: next(answers))
+    monkeypatch.setattr(module, "ask_optional", lambda label: "")
     monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
     monkeypatch.setattr(module, "secret_input", lambda _: "SyntheticSecret9!")
     saved = {}
@@ -197,6 +199,7 @@ def test_wizard_generate_models_keeps_keys_only_in_runtime_secrets(tmp_path, mon
                     "auto"])
     secrets = iter(["rc-llm-key", "oc-llm-key", "PgSecret9!", "AdminPassw0rd!xy"])
     monkeypatch.setattr(module, "ask", lambda _: next(answers))
+    monkeypatch.setattr(module, "ask_optional", lambda label: "")  # embed/rerank/a2at skipped
     monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
     monkeypatch.setattr(module, "secret_input", lambda _: next(secrets))
     monkeypatch.setattr(module, "probe_llm", lambda model, url, key: True)
@@ -274,6 +277,7 @@ def test_wizard_rejects_missing_public_dependencies_before_secrets(tmp_path, mon
     answers = iter(["all", "tested", "shared", "existing", "rc-models", "oc-models", "secret",
                     "signing"])
     monkeypatch.setattr(module, "ask", lambda _: next(answers))
+    monkeypatch.setattr(module, "ask_optional", lambda label: "")
     monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
     monkeypatch.setattr(module.subprocess, "run", lambda command, **kw: subprocess.CompletedProcess(command, 1, "", ""))
     monkeypatch.setattr(module, "secret_input", lambda _: pytest.fail("Must not collect secrets yet"))
@@ -294,6 +298,7 @@ def test_wizard_local_storage_fallback_values(tmp_path, monkeypatch):
     module = wizard()
     answers = iter(["all", "shared", "existing", "rc-models", "oc-models", "auto"])
     monkeypatch.setattr(module, "ask", lambda _: next(answers))
+    monkeypatch.setattr(module, "ask_optional", lambda label: "")
     monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
     # No default StorageClass and a detectable node: the fallback engages
     # automatically (no storage question anymore).
@@ -318,6 +323,7 @@ def test_wizard_per_component_image_tags(tmp_path, monkeypatch):
     answers = iter(["all", "per-component", "existing", "rc-models", "oc-models", "auto"])
     component_tags = iter(["v1.1.2", "main-20261019", "v1.0.0"])
     monkeypatch.setattr(module, "ask", lambda _: next(answers))
+    monkeypatch.setattr(module, "ask_optional", lambda label: "")
     monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
     monkeypatch.setattr(module, "ask_default", lambda label, default: next(component_tags))
     monkeypatch.setattr(module, "secret_input", lambda _: "SyntheticSecret9!")
@@ -330,6 +336,47 @@ def test_wizard_per_component_image_tags(tmp_path, monkeypatch):
     assert values["registry"]["image"]["tag"] == "v1.1.2"
     assert values["orchestration"]["image"]["tag"] == "main-20261019"
     assert values["frontend"]["image"]["tag"] == "v1.0.0"
+
+
+def test_wizard_optional_models_and_a2at_land_in_values_and_secrets(tmp_path, monkeypatch):
+    module = wizard()
+    answers = iter(["all", "shared", "generate",
+                    "rc-chat-model", "https://llm.example/v1/chat/completions",
+                    "https://llm.example/v1/embeddings",
+                    "no",
+                    "oc-chat-model", "https://llm.example/v1/chat/completions",
+                    "https://llm.example/v1/embeddings",
+                    "https://api.example.com/v1",
+                    "auto"])
+    optional = iter(["rc-embed-model", "", "oc-embed-model", "", "a2at-model"])
+    secrets = iter(["rc-chat-key", "rc-embed-key", "oc-chat-key", "oc-embed-key",
+                    "a2at-key", "PgSecret9!", "AdminPassw0rd!xy"])
+    monkeypatch.setattr(module, "ask", lambda _: next(answers))
+    monkeypatch.setattr(module, "ask_optional", lambda label: next(optional))
+    monkeypatch.setattr(module, "choose", lambda label, options, default: next(answers))
+    monkeypatch.setattr(module, "secret_input", lambda _: next(secrets))
+    monkeypatch.setattr(module, "probe_llm", lambda model, url, key: True)
+    saved, configmaps = {}, {}
+    monkeypatch.setattr(module, "create_secret", lambda ns, name, data: saved.update({name: data}))
+    monkeypatch.setattr(module, "create_configmap", lambda ns, name, data: configmaps.update({name: data}))
+    monkeypatch.setattr(module.subprocess, "run", lambda command, **kw: subprocess.CompletedProcess(command, 0, "", ""))
+    output = tmp_path / "values.json"
+    module.configure("openan", "openan", output, tag="tested")
+    text = output.read_text(encoding="utf-8")
+    values = json.loads(text)
+    rc_models = configmaps["openan-rc-models"]["models.yaml"]
+    oc_models = configmaps["openan-oc-models"]["models.yaml"]
+    assert "embed:" in rc_models and "api_key_env: LLM_EMBED_API_KEY" in rc_models
+    assert "rerank:" not in rc_models  # skipped for registry
+    assert "embed:" in oc_models and "rerank:" not in oc_models
+    assert saved["openan-rc-runtime"]["LLM_EMBED_API_KEY"] == "rc-embed-key"
+    assert "LLM_RERANK_API_KEY" not in saved["openan-rc-runtime"]
+    assert saved["openan-oc-runtime"]["LLM_EMBED_API_KEY"] == "oc-embed-key"
+    assert saved["openan-oc-runtime"]["A2AT_LLM_API_KEY"] == "a2at-key"
+    assert values["orchestration"]["a2atLlm"] == {"provider": "openai", "model": "a2at-model",
+                                                  "baseUrl": "https://api.example.com/v1"}
+    for secret in ("rc-chat-key", "rc-embed-key", "a2at-key", "AdminPassw0rd!xy"):
+        assert secret not in text
 
 
 def test_wizard_failure_prints_concrete_reason_without_traceback(tmp_path):

@@ -182,15 +182,25 @@ The installer prints the access URL at the end — either the MetalLB
 LoadBalancer IP (`http://<LB_IP>/`) or a NodePort fallback
 (`http://<node-ip>:<nodePort>/`).
 
-## In-cluster HTTPS (optional)
+## In-cluster HTTPS (default on)
 
-Set `HTTPS_ENABLED="true"` in `config.env` to serve registry-center and
-orchestration-center over TLS inside the cluster (self-signed certificates
-are generated per component; override with `orchestration.tls.existingSecret`
-/ `registry.tls.existingSecret` for CA-issued material). Probes, the
-frontend upstream and the ingress backend protocol switch
-automatically. `HTTPS_VERIFY_CLIENT="true"` additionally requires client
-certificates (mTLS) on the registry listener.
+`HTTPS_ENABLED` defaults to `"true"`: registry-center and orchestration-center
+are served over TLS inside the cluster. By default the installer generates a
+self-signed CA plus per-service certificates with `tool/gen_certs.py` (openssl;
+needs `openssl` and `python3` on the install node) and stores them as Secrets
+`openan-rc-tls` / `openan-oc-tls` / `openan-ingress-client` — and
+`openan-public-tls` when `INGRESS_HOST` is set, which also enables public
+HTTPS on the ingress. The ingress always verifies backend server certificates
+against the shared CA (`proxy-ssl-verify` on). Probes, the frontend upstream
+and the ingress backend protocol switch automatically.
+
+To use your own certificates instead, pre-create the Secrets and set
+`RC_TLS_SECRET`, `OC_TLS_SECRET` and `INGRESS_CLIENT_SECRET` in `config.env`
+(all three together; keys: `server.cer`, `server_key.pem`, `trust.cer`,
+`cert_pwd` for the services and `tls.crt`, `tls.key`, `ca.crt` for the ingress
+client). `HTTPS_VERIFY_CLIENT="true"` additionally requires client
+certificates (mTLS) on the registry listener — note that kubelet httpGet
+probes present no client certificate, so this stays opt-in.
 
 ## Frontend selection
 

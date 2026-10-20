@@ -108,9 +108,11 @@ mysql:
 # Transport security
 # =============================================================================
 # Serve registry-center and orchestration-center over HTTPS inside the
-# cluster. Default false keeps the plain-HTTP offline topology unchanged.
+# cluster. The offline installer enables this by default and provisions
+# certificates (tool/gen_certs.py or operator-provided Secrets).
 # verifyClient additionally requires client certificates (mTLS) on the
-# registry listener; keep false when clients authenticate by other means.
+# registry listener; keep false when clients authenticate by other means
+# (kubelet httpGet probes present no client certificate).
 https:
   enabled: false
   verifyClient: false
@@ -160,6 +162,10 @@ registry:
   tls:
     mode: auto
     existingSecret: ""  # Used when mode=secret. Secret containing server.cer, server_key.pem, trust.cer, cert_pwd
+  # Ingress upstream client material for backend certificate verification /
+  # mTLS: Secret with tls.crt, tls.key, ca.crt (required when
+  # ingress.backendVerifyServer=true or https.verifyClient=true).
+  ingressClientSecret: ""
   # JWS signing certificate configuration
   # mode: auto (Helm generates self-signed cert, stored in Secret) / secret (user-provided Secret) / off (no certs mounted)
   # "auto" is recommended: generates once, persists in Secret, consistent across replicas and upgrades.
@@ -217,7 +223,17 @@ orchestration:
   tls:
     mode: auto
     existingSecret: ""  # Used when mode=secret. Secret containing server.cer, server_key.pem, trust.cer, cert_pwd
-  # LLM configuration for orchestration-center
+  # Ingress upstream client material for backend certificate verification /
+  # mTLS: Secret with tls.crt, tls.key, ca.crt (required when
+  # ingress.backendVerifyServer=true or https.verifyClient=true).
+  ingressClientSecret: ""
+  # OC->RC outbound TLS: verify the registry server certificate and present
+  # a client certificate when the registry requires mTLS. Secret with
+  # trust.cer (+ client.cer, client_key.pem when https.verifyClient=true).
+  clientVerifyServer: false
+  registryClientSecret: ""
+  # LLM configuration for orchestration-center (embed drives workflow
+  # semantic retrieval; rerank is optional for top-N retrieval).
   llm:
     chat:
       model: "your-chat-model"
@@ -225,6 +241,18 @@ orchestration:
       apiKey: "your-api-key"
       existingSecret: ""
       existingSecretKey: "orchestration-llm-chat-api-key"
+    embed:
+      model: ""
+      url: ""
+      apiKey: ""
+      existingSecret: ""
+      existingSecretKey: "orchestration-llm-embed-api-key"
+    rerank:
+      model: ""
+      url: ""
+      apiKey: ""
+      existingSecret: ""
+      existingSecretKey: "orchestration-llm-rerank-api-key"
   # Resource limits
   resources:
     requests:
@@ -384,6 +412,10 @@ ingress:
   # host: Set to a DNS name for host-based routing, or leave empty for IP-based path routing
   # Examples: "openan.local" for DNS, "" for direct IP access (e.g., http://<LB_IP>/)
   host: ""
+  # Verify upstream (RC/OC) server certificates on HTTPS backends
+  # (proxy-ssl-verify). Requires per-service ingressClientSecret with
+  # tls.crt / tls.key / ca.crt when enabled.
+  backendVerifyServer: false
   # TLS configuration
   tls:
     enabled: false

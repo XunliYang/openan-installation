@@ -138,6 +138,7 @@ mkdir -p "$BUNDLE/images" "$BUNDLE/deps/bin" "$BUNDLE/deps/manifests"
 log_step "Assembling bundle at $BUNDLE"
 cp -r "$OFFLINE_SRC/scripts" "$BUNDLE/scripts"
 cp -r "$OFFLINE_SRC/chart" "$BUNDLE/chart"
+cp -r "$OFFLINE_SRC/tool" "$BUNDLE/tool"
 cp -r "$OFFLINE_SRC/docs" "$BUNDLE/docs"
 cp "$OFFLINE_SRC/README.md" "$BUNDLE/README.md" 2>/dev/null || true
 cp "$OFFLINE_SRC/config.env.example" "$BUNDLE/config.env.example"

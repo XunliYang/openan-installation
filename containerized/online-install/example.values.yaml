@@ -45,6 +45,9 @@ orchestration:
   resources:
     requests: { cpu: 250m, memory: 512Mi }
     limits: { cpu: 1000m, memory: 1Gi }
+  # A2A-T SDK negotiation LLM (independent of models.yaml; API key goes in
+  # runtimeSecret as A2AT_LLM_API_KEY):
+  # a2atLlm: { provider: openai, model: your-model, baseUrl: https://api.example.com/v1 }
 
 # Frontend (portal by default)
 frontend:

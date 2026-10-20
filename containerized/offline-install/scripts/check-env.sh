@@ -46,6 +46,10 @@ REGISTRY_NODEPORT="${REGISTRY_NODEPORT:-30500}"
 INSTALL_METALLB="${INSTALL_METALLB:-true}"
 METALLB_POOL="${METALLB_POOL:-}"
 INGRESS_HOST="${INGRESS_HOST:-}"
+HTTPS_ENABLED="${HTTPS_ENABLED:-true}"
+RC_TLS_SECRET="${RC_TLS_SECRET:-}"
+OC_TLS_SECRET="${OC_TLS_SECRET:-}"
+INGRESS_CLIENT_SECRET="${INGRESS_CLIENT_SECRET:-}"
 STORAGE_MODE="${STORAGE_MODE:-auto}"
 STORAGE_NODE="${STORAGE_NODE:-}"
 DB_TYPE="${DB_TYPE:-mysql}"
@@ -76,6 +80,41 @@ OS_ID="$(detect_os_id)"
 section "Platform"
 if [ -n "$ARCH" ]; then pass "architecture: $ARCH"; else fail "unsupported architecture: $(uname -m) (need x86_64 or aarch64)"; fi
 pass "os: $OS_ID ($(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-unknown}"))"
+
+section "Transport security (HTTPS)"
+if [ "$(printf '%s' "$HTTPS_ENABLED" | tr '[:upper:]' '[:lower:]')" != "true" ]; then
+    warn "HTTPS_ENABLED is not true — in-cluster traffic stays plain HTTP"
+else
+    if [ -n "$INGRESS_HOST" ] && { printf '%s' "$INGRESS_HOST" | grep -Eq '^[0-9.]+$' || printf '%s' "$INGRESS_HOST" | grep -q ':'; }; then
+        fail "INGRESS_HOST must be a DNS name, not an IP address (Kubernetes rejects IP hosts)"
+    fi
+    if [ -n "$RC_TLS_SECRET" ] || [ -n "$OC_TLS_SECRET" ] || [ -n "$INGRESS_CLIENT_SECRET" ]; then
+        # Existing-Secret mode: all three names required and present in the cluster
+        if [ -z "$RC_TLS_SECRET" ] || [ -z "$OC_TLS_SECRET" ] || [ -z "$INGRESS_CLIENT_SECRET" ]; then
+            fail "existing TLS mode requires RC_TLS_SECRET, OC_TLS_SECRET and INGRESS_CLIENT_SECRET together"
+        elif kubectl get secret "$RC_TLS_SECRET" "$OC_TLS_SECRET" "$INGRESS_CLIENT_SECRET" -n "$K8S_NAMESPACE" >/dev/null 2>&1; then
+            pass "TLS Secrets present: $RC_TLS_SECRET / $OC_TLS_SECRET / $INGRESS_CLIENT_SECRET"
+        else
+            fail "configured TLS Secrets not found in namespace '$K8S_NAMESPACE' (create them first)"
+        fi
+    else
+        if have openssl; then
+            pass "openssl present (self-signed certificate generation)"
+        else
+            fail "openssl not found — required to generate certificates (tool/gen_certs.py)"
+        fi
+        if have python3; then
+            pass "python3 present (tool/gen_certs.py)"
+        else
+            fail "python3 not found — required to generate certificates (tool/gen_certs.py)"
+        fi
+        if [ -x "$BUNDLE_DIR/tool/gen_certs.py" ] || [ -f "$BUNDLE_DIR/tool/gen_certs.py" ]; then
+            pass "tool/gen_certs.py bundled"
+        else
+            fail "tool/gen_certs.py missing from the bundle"
+        fi
+    fi
+fi
 
 section "Bundle"
 if [ -d "$BUNDLE_DIR/images" ] && [ -n "$(ls -A "$BUNDLE_DIR/images" 2>/dev/null)" ]; then
@@ -127,6 +166,12 @@ check_k8s() {
         fi
     else
         fail "ctr not found — containerd is required (see docs/KUBEADM_CLUSTER.md)"
+    fi
+
+    if have curl; then
+        pass "curl: $(curl --version 2>/dev/null | head -1 | awk '{print $1, $2}')"
+    else
+        fail "curl not found — required for registry readiness checks and API smoke tests"
     fi
 
     section "Cluster"
