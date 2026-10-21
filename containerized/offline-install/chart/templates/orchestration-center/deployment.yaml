@@ -198,10 +198,14 @@ spec:
           {{- else }}
           secretName: {{ .Values.orchestration.tls.existingSecret }}
           {{- end }}
+          # 0444 (the K8s default) leaves the private key world-readable;
+          # the service refuses to start on such TLS mounts.
+          defaultMode: 0440
       {{- end }}
       {{- if and .Values.https.enabled .Values.orchestration.registryClientSecret }}
       - name: registry-tls
         secret:
           secretName: {{ .Values.orchestration.registryClientSecret }}
+          defaultMode: 0440
       {{- end }}
 {{- end }}

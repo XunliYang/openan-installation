@@ -20,6 +20,14 @@ spec:
       labels:
         {{- include "openan.registry.selectorLabels" . | nindent 8 }}
     spec:
+      # fsGroup lets kubelet chown secret volumes to group 10001, so the
+      # defaultMode 0440 mounts (TLS/signing) are group-readable by the
+      # non-root application user; without it the volumes stay root:root
+      # and the service cannot read its own keys (field crash).
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
       terminationGracePeriodSeconds: 60
       affinity:
         podAntiAffinity:
@@ -114,14 +122,24 @@ spec:
           subPath: models.yaml
           readOnly: true
         {{- if ne .Values.registry.tls.mode "off" }}
+        {{- /* Per-file subPath mounts keep the image's etc/ssl directory (0700,
+             owned by UID 10001). A whole-directory secret mount replaces it
+             with a kubelet-created 0755 root, which the service's TLS
+             permission check rejects (field crash). */}}
+        {{- range $key := list "server.cer" "server_key.pem" "cert_pwd" "trust.cer" }}
         - name: tls-certs
-          mountPath: /opt/registry-center/etc/ssl
+          mountPath: /opt/registry-center/etc/ssl/{{ $key }}
+          subPath: {{ $key }}
           readOnly: true
         {{- end }}
+        {{- end }}
         {{- if ne .Values.registry.signing.mode "off" }}
+        {{- range $key := list "sign.cer" "sign_key.pem" "cert_pwd" }}
         - name: signing-certs
-          mountPath: /opt/registry-center/etc/sign_cert
+          mountPath: /opt/registry-center/etc/sign_cert/{{ $key }}
+          subPath: {{ $key }}
           readOnly: true
+        {{- end }}
         {{- end }}
       volumes:
       - name: models-config
@@ -135,6 +153,9 @@ spec:
           {{- else }}
           secretName: {{ .Values.registry.tls.existingSecret }}
           {{- end }}
+          # 0444 (the K8s default) leaves the private key world-readable;
+          # the service refuses to start on such TLS mounts.
+          defaultMode: 0440
       {{- end }}
       {{- if ne .Values.registry.signing.mode "off" }}
       - name: signing-certs
@@ -144,5 +165,6 @@ spec:
           {{- else }}
           secretName: {{ .Values.registry.signing.existingSecret }}
           {{- end }}
+          defaultMode: 0440
       {{- end }}
 {{- end }}
