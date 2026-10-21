@@ -341,6 +341,15 @@ frontend:
   # External Service port (stable); the container port switches by type.
   port: 80
   nodePort: 30191
+  # Backend TLS: material for the frontend nginx to verify the backend server
+  # certificate and present a client certificate (mTLS) when the backend
+  # requires it. Secret keys: trust.cer (required), client.cer + client_key.pem
+  # (for mTLS). Leave empty for plain-HTTP backends. The workflow-designer
+  # image consumes these via BACKEND_CA_FILE / BACKEND_CLIENT_CERT /
+  # BACKEND_CLIENT_KEY (its 15-openan-backend.envsh composes the nginx
+  # proxy_ssl_* directives); the portal image gets the same directives via
+  # the chart-managed nginx template override.
+  backendTlsSecret: ""
   # Nginx configuration for workflow-designer (only used when frontend.type=workflow-designer; mounted as ConfigMap to /etc/nginx/conf.d/default.conf)
   nginxConfig: |
     server {

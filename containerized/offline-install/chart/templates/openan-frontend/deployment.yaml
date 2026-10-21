@@ -33,6 +33,18 @@ spec:
               value: "orchestration-center"
             - name: BACKEND_PORT
               value: "5001"
+            {{- if and .Values.https.enabled .Values.frontend.backendTlsSecret }}
+            - name: BACKEND_TLS_OPTIONS
+              value: >-
+                proxy_ssl_server_name on;
+                proxy_ssl_name orchestration-center;
+                proxy_ssl_verify on;
+                proxy_ssl_trusted_certificate /etc/nginx/backend-tls/trust.cer;
+                {{- if and .Values.https.verifyClient (or (eq (include "openan.frontendType" .) "workflow-designer") true) }}
+                proxy_ssl_certificate /etc/nginx/backend-tls/client.cer;
+                proxy_ssl_certificate_key /etc/nginx/backend-tls/client_key.pem;
+                {{- end }}
+            {{- end }}
           command:
             - /bin/sh
             - -c
@@ -48,20 +60,26 @@ spec:
                 echo "no nginx template or configmap found" >&2; exit 1
               fi
               if command -v envsubst >/dev/null 2>&1; then
-                envsubst '${BACKEND_SCHEME} ${BACKEND_HOST} ${BACKEND_PORT}' < "$SRC" > /rendered/default.conf
+                envsubst '${BACKEND_SCHEME} ${BACKEND_HOST} ${BACKEND_PORT} ${BACKEND_TLS_OPTIONS}' < "$SRC" > /rendered/default.conf
               else
                 sed -e "s|\${BACKEND_SCHEME}|${BACKEND_SCHEME}|g" \
                     -e "s|\${BACKEND_HOST}|${BACKEND_HOST}|g" \
                     -e "s|\${BACKEND_PORT}|${BACKEND_PORT}|g" \
+                    -e "s|\${BACKEND_TLS_OPTIONS}|${BACKEND_TLS_OPTIONS}|g" \
                     "$SRC" > /rendered/default.conf
               fi
               echo "rendered default.conf:"
-              grep -n 'proxy_pass' /rendered/default.conf
+              grep -n 'proxy_pass\|proxy_ssl' /rendered/default.conf || true
           volumeMounts:
             - name: nginx-conf-rendered
               mountPath: /rendered
             - name: nginx-config-cm
               mountPath: /cm
+            {{- if and .Values.https.enabled .Values.frontend.backendTlsSecret }}
+            - name: backend-tls
+              mountPath: /etc/nginx/backend-tls
+              readOnly: true
+            {{- end }}
       {{- end }}
       {{- if eq (include "openan.frontendType" .) "portal" }}
       initContainers:
@@ -125,11 +143,21 @@ spec:
           volumeMounts:
             - name: nginx-conf-rendered
               mountPath: /etc/nginx/conf.d
+            {{- if and .Values.https.enabled .Values.frontend.backendTlsSecret }}
+            - name: backend-tls
+              mountPath: /etc/nginx/backend-tls
+              readOnly: true
+            {{- end }}
           {{- end }}
           {{- if eq (include "openan.frontendType" .) "portal" }}
           volumeMounts:
             - name: portal-html
               mountPath: /usr/share/nginx/html
+            {{- if and .Values.https.enabled .Values.frontend.backendTlsSecret }}
+            - name: backend-tls
+              mountPath: /etc/nginx/backend-tls
+              readOnly: true
+            {{- end }}
           {{- end }}
       {{- if eq (include "openan.frontendType" .) "workflow-designer" }}
       volumes:
@@ -138,10 +166,22 @@ spec:
         - name: nginx-config-cm
           configMap:
             name: openan-frontend-nginx-config
+        {{- if and .Values.https.enabled .Values.frontend.backendTlsSecret }}
+        - name: backend-tls
+          secret:
+            secretName: {{ .Values.frontend.backendTlsSecret }}
+            defaultMode: 0440
+        {{- end }}
       {{- end }}
       {{- if eq (include "openan.frontendType" .) "portal" }}
       volumes:
         - name: portal-html
           emptyDir: {}
+        {{- if and .Values.https.enabled .Values.frontend.backendTlsSecret }}
+        - name: backend-tls
+          secret:
+            secretName: {{ .Values.frontend.backendTlsSecret }}
+            defaultMode: 0440
+        {{- end }}
       {{- end }}
 {{- end }}

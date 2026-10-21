@@ -764,6 +764,11 @@ emit_db_storage() {
         echo "    tag: $(REF_TAG "$WORKFLOW_DESIGNER_IMAGE")"
     fi
     echo "    pullPolicy: IfNotPresent"
+    # Frontend nginx backend TLS: same material as the ingress client
+    # (verify backend certs, present client cert for mTLS backends).
+    if [ "$HTTPS_ENABLED" = "true" ] && [ -n "$INGRESS_CLIENT_SECRET" ]; then
+        echo "  backendTlsSecret: \"${INGRESS_CLIENT_SECRET}\""
+    fi
     echo "ingress:"
     echo "  enabled: true"
     echo "  className: nginx"

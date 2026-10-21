@@ -272,6 +272,35 @@ def test_secret_volume_permissions_are_not_world_readable():
                    for m in oc_mounts)
 
 
+def test_frontend_backend_tls_mounts_for_mtls():
+    # The frontend nginx needs TLS material to verify the backend server cert
+    # and present a client certificate (mTLS) — the BFF proxy approach the
+    # orchestration-center project itself uses (15-openan-backend.envsh).
+    # Without it, HTTPS backends requiring client certs return 502.
+    docs = render({"https.enabled": True,
+                   "frontend.backendTlsSecret": "openan-ingress-client"})
+    spec = docs["Deployment/openan-frontend"]["spec"]["template"]["spec"]
+    volumes = {v["name"]: v for v in spec["volumes"]}
+    assert volumes["backend-tls"]["secret"]["secretName"] == "openan-ingress-client"
+    assert volumes["backend-tls"]["secret"]["defaultMode"] == 0o440
+    mounts = spec["containers"][0]["volumeMounts"]
+    assert any(m["mountPath"] == "/etc/nginx/backend-tls" and m["readOnly"]
+               for m in mounts)
+    # No TLS volume when the secret is not set
+    default = render()
+    default_volumes = {v["name"] for v in
+                       default["Deployment/openan-frontend"]["spec"]["template"]["spec"]["volumes"]}
+    assert "backend-tls" not in default_volumes
+
+
+def test_installer_emits_frontend_backend_tls():
+    # The installer wires the ingress client Secret as the frontend backend
+    # TLS material so the frontend nginx can do mTLS to the backends.
+    text = (ROOT / "containerized/offline-install/scripts/install.sh").read_text(encoding="utf-8")
+    assert "backendTlsSecret" in text
+    assert "INGRESS_CLIENT_SECRET" in text
+
+
 def test_oc_verify_client_follows_values():
     # The OC image defaults to ORCH_VERIFY_CLIENT=true; without the configmap
     # override, the OC always requires client certificates regardless of the
