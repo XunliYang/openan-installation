@@ -208,12 +208,16 @@ def test_secret_volume_permissions_are_not_world_readable():
     # The registry-center service refuses to start on TLS mounts whose key
     # files are world-readable; K8s defaults secret volumes to 0444, so every
     # secret volume must pin defaultMode: 0440 (field-verified crash).
+    # 0440 is only readable by the app when fsGroup chowns the volumes to
+    # the non-root group (second field crash: Permission denied on sign key).
     docs = render({"https.enabled": True,
                    "registry.tls.mode": "secret", "registry.tls.existingSecret": "rc-tls",
                    "orchestration.tls.mode": "secret", "orchestration.tls.existingSecret": "oc-tls",
                    "orchestration.registryClientSecret": "oc-registry-client"})
     for deployment in ("Deployment/registry-center", "Deployment/orchestration-center"):
-        volumes = {v["name"]: v for v in docs[deployment]["spec"]["template"]["spec"]["volumes"]}
+        spec = docs[deployment]["spec"]["template"]["spec"]
+        assert spec["securityContext"]["fsGroup"] == 10001, deployment
+        volumes = {v["name"]: v for v in spec["volumes"]}
         secret_volumes = [v for v in volumes.values() if "secret" in v]
         assert secret_volumes, deployment
         for volume in secret_volumes:

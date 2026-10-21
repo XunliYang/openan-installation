@@ -20,6 +20,14 @@ spec:
       labels:
         {{- include "openan.registry.selectorLabels" . | nindent 8 }}
     spec:
+      # fsGroup lets kubelet chown secret volumes to group 10001, so the
+      # defaultMode 0440 mounts (TLS/signing) are group-readable by the
+      # non-root application user; without it the volumes stay root:root
+      # and the service cannot read its own keys (field crash).
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
       terminationGracePeriodSeconds: 60
       affinity:
         podAntiAffinity:
