@@ -135,6 +135,9 @@ spec:
           {{- else }}
           secretName: {{ .Values.registry.tls.existingSecret }}
           {{- end }}
+          # 0444 (the K8s default) leaves the private key world-readable;
+          # the service refuses to start on such TLS mounts.
+          defaultMode: 0440
       {{- end }}
       {{- if ne .Values.registry.signing.mode "off" }}
       - name: signing-certs
@@ -144,5 +147,6 @@ spec:
           {{- else }}
           secretName: {{ .Values.registry.signing.existingSecret }}
           {{- end }}
+          defaultMode: 0440
       {{- end }}
 {{- end }}

@@ -204,6 +204,22 @@ def test_orchestration_verifies_registry_tls():
     assert "REGISTRY_CA_FILE" not in config
 
 
+def test_secret_volume_permissions_are_not_world_readable():
+    # The registry-center service refuses to start on TLS mounts whose key
+    # files are world-readable; K8s defaults secret volumes to 0444, so every
+    # secret volume must pin defaultMode: 0440 (field-verified crash).
+    docs = render({"https.enabled": True,
+                   "registry.tls.mode": "secret", "registry.tls.existingSecret": "rc-tls",
+                   "orchestration.tls.mode": "secret", "orchestration.tls.existingSecret": "oc-tls",
+                   "orchestration.registryClientSecret": "oc-registry-client"})
+    for deployment in ("Deployment/registry-center", "Deployment/orchestration-center"):
+        volumes = {v["name"]: v for v in docs[deployment]["spec"]["template"]["spec"]["volumes"]}
+        secret_volumes = [v for v in volumes.values() if "secret" in v]
+        assert secret_volumes, deployment
+        for volume in secret_volumes:
+            assert volume["secret"]["defaultMode"] == 0o440, f"{deployment}/{volume['name']}"
+
+
 def test_installer_security_contract():
     # Security batch: strict mode, no default DB password, credentials only as
     # Secret references (never inlined into the generated values file).
