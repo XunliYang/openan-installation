@@ -485,6 +485,46 @@ def test_offline_compose_source_ref_derives_dated_tag(tmp_path):
         result.stdout + result.stderr + "\nDOCKER CALLS:\n" + calls
 
 
+def test_offline_compose_per_component_tags_override_global(tmp_path):
+    # --registry-tag/--orchestration-tag/--portal-tag override the global
+    # tag for their component; --orchestration-tag also covers
+    # workflow-designer; unset components keep the global tag. The docker
+    # shim succeeds for pull/inspect/save/create so every component is
+    # prepared and logged before the (expected) web-extraction failure.
+    if not BASH:
+        pytest.skip("Bash unavailable")
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    log = tmp_path / "docker-args.txt"
+    docker = shim / "docker"
+    docker.write_text(f'''#!/usr/bin/env bash
+printf "%s\\n" "$*" >> "{log}"
+case "$1 $2" in
+  "image inspect") echo "linux/amd64"; exit 0 ;;
+  "save -o") printf x > "$3"; exit 0 ;;
+  "create --platform") echo "fakecid"; exit 0 ;;
+esac
+exit 0
+''')
+    docker.chmod(0o755)
+    python3 = shim / "python3"
+    python3.write_text("#!/usr/bin/env bash\nexit 0\n")
+    python3.chmod(0o755)
+    result = _run_build_with_shim(
+        ROOT / "containerized/offline-install-compose/build/build-offline.sh",
+        ["--tag", "v1.0.0", "--app-source", "pull",
+         "--registry-tag", "v1.1.2", "--orchestration-tag", "main-20261019",
+         "--platforms", "linux/amd64", "--out", str(tmp_path / "dist")],
+        shim)
+    calls = log.read_text() if log.exists() else ""
+    assert "registry-center:v1.1.2" in calls, \
+        result.stdout + result.stderr + "\nDOCKER CALLS:\n" + calls
+    assert "orchestration-center:main-20261019" in calls
+    assert "workflow-designer:main-20261019" in calls  # shares the OC tag
+    assert "openan-portal:v1.0.0" in calls             # unset -> global tag
+    assert "registry-center:v1.0.0" not in calls       # overridden
+
+
 def test_build_local_source_skips_remote_download(tmp_path):
     if not BASH:
         pytest.skip("Bash unavailable")

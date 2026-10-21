@@ -24,7 +24,7 @@ def render(settings=None, success=True):
     # Render against the chart's declared minimum so the result does not
     # depend on the K8s version compiled into the local helm binary.
     command = [HELM, "template", "contract", str(CHART), "--namespace", "openan",
-               "--kube-version", "1.34.0"]
+                "--kube-version", "1.33.0"]
     for key, value in {**BASE, **(settings or {})}.items():
         command += ["--set", f"{key}={str(value).lower() if isinstance(value, bool) else value}"]
     result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", timeout=40)
@@ -214,6 +214,26 @@ def test_installer_security_contract():
     assert "existingSecret: openan-db-credentials" in text
     assert "existingSecret: openan-admin" in text
     assert "create_secret_from_pairs" in text  # stdin JSON, never argv
+
+
+def test_example_values_really_render():
+    # The pure-Helm entry point documented in chart/README.md: the shipped
+    # example must render and carry Secret references, not inline credentials.
+    if not HELM:
+        pytest.skip("Set HELM_BIN to run real Helm render validation")
+    example = ROOT / "containerized/offline-install/example.values.yaml"
+    result = subprocess.run([HELM, "template", "openan", str(CHART), "--namespace", "openan",
+                             "--kube-version", "1.33.0", "-f", str(example)],
+                            capture_output=True, text=True, encoding="utf-8", timeout=40)
+    assert result.returncode == 0, result.stderr
+    docs = list(yaml.safe_load_all(result.stdout))
+    assert any(d and d.get("kind") == "Deployment" for d in docs)
+    rendered = result.stdout
+    assert "openan-rc-tls" in rendered and "openan-ingress-client" in rendered
+    assert "proxy-ssl-verify" in rendered  # backend verification on
+    text = example.read_text(encoding="utf-8")
+    assert "initialPassword" not in text
+    assert "apiKey:" not in text
 
 
 def test_frontend_image_override_beats_type_default():

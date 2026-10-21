@@ -25,12 +25,18 @@ For architecture, configuration reference and troubleshooting see
 The cluster and its OS-level dependencies are **already installed** — the
 installer deploys *onto* a cluster, it does not create one:
 
-- A running **Kubernetes cluster (v1.34+)**, e.g. built with `kubeadm`
+- A running **Kubernetes cluster (v1.33+)**, e.g. built with `kubeadm`
   (`kubeadm`, `kubelet`, `kubectl`, containerd and the control-plane images all
   in place). Building the cluster offline is covered by
   [docs/KUBEADM_CLUSTER.md](docs/KUBEADM_CLUSTER.md).
 - `kubectl` access to the cluster from the machine you run the installer on
   (`~/.kube/config` present, nodes `Ready`).
+- **At least 20 GB of free disk space** on the install node: the extracted
+  bundle images, the containerd import and the crane pushes all land on this
+  node before the cluster pulls them. (`check-env.sh` only warns below
+  5 GiB, which is not enough for a full bundle; clean old deployments and
+  stale images first, e.g. `kubectl delete ns <old-namespace>` and
+  `docker system prune -a --volumes`.)
 
 Prepare the following items **before** running the installer (full details and
 the exact check commands for each are in
@@ -99,7 +105,7 @@ Application image sources (`--app-source`):
 | value | meaning |
 |---|---|
 | `pull` (default) | pull the app images (registry-center, orchestration-center, workflow-designer, openan-portal) from `--app-registry` (default `ghcr.io/project-openan`) |
-| `build` | build from local source: `--registry-src <dir> --orchestration-src <dir> [--portal-src <dir>]` |
+| `build` | build from local source: `--registry-src <dir> --orchestration-src <dir>` (portal is pull-only; see the build README) |
 | `tars` | reuse pre-built `<base>-<arch>.tar` from `--app-tars-dir <dir>` |
 
 Useful options: `--platforms linux/amd64,linux/arm64` (default both),
