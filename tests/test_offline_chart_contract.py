@@ -272,7 +272,19 @@ def test_secret_volume_permissions_are_not_world_readable():
                    for m in oc_mounts)
 
 
-def test_orchestration_runtime_pv_fallback_renders():
+def test_oc_verify_client_follows_values():
+    # The OC image defaults to ORCH_VERIFY_CLIENT=true; without the configmap
+    # override, the OC always requires client certificates regardless of the
+    # chart value, and the portal nginx (which has no client cert) gets 502.
+    docs = render()
+    config = docs["ConfigMap/orchestration-center-config"]["data"]
+    assert config["ORCH_VERIFY_CLIENT"] == "false"  # follows https.verifyClient default
+    mtls = render({"https.enabled": True, "https.verifyClient": True,
+                   "registry.ingressClientSecret": "ingress-client"})
+    assert mtls["ConfigMap/orchestration-center-config"]["data"]["ORCH_VERIFY_CLIENT"] == "true"
+
+
+def test_oc_runtime_pv_fallback_renders():
     # PR #31 added the runtime PVC; clusters without a StorageClass left it
     # Pending forever (field crash). The fallback mirrors the database
     # storage blocks: createPV + useHostPath + nodeName + storageClassName.

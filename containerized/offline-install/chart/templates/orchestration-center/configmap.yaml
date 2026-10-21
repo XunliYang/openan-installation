@@ -33,6 +33,7 @@ data:
   ORCH_IP: "0.0.0.0"
   ORCH_PORT: {{ .Values.orchestration.port | quote }}
   ORCH_ENABLE_HTTPS: {{ .Values.https.enabled | quote }}
+  ORCH_VERIFY_CLIENT: {{ .Values.https.verifyClient | quote }}
   ORCH_FORWARDED_ALLOW_IPS: "*"
 
   # Persistence
