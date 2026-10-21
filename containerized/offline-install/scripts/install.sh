@@ -734,6 +734,23 @@ emit_db_storage() {
             echo "      existingSecretKey: orch-chat"
         fi
     fi
+    # Runtime PVC storage: same fallback pattern as the database
+    OC_PERSISTENCE_OPEN=false
+    if [ "$STORAGE_MODE" = "sc" ] || { [ "$STORAGE_MODE" = "auto" ] && [ -n "$STORAGE_CLASS" ]; }; then
+        echo "  persistence:"
+        echo "    storageClassName: \"${STORAGE_CLASS}\""
+        OC_PERSISTENCE_OPEN=true
+    fi
+    if [ "$STORAGE_MODE" = "hostpath" ] || [ "$STORAGE_MODE" = "auto" ]; then
+        if [ "$OC_PERSISTENCE_OPEN" = "false" ]; then
+            echo "  persistence:"
+            OC_PERSISTENCE_OPEN=true
+        fi
+        echo "    createPV: true"
+        echo "    useHostPath: true"
+        echo "    hostPath: \"/data/openan-orchestration-runtime\""
+        echo "    nodeName: ${STORAGE_NODE}"
+    fi
     echo "frontend:"
     echo "  enabled: true"
     echo "  type: ${FRONTEND_TYPE}"

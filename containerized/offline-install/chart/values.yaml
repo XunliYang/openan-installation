@@ -207,6 +207,14 @@ orchestration:
     existingClaim: ""
     size: 10Gi
     storageClassName: ""
+    # Local-PV fallback for clusters without a StorageClass (mirrors the
+    # database storage blocks; the installer enables it via STORAGE_MODE).
+    createPV: false
+    useHostPath: true
+    hostPath: "/data/openan-orchestration-runtime"
+    nodeName: ""
+    pvName: "openan-oc-runtime-pv"
+    reclaimPolicy: "Retain"
   # Vector retrieval policy — requires an OC image with RETRIEVAL_* deployment
   # alias support (orchestration-center #179 or later); older images silently
   # ignore these keys and the feature stays off.

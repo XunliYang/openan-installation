@@ -161,9 +161,16 @@ spec:
           subPath: models.yaml
           readOnly: true
         {{- if and .Values.https.enabled (ne .Values.orchestration.tls.mode "off") }}
+        {{- /* Per-file subPath mounts keep the seeded etc/ssl directory (0700,
+             from the image via seed-etc). A whole-directory secret mount
+             replaces it with a kubelet-created 0755 root, which the
+             service's TLS permission check rejects. */}}
+        {{- range $key := list "server.cer" "server_key.pem" "cert_pwd" "trust.cer" }}
         - name: tls-certs
-          mountPath: /opt/orchestration-center/etc/ssl
+          mountPath: /opt/orchestration-center/etc/ssl/{{ $key }}
+          subPath: {{ $key }}
           readOnly: true
+        {{- end }}
         {{- end }}
         {{- if and .Values.https.enabled .Values.orchestration.registryClientSecret }}
         - name: registry-tls

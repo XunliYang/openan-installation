@@ -234,6 +234,45 @@ def test_secret_volume_permissions_are_not_world_readable():
     # No whole-directory secret mounts remain on RC
     assert not any(m["mountPath"] == "/opt/registry-center/etc/ssl" and "subPath" not in m
                    for m in mounts)
+    # OC TLS also mounts per-key (subPath) into the seeded emptyDir directory
+    oc = docs["Deployment/orchestration-center"]["spec"]["template"]["spec"]["containers"][0]
+    oc_mounts = oc["volumeMounts"]
+    oc_tls_paths = {m["mountPath"] for m in oc_mounts if m.get("subPath") and "/etc/ssl/" in m["mountPath"]}
+    assert oc_tls_paths == {f"/opt/orchestration-center/etc/ssl/{k}"
+                            for k in ("server.cer", "server_key.pem", "cert_pwd", "trust.cer")}
+    # No whole-directory TLS mount on OC either
+    assert not any(m["mountPath"] == "/opt/orchestration-center/etc/ssl" and "subPath" not in m
+                   for m in oc_mounts)
+
+
+def test_orchestration_runtime_pv_fallback_renders():
+    # PR #31 added the runtime PVC; clusters without a StorageClass left it
+    # Pending forever (field crash). The fallback mirrors the database
+    # storage blocks: createPV + useHostPath + nodeName + storageClassName.
+    docs = render({"orchestration.persistence.createPV": True,
+                   "orchestration.persistence.useHostPath": True,
+                   "orchestration.persistence.nodeName": "node185",
+                   "orchestration.persistence.storageClassName": "openan-local"})
+    pv = docs["PersistentVolume/openan-oc-runtime-pv"]
+    assert pv["spec"]["hostPath"]["path"] == "/data/openan-orchestration-runtime"
+    assert pv["spec"]["storageClassName"] == "openan-local"
+    affinity = pv["spec"]["nodeAffinity"]["required"]["nodeSelectorTerms"][0]["matchExpressions"][0]
+    assert affinity["values"] == ["node185"]
+    pvc = docs["PersistentVolumeClaim/orchestration-center-runtime"]
+    assert pvc["spec"]["storageClassName"] == "openan-local"
+    # Default render: no PV created
+    default = render()
+    assert "PersistentVolume/openan-oc-runtime-pv" not in default
+
+
+def test_installer_emits_orchestration_persistence():
+    # The installer must set the runtime PVC storage from STORAGE_MODE,
+    # matching the database fallback (field crash: PVC Pending, no SC).
+    text = (ROOT / "containerized/offline-install/scripts/install.sh").read_text(encoding="utf-8")
+    assert "createPV: true" in text
+    assert "/data/openan-orchestration-runtime" in text
+    # Appear in both the database section and the orchestration section
+    assert text.count("createPV: true") >= 2
 
 
 def test_installer_security_contract():

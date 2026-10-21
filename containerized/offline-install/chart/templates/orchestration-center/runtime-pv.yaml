@@ -1,0 +1,40 @@
+{{/* Copyright (c) 2026 Huawei Technologies Co., Ltd. SPDX-License-Identifier: Apache-2.0 */}}
+{{/* Local-PV fallback for the orchestration runtime claim on clusters
+     without a StorageClass (same pattern as postgres/storage.yaml). The
+     installer enables it via STORAGE_MODE=auto/hostpath. */}}
+{{- if and .Values.orchestration.enabled .Values.orchestration.persistence.createPV (not .Values.orchestration.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Values.orchestration.persistence.pvName | default "openan-oc-runtime-pv" }}
+  labels:
+    {{- include "openan.orchestration.labels" . | nindent 4 }}
+spec:
+  capacity:
+    storage: {{ .Values.orchestration.persistence.size }}
+  volumeMode: Filesystem
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: {{ .Values.orchestration.persistence.reclaimPolicy | default "Retain" }}
+  {{- if .Values.orchestration.persistence.storageClassName }}
+  storageClassName: {{ .Values.orchestration.persistence.storageClassName }}
+  {{- end }}
+  {{- if .Values.orchestration.persistence.useHostPath }}
+  hostPath:
+    path: {{ .Values.orchestration.persistence.hostPath | default "/data/openan-orchestration-runtime" }}
+    type: DirectoryOrCreate
+  {{- else }}
+  local:
+    path: {{ .Values.orchestration.persistence.hostPath | default "/data/openan-orchestration-runtime" }}
+  {{- end }}
+  {{- if .Values.orchestration.persistence.nodeName }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - {{ .Values.orchestration.persistence.nodeName }}
+  {{- end }}
+{{- end }}
