@@ -39,6 +39,27 @@ def render(settings=None, success=True):
     return docs
 
 
+def test_portal_defaults_initcontainer_patches_js():
+    # The portal JS hardcodes 127.0.0.1:5001 as the backend default; the
+    # BACKEND_URL env var only configures nginx, not the JS bundle. An
+    # initContainer copies the HTML to an emptyDir and seds the defaults
+    # to the in-cluster service addresses (field-verified bug).
+    docs = render()
+    deployment = docs["Deployment/openan-frontend"]
+    spec = deployment["spec"]["template"]["spec"]
+    init = next(c for c in spec["initContainers"] if c["name"] == "patch-portal-defaults")
+    command = " ".join(init["command"])
+    assert "127.0.0.1:5001" in command or "127\\.0\\.0\\.1:5001" in command
+    assert "orchestration-center:5001" in command
+    assert "registry-center:5000" in command
+    # The main container serves the patched files from the emptyDir
+    volumes = {v["name"]: v for v in spec["volumes"]}
+    assert volumes["portal-html"]["emptyDir"] == {}
+    container = spec["containers"][0]
+    mounts = {m["mountPath"]: m["name"] for m in container["volumeMounts"]}
+    assert mounts["/usr/share/nginx/html"] == "portal-html"
+
+
 def test_frontend_defaults_to_portal():
     docs = render()
     deployment = docs["Deployment/openan-frontend"]
@@ -48,8 +69,10 @@ def test_frontend_defaults_to_portal():
     env = {e["name"]: e["value"] for e in container["env"]}
     assert env["BACKEND_URL"] == "http://orchestration-center:5001"
     assert env["REGISTRY_URL"] == "http://registry-center:5000"
-    # portal renders no initContainer and no chart-managed nginx ConfigMap
-    assert "initContainers" not in deployment["spec"]["template"]["spec"]
+    # portal has only the JS-defaults patch initContainer (no nginx render);
+    # no chart-managed nginx ConfigMap for the portal type
+    init_names = [c["name"] for c in deployment["spec"]["template"]["spec"].get("initContainers", [])]
+    assert init_names == ["patch-portal-defaults"]
     assert "ConfigMap/openan-frontend-nginx-config" not in docs
     assert "Deployment/workflow-designer" not in docs
     assert "Service/workflow-designer" not in docs

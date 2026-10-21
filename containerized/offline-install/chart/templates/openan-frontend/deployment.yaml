@@ -63,6 +63,31 @@ spec:
             - name: nginx-config-cm
               mountPath: /cm
       {{- end }}
+      {{- if eq (include "openan.frontendType" .) "portal" }}
+      initContainers:
+        # The portal JS hardcodes 127.0.0.1:5001/5000 as backend defaults
+        # (read from localStorage server_config); the BACKEND_URL env var only
+        # configures the nginx proxy, not the JS. Copy the image's HTML to an
+        # emptyDir and patch the defaults to the in-cluster service addresses
+        # (field-verified bug; the proper fix belongs in the portal source).
+        - name: patch-portal-defaults
+          image: "{{ include "openan.frontendImageRepository" . }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              cp -r /usr/share/nginx/html/. /patched/
+              find /patched -name '*.js' -exec sed -i \
+                -e 's|127\.0\.0\.1:5001|orchestration-center:{{ .Values.orchestration.port }}|g' \
+                -e 's|127\.0\.0\.1:5000|registry-center:{{ .Values.registry.port }}|g' \
+                {} +
+              echo "portal JS defaults patched to in-cluster services"
+          volumeMounts:
+            - name: portal-html
+              mountPath: /patched
+      {{- end }}
       containers:
         - name: openan-frontend
           image: "{{ include "openan.frontendImageRepository" . }}:{{ .Values.frontend.image.tag }}"
@@ -96,6 +121,11 @@ spec:
             - name: nginx-conf-rendered
               mountPath: /etc/nginx/conf.d
           {{- end }}
+          {{- if eq (include "openan.frontendType" .) "portal" }}
+          volumeMounts:
+            - name: portal-html
+              mountPath: /usr/share/nginx/html
+          {{- end }}
       {{- if eq (include "openan.frontendType" .) "workflow-designer" }}
       volumes:
         - name: nginx-conf-rendered
@@ -103,5 +133,10 @@ spec:
         - name: nginx-config-cm
           configMap:
             name: openan-frontend-nginx-config
+      {{- end }}
+      {{- if eq (include "openan.frontendType" .) "portal" }}
+      volumes:
+        - name: portal-html
+          emptyDir: {}
       {{- end }}
 {{- end }}
