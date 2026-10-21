@@ -272,6 +272,35 @@ def test_secret_volume_permissions_are_not_world_readable():
                    for m in oc_mounts)
 
 
+def test_storage_class_names_prevent_pv_cross_binding():
+    # Both PVs and PVCs without a storageClassName can cross-bind (field
+    # crash: the OC runtime PVC claimed the MySQL PV). Each PV/PVC pair
+    # must use a DISTINCT class name so binding is deterministic.
+    text = (ROOT / "containerized/offline-install/scripts/install.sh").read_text(encoding="utf-8")
+    # Database uses openan-local (with createStorageClass for binding mode)
+    assert 'storageClassName: openan-local' in text
+    assert 'createStorageClass: true' in text
+    # OC runtime uses a distinct class name (no cross-binding with database)
+    assert 'storageClassName: openan-oc-runtime' in text
+    # Both appear in the hostpath/auto fallback branches
+    assert text.count('storageClassName: openan-local') >= 1
+    assert text.count('storageClassName: openan-oc-runtime') >= 1
+
+
+def test_prepare_runtime_initcontainer_runs_as_root():
+    # The hostPath PVC volume root is root:10001 mode 0755 (group no write);
+    # the app user (10001) cannot mkdir. The initContainer must run as root,
+    # create data/log, chown them to 10001 and make the root group-writable.
+    docs = render()
+    init = next(c for c in
+                docs["Deployment/orchestration-center"]["spec"]["template"]["spec"]["initContainers"]
+                if c["name"] == "prepare-runtime")
+    assert init["securityContext"]["runAsUser"] == 0
+    command = " ".join(init["command"])
+    assert "chown 10001:10001" in command
+    assert "chmod 0770" in command
+
+
 def test_frontend_backend_tls_mounts_for_mtls():
     # The frontend nginx needs TLS material to verify the backend server cert
     # and present a client certificate (mTLS) — the BFF proxy approach the

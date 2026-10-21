@@ -641,6 +641,10 @@ emit_db_storage() {
         echo "    storageClassName: \"${STORAGE_CLASS}\""
     fi
     if [ "$STORAGE_MODE" = "hostpath" ] || [ "$STORAGE_MODE" = "auto" ]; then
+        # Distinct storageClassName per PV/PVC pair prevents cross-binding
+        # (e.g. the OC runtime PVC claiming the MySQL PV).
+        echo "    createStorageClass: true"
+        echo "    storageClassName: openan-local"
         echo "    createPV: true"
         echo "    useHostPath: true"
         echo "    hostPath: \"${hostpath}\""
@@ -746,6 +750,8 @@ emit_db_storage() {
             echo "  persistence:"
             OC_PERSISTENCE_OPEN=true
         fi
+        # Distinct class from the database: prevents cross-binding
+        echo "    storageClassName: openan-oc-runtime"
         echo "    createPV: true"
         echo "    useHostPath: true"
         echo "    hostPath: \"/data/openan-orchestration-runtime\""
