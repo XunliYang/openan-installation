@@ -122,14 +122,24 @@ spec:
           subPath: models.yaml
           readOnly: true
         {{- if ne .Values.registry.tls.mode "off" }}
+        {{- /* Per-file subPath mounts keep the image's etc/ssl directory (0700,
+             owned by UID 10001). A whole-directory secret mount replaces it
+             with a kubelet-created 0755 root, which the service's TLS
+             permission check rejects (field crash). */}}
+        {{- range $key := list "server.cer" "server_key.pem" "cert_pwd" "trust.cer" }}
         - name: tls-certs
-          mountPath: /opt/registry-center/etc/ssl
+          mountPath: /opt/registry-center/etc/ssl/{{ $key }}
+          subPath: {{ $key }}
           readOnly: true
         {{- end }}
+        {{- end }}
         {{- if ne .Values.registry.signing.mode "off" }}
+        {{- range $key := list "sign.cer" "sign_key.pem" "cert_pwd" }}
         - name: signing-certs
-          mountPath: /opt/registry-center/etc/sign_cert
+          mountPath: /opt/registry-center/etc/sign_cert/{{ $key }}
+          subPath: {{ $key }}
           readOnly: true
+        {{- end }}
         {{- end }}
       volumes:
       - name: models-config

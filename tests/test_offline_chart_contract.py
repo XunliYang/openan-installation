@@ -205,11 +205,11 @@ def test_orchestration_verifies_registry_tls():
 
 
 def test_secret_volume_permissions_are_not_world_readable():
-    # The registry-center service refuses to start on TLS mounts whose key
-    # files are world-readable; K8s defaults secret volumes to 0444, so every
-    # secret volume must pin defaultMode: 0440 (field-verified crash).
-    # 0440 is only readable by the app when fsGroup chowns the volumes to
-    # the non-root group (second field crash: Permission denied on sign key).
+    # The registry-center service walks etc/ssl and rejects mounts whose
+    # directory has world bits (a whole-directory secret mount creates a
+    # kubelet-owned 0755 root — field crash). TLS/signing files must mount
+    # per-key via subPath into the image's pre-created 0700 directories,
+    # with defaultMode 0440 on the secret volume and fsGroup for ownership.
     docs = render({"https.enabled": True,
                    "registry.tls.mode": "secret", "registry.tls.existingSecret": "rc-tls",
                    "orchestration.tls.mode": "secret", "orchestration.tls.existingSecret": "oc-tls",
@@ -222,6 +222,18 @@ def test_secret_volume_permissions_are_not_world_readable():
         assert secret_volumes, deployment
         for volume in secret_volumes:
             assert volume["secret"]["defaultMode"] == 0o440, f"{deployment}/{volume['name']}"
+    # RC TLS/signing files mount per-key (subPath) into the image directories
+    rc = docs["Deployment/registry-center"]["spec"]["template"]["spec"]["containers"][0]
+    mounts = rc["volumeMounts"]
+    tls_paths = {m["mountPath"] for m in mounts if m.get("subPath") and "/etc/ssl/" in m["mountPath"]}
+    assert tls_paths == {f"/opt/registry-center/etc/ssl/{k}"
+                         for k in ("server.cer", "server_key.pem", "cert_pwd", "trust.cer")}
+    signing_paths = {m["mountPath"] for m in mounts if m.get("subPath") and "/etc/sign_cert/" in m["mountPath"]}
+    assert signing_paths == {f"/opt/registry-center/etc/sign_cert/{k}"
+                             for k in ("sign.cer", "sign_key.pem", "cert_pwd")}
+    # No whole-directory secret mounts remain on RC
+    assert not any(m["mountPath"] == "/opt/registry-center/etc/ssl" and "subPath" not in m
+                   for m in mounts)
 
 
 def test_installer_security_contract():
