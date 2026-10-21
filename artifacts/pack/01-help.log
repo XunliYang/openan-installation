@@ -1,0 +1,27 @@
+Usage: pack.sh [OPTIONS]
+
+Component selection: every flag that names a component selects it.
+General flags select at the default version; specific flags select AND pin
+the source tag. Selection is order-independent.
+
+Options:
+  --reg                Pack registry-center (default version)
+  --orc                Pack orchestration-center (default version)
+                       (default: both if no component flag is specified)
+  --reg-version <tag>  registry-center source tag (default: v1.0.0);
+                       also selects registry-center
+  --orc-version <tag>  orchestration-center source tag (default: v1.0.0);
+                       also selects orchestration-center
+  -h, --help           Show this help message and exit
+
+Version overrides (precedence: flag > built-in default):
+  Tags accept "v1.1.0" or "1.1.0"; the tarball name strips the leading "v".
+
+Examples:
+  ./pack.sh                              # Pack everything (default: --reg --orc)
+  ./pack.sh --reg                        # Pack only registry-center
+  ./pack.sh --orc                        # Pack only orchestration-center
+  ./pack.sh --reg --orc                  # Pack both
+  ./pack.sh --reg --orc-version v1.1.0   # registry-center (default) + orchestration-center v1.1.0
+  ./pack.sh --orc-version v1.1.0         # Pack only orchestration-center v1.1.0
+exit=0

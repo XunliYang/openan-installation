@@ -1,0 +1,525 @@
+START 2026-10-18 03:36:31 UTC
+[0;34m========================================[0m
+[0;34m  OpenAN Offline Packager[0m
+[0;34m========================================[0m
+
+  Pack targets:
+    registry-center:       false
+    orchestration-center:  true
+  Versions (flag > default):
+    registry-center:       v1.0.0 (default)
+      https://github.com/project-openan/registry-center/archive/refs/tags/v1.0.0.tar.gz
+    orchestration-center:  v1.0.0 (default)
+      https://github.com/project-openan/orchestration-center/archive/refs/tags/v1.0.0.tar.gz
+  Target archs:    x86_64, aarch64
+  Python version:  3.12
+  Output:          /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist
+
+[1;33mChecking prerequisites...[0m
+  [0;32m✓[0m Python 3.12 (python3.12)
+  [0;32m✓[0m Node.js 24.21.0
+  [0;32m✓[0m npm 11.19.0
+  [0;32m✓[0m curl (for source download)
+  [0;32m✓[0m tar (for source extraction)
+
+[1;33mCreating packaging venv...[0m
+  [0;32m✓[0m Packaging venv created: /tmp/pack-openan-venv-MrPWo2
+
+[0;34m--- Packing orchestration-center ---[0m
+
+[1;33mCleaning previous build...[0m
+  [0;32m✓[0m Build directory ready: /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux
+
+[1;33mDownloading project source v1.0.0...[0m
+  [0;32m✓[0m Source downloaded and copied
+
+[1;33mDownloading Python wheels (x86_64 + aarch64)...[0m
+  [1;33mDownloading binary wheels for x86_64...[0m
+  Collecting pydantic>=2.12.5 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 18))
+    Using cached pydantic-2.14.1-py3-none-any.whl.metadata (133 kB)
+  Collecting a2a-t-sdk>=0.1.8 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    Downloading a2a_t_sdk-1.1.0-py3-none-any.whl.metadata (10 kB)
+  Collecting openai>=2.26.0 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 22))
+    Using cached openai-3.35.1-py3-none-any.whl.metadata (44 kB)
+  Collecting fastapi>=0.135.1 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 23))
+    Using cached fastapi-0.143.3-py3-none-any.whl.metadata (26 kB)
+  Collecting uvicorn>=0.42 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 24))
+    Using cached uvicorn-0.54.0-py3-none-any.whl.metadata (6.6 kB)
+  Collecting loguru>=0.7.3 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 25))
+    Using cached loguru-0.7.3-py3-none-any.whl.metadata (22 kB)
+  Collecting PyYAML>=6.0.3 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 26))
+    Using cached pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+  Collecting pymupdf (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 27))
+    Downloading pymupdf-1.28.2-cp310-abi3-manylinux_2_28_x86_64.whl.metadata (26 kB)
+  Collecting limits>=5.8.0 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 28))
+    Downloading limits-5.8.0-py3-none-any.whl.metadata (10 kB)
+  Collecting python-multipart>=0.0.24 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 29))
+    Downloading python_multipart-0.0.32-py3-none-any.whl.metadata (2.1 kB)
+  Collecting psycopg2-binary>=2.9.10 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 30))
+    Using cached psycopg2_binary-2.9.13-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (4.9 kB)
+  Collecting pytest>=8.0 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 32))
+    Using cached pytest-9.1.1-py3-none-any.whl.metadata (7.6 kB)
+  Collecting pytest-asyncio>=0.24 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 33))
+    Using cached pytest_asyncio-1.4.0-py3-none-any.whl.metadata (4.1 kB)
+  Collecting a2a-sdk[http-server] (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached a2a_sdk-1.2.2-py3-none-any.whl.metadata (9.6 kB)
+  Collecting annotated-types>=0.6.0 (from pydantic>=2.12.5->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 18))
+    Using cached annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+  Collecting pydantic-core==2.50.1 (from pydantic>=2.12.5->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 18))
+    Using cached pydantic_core-2.50.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.5 kB)
+  Collecting typing-extensions>=4.16.0 (from pydantic>=2.12.5->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 18))
+    Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+  Collecting typing-inspection>=0.4.4 (from pydantic>=2.12.5->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 18))
+    Using cached typing_inspection-0.4.4-py3-none-any.whl.metadata (2.6 kB)
+  Collecting jsonschema>=4.23.0 (from a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    Downloading jsonschema-4.26.0-py3-none-any.whl.metadata (7.6 kB)
+  Collecting python-dotenv>=1.1.0 (from a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    Using cached python_dotenv-1.2.4-py3-none-any.whl.metadata (29 kB)
+  Collecting httpx<1,>=0.23.0 (from a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    Using cached httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+  Collecting anyio (from httpx<1,>=0.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    Using cached anyio-4.15.1-py3-none-any.whl.metadata (4.7 kB)
+  Collecting certifi (from httpx<1,>=0.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    Using cached certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+  Collecting httpcore==1.* (from httpx<1,>=0.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    Using cached httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+  Collecting idna (from httpx<1,>=0.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    Using cached idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+  Collecting h11>=0.16 (from httpcore==1.*->httpx<1,>=0.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+  Collecting culsans>=0.11.0 (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached culsans-0.11.0-py3-none-any.whl.metadata (13 kB)
+  Collecting google-api-core>=1.26.0 (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached google_api_core-2.42.0-py3-none-any.whl.metadata (3.2 kB)
+  Collecting googleapis-common-protos>=1.70.0 (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached googleapis_common_protos-1.75.5-py3-none-any.whl.metadata (8.5 kB)
+  Collecting json-rpc>=1.15.0 (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached json_rpc-1.15.0-py2.py3-none-any.whl.metadata (7.2 kB)
+  Collecting packaging>=24.0 (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+  Collecting protobuf>=5.29.5 (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl.metadata (595 bytes)
+  Collecting sse-starlette (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Downloading sse_starlette-3.5.0-py3-none-any.whl.metadata (15 kB)
+  Collecting starlette (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Downloading starlette-1.8.0-py3-none-any.whl.metadata (6.6 kB)
+  Collecting grpcio-reflection>=1.7.0 (from a2a-sdk[grpc]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 21))
+    Downloading grpcio_reflection-1.84.0-py3-none-any.whl.metadata (1.2 kB)
+  Collecting grpcio-tools>=1.60 (from a2a-sdk[grpc]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 21))
+    Downloading grpcio_tools-1.84.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.3 kB)
+  Collecting grpcio>=1.60 (from a2a-sdk[grpc]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 21))
+    Using cached grpcio-1.84.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (3.8 kB)
+  Collecting httpx2<3,>=2.12.0 (from openai>=2.26.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 22))
+    Using cached httpx2-2.13.1-py3-none-any.whl.metadata (9.8 kB)
+  Collecting jiter<1,>=0.16.0 (from openai>=2.26.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 22))
+    Using cached jiter-0.17.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.2 kB)
+  Collecting sniffio (from openai>=2.26.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 22))
+    Using cached sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+  Collecting httpcore2==2.13.1 (from httpx2<3,>=2.12.0->openai>=2.26.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 22))
+    Using cached httpcore2-2.13.1-py3-none-any.whl.metadata (26 kB)
+  Collecting truststore>=0.10 (from httpx2<3,>=2.12.0->openai>=2.26.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 22))
+    Using cached truststore-0.10.5-py3-none-any.whl.metadata (4.5 kB)
+  Collecting annotated-doc>=0.0.2 (from fastapi>=0.135.1->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 23))
+    Using cached annotated_doc-0.0.5-py3-none-any.whl.metadata (6.5 kB)
+  Collecting opentelemetry-api>=1.44.0 (from fastapi>=0.135.1->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 23))
+    Using cached opentelemetry_api-1.45.1-py3-none-any.whl.metadata (1.4 kB)
+  Collecting click>=7.0 (from uvicorn>=0.42->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 24))
+    Using cached click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+  Collecting deprecated>=1.2 (from limits>=5.8.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 28))
+    Using cached deprecated-3.0.0-py3-none-any.whl.metadata (6.5 kB)
+  Collecting iniconfig>=1.0.1 (from pytest>=8.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 32))
+    Using cached iniconfig-2.3.1-py3-none-any.whl.metadata (2.8 kB)
+  Collecting pluggy<2,>=1.5 (from pytest>=8.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 32))
+    Using cached pluggy-1.7.0-py3-none-any.whl.metadata (5.0 kB)
+  Collecting pygments>=2.7.2 (from pytest>=8.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 32))
+    Using cached pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+  Collecting aiologic<0.18.0,>=0.16.0 (from culsans>=0.11.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached aiologic-0.17.1-py3-none-any.whl.metadata (10 kB)
+  Collecting wrapt>=1.16.0 (from aiologic<0.18.0,>=0.16.0->culsans>=0.11.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached wrapt-2.5.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (7.6 kB)
+  Collecting proto-plus<2.0.0,>=1.26.1 (from google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached proto_plus-1.29.0-py3-none-any.whl.metadata (2.2 kB)
+  Collecting google-auth<3.0.0,>=2.14.1 (from google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached google_auth-2.62.0-py3-none-any.whl.metadata (6.0 kB)
+  Collecting requests<3.0.0,>=2.33.0 (from google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+  Collecting pyasn1-modules>=0.2.1 (from google-auth<3.0.0,>=2.14.1->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+  Collecting cryptography>=38.0.3 (from google-auth<3.0.0,>=2.14.1->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Downloading cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (4.4 kB)
+  Collecting charset_normalizer<4,>=2 (from requests<3.0.0,>=2.33.0->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached charset_normalizer-3.5.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (46 kB)
+  Collecting urllib3<3,>=1.26 (from requests<3.0.0,>=2.33.0->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)
+  Collecting cffi>=2.0.0 (from cryptography>=38.0.3->google-auth<3.0.0,>=2.14.1->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+  Collecting pycparser (from cffi>=2.0.0->cryptography>=38.0.3->google-auth<3.0.0,>=2.14.1->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached pycparser-3.11-py3-none-any.whl.metadata (8.2 kB)
+  Collecting setuptools>=77.0.1 (from grpcio-tools>=1.60->a2a-sdk[grpc]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 21))
+    Downloading setuptools-84.0.0-py3-none-any.whl.metadata (6.6 kB)
+  Collecting attrs>=22.2.0 (from jsonschema>=4.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    Downloading attrs-26.1.0-py3-none-any.whl.metadata (8.8 kB)
+  Collecting jsonschema-specifications>=2023.03.6 (from jsonschema>=4.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl.metadata (2.9 kB)
+  Collecting referencing>=0.28.4 (from jsonschema>=4.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    Downloading referencing-0.37.0-py3-none-any.whl.metadata (2.8 kB)
+  Collecting rpds-py>=0.25.0 (from jsonschema>=4.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    Downloading rpds_py-2026.9.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.1 kB)
+  Collecting pyasn1<0.7.0,>=0.6.1 (from pyasn1-modules>=0.2.1->google-auth<3.0.0,>=2.14.1->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached pyasn1-0.6.4-py3-none-any.whl.metadata (8.4 kB)
+  Using cached pydantic-2.14.1-py3-none-any.whl (488 kB)
+  Using cached pydantic_core-2.50.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.2 MB)
+  Downloading a2a_t_sdk-1.1.0-py3-none-any.whl (387 kB)
+  Using cached httpx-0.28.1-py3-none-any.whl (73 kB)
+  Using cached httpcore-1.0.9-py3-none-any.whl (78 kB)
+  Using cached a2a_sdk-1.2.2-py3-none-any.whl (275 kB)
+  Using cached openai-3.35.1-py3-none-any.whl (2.3 MB)
+  Using cached anyio-4.15.1-py3-none-any.whl (132 kB)
+  Using cached httpx2-2.13.1-py3-none-any.whl (95 kB)
+  Using cached httpcore2-2.13.1-py3-none-any.whl (83 kB)
+  Using cached jiter-0.17.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (345 kB)
+  Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+  Using cached fastapi-0.143.3-py3-none-any.whl (144 kB)
+  Using cached uvicorn-0.54.0-py3-none-any.whl (87 kB)
+  Using cached loguru-0.7.3-py3-none-any.whl (61 kB)
+  Using cached pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (807 kB)
+  Downloading pymupdf-1.28.2-cp310-abi3-manylinux_2_28_x86_64.whl (25.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 25.8/25.8 MB 50.9 MB/s  0:00:00
+  Downloading limits-5.8.0-py3-none-any.whl (60 kB)
+  Downloading python_multipart-0.0.32-py3-none-any.whl (30 kB)
+  Using cached psycopg2_binary-2.9.13-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (4.3 MB)
+  Using cached pytest-9.1.1-py3-none-any.whl (386 kB)
+  Using cached pluggy-1.7.0-py3-none-any.whl (27 kB)
+  Using cached pytest_asyncio-1.4.0-py3-none-any.whl (16 kB)
+  Using cached annotated_doc-0.0.5-py3-none-any.whl (5.3 kB)
+  Using cached annotated_types-0.8.0-py3-none-any.whl (13 kB)
+  Using cached click-8.5.0-py3-none-any.whl (125 kB)
+  Using cached culsans-0.11.0-py3-none-any.whl (21 kB)
+  Using cached aiologic-0.17.1-py3-none-any.whl (161 kB)
+  Using cached deprecated-3.0.0-py3-none-any.whl (21 kB)
+  Using cached wrapt-2.5.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (250 kB)
+  Downloading google_api_core-2.42.0-py3-none-any.whl (221 kB)
+  Using cached google_auth-2.62.0-py3-none-any.whl (267 kB)
+  Using cached googleapis_common_protos-1.75.5-py3-none-any.whl (307 kB)
+  Using cached opentelemetry_api-1.45.1-py3-none-any.whl (60 kB)
+  Using cached proto_plus-1.29.0-py3-none-any.whl (50 kB)
+  Using cached protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl (343 kB)
+  Downloading requests-2.34.2-py3-none-any.whl (73 kB)
+  Using cached charset_normalizer-3.5.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (257 kB)
+  Using cached idna-3.20-py3-none-any.whl (69 kB)
+  Using cached urllib3-2.8.0-py3-none-any.whl (135 kB)
+  Using cached certifi-2026.7.22-py3-none-any.whl (136 kB)
+  Downloading cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl (4.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.8/4.8 MB 51.1 MB/s  0:00:00
+  Using cached cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (221 kB)
+  Using cached grpcio-1.84.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (7.2 MB)
+  Downloading grpcio_reflection-1.84.0-py3-none-any.whl (22 kB)
+  Downloading grpcio_tools-1.84.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (2.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.8/2.8 MB 44.1 MB/s  0:00:00
+  Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+  Using cached iniconfig-2.3.1-py3-none-any.whl (7.6 kB)
+  Using cached json_rpc-1.15.0-py2.py3-none-any.whl (39 kB)
+  Downloading jsonschema-4.26.0-py3-none-any.whl (90 kB)
+  Downloading attrs-26.1.0-py3-none-any.whl (67 kB)
+  Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl (18 kB)
+  Using cached packaging-26.3-py3-none-any.whl (129 kB)
+  Using cached pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+  Using cached pyasn1-0.6.4-py3-none-any.whl (84 kB)
+  Using cached pygments-2.21.0-py3-none-any.whl (1.3 MB)
+  Using cached python_dotenv-1.2.4-py3-none-any.whl (23 kB)
+  Downloading referencing-0.37.0-py3-none-any.whl (26 kB)
+  Downloading rpds_py-2026.9.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (371 kB)
+  Downloading setuptools-84.0.0-py3-none-any.whl (818 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 818.2/818.2 kB 50.1 MB/s  0:00:00
+  Using cached sniffio-1.3.1-py3-none-any.whl (10 kB)
+  Downloading starlette-1.8.0-py3-none-any.whl (79 kB)
+  Using cached truststore-0.10.5-py3-none-any.whl (19 kB)
+  Using cached typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+  Using cached pycparser-3.11-py3-none-any.whl (51 kB)
+  Downloading sse_starlette-3.5.0-py3-none-any.whl (17 kB)
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pydantic-2.14.1-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pydantic_core-2.50.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/a2a_t_sdk-1.1.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/httpx-0.28.1-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/httpcore-1.0.9-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/a2a_sdk-1.2.2-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/openai-3.35.1-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/anyio-4.15.1-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/httpx2-2.13.1-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/httpcore2-2.13.1-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/jiter-0.17.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/typing_extensions-4.16.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/fastapi-0.143.3-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/uvicorn-0.54.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/loguru-0.7.3-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pymupdf-1.28.2-cp310-abi3-manylinux_2_28_x86_64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/limits-5.8.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/python_multipart-0.0.32-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/psycopg2_binary-2.9.13-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pytest-9.1.1-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pluggy-1.7.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pytest_asyncio-1.4.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/annotated_doc-0.0.5-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/annotated_types-0.8.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/click-8.5.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/culsans-0.11.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/aiologic-0.17.1-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/deprecated-3.0.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/wrapt-2.5.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/google_api_core-2.42.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/google_auth-2.62.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/googleapis_common_protos-1.75.5-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/opentelemetry_api-1.45.1-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/proto_plus-1.29.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/requests-2.34.2-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/charset_normalizer-3.5.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/idna-3.20-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/urllib3-2.8.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/certifi-2026.7.22-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/grpcio-1.84.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/grpcio_reflection-1.84.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/grpcio_tools-1.84.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/h11-0.16.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/iniconfig-2.3.1-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/json_rpc-1.15.0-py2.py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/jsonschema-4.26.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/attrs-26.1.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/jsonschema_specifications-2025.9.1-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/packaging-26.3-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pyasn1_modules-0.4.2-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pyasn1-0.6.4-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pygments-2.21.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/python_dotenv-1.2.4-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/referencing-0.37.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/rpds_py-2026.9.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/setuptools-84.0.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/sniffio-1.3.1-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/starlette-1.8.0-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/truststore-0.10.5-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/typing_inspection-0.4.4-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pycparser-3.11-py3-none-any.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/sse_starlette-3.5.0-py3-none-any.whl
+  Successfully downloaded pydantic pydantic-core a2a-t-sdk httpx httpcore a2a-sdk openai anyio httpx2 httpcore2 jiter typing-extensions fastapi uvicorn loguru PyYAML pymupdf limits python-multipart psycopg2-binary pytest pluggy pytest-asyncio annotated-doc annotated-types click culsans aiologic deprecated wrapt google-api-core google-auth googleapis-common-protos opentelemetry-api proto-plus protobuf requests charset_normalizer idna urllib3 certifi cryptography cffi grpcio grpcio-reflection grpcio-tools h11 iniconfig json-rpc jsonschema attrs jsonschema-specifications packaging pyasn1-modules pyasn1 pygments python-dotenv referencing rpds-py setuptools sniffio starlette truststore typing-inspection pycparser sse-starlette
+  [1;33mDownloading binary wheels for aarch64...[0m
+  Collecting pydantic>=2.12.5 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 18))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pydantic-2.14.1-py3-none-any.whl
+  Collecting a2a-t-sdk>=0.1.8 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/a2a_t_sdk-1.1.0-py3-none-any.whl
+  Collecting openai>=2.26.0 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 22))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/openai-3.35.1-py3-none-any.whl
+  Collecting fastapi>=0.135.1 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 23))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/fastapi-0.143.3-py3-none-any.whl
+  Collecting uvicorn>=0.42 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 24))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/uvicorn-0.54.0-py3-none-any.whl
+  Collecting loguru>=0.7.3 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 25))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/loguru-0.7.3-py3-none-any.whl
+  Collecting PyYAML>=6.0.3 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 26))
+    Using cached pyyaml-6.0.3-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (2.4 kB)
+  Collecting pymupdf (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 27))
+    Downloading pymupdf-1.28.2-cp310-abi3-manylinux_2_28_aarch64.whl.metadata (26 kB)
+  Collecting limits>=5.8.0 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 28))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/limits-5.8.0-py3-none-any.whl
+  Collecting python-multipart>=0.0.24 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 29))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/python_multipart-0.0.32-py3-none-any.whl
+  Collecting psycopg2-binary>=2.9.10 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 30))
+    Using cached psycopg2_binary-2.9.13-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl.metadata (4.9 kB)
+  Collecting pytest>=8.0 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 32))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pytest-9.1.1-py3-none-any.whl
+  Collecting pytest-asyncio>=0.24 (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 33))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pytest_asyncio-1.4.0-py3-none-any.whl
+  Collecting a2a-sdk[http-server] (from -r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/a2a_sdk-1.2.2-py3-none-any.whl
+  Collecting annotated-types>=0.6.0 (from pydantic>=2.12.5->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 18))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/annotated_types-0.8.0-py3-none-any.whl
+  Collecting pydantic-core==2.50.1 (from pydantic>=2.12.5->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 18))
+    Using cached pydantic_core-2.50.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (6.5 kB)
+  Collecting typing-extensions>=4.16.0 (from pydantic>=2.12.5->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 18))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/typing_extensions-4.16.0-py3-none-any.whl
+  Collecting typing-inspection>=0.4.4 (from pydantic>=2.12.5->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 18))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/typing_inspection-0.4.4-py3-none-any.whl
+  Collecting jsonschema>=4.23.0 (from a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/jsonschema-4.26.0-py3-none-any.whl
+  Collecting python-dotenv>=1.1.0 (from a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/python_dotenv-1.2.4-py3-none-any.whl
+  Collecting httpx<1,>=0.23.0 (from a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/httpx-0.28.1-py3-none-any.whl
+  Collecting anyio (from httpx<1,>=0.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/anyio-4.15.1-py3-none-any.whl
+  Collecting certifi (from httpx<1,>=0.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/certifi-2026.7.22-py3-none-any.whl
+  Collecting httpcore==1.* (from httpx<1,>=0.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/httpcore-1.0.9-py3-none-any.whl
+  Collecting idna (from httpx<1,>=0.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/idna-3.20-py3-none-any.whl
+  Collecting h11>=0.16 (from httpcore==1.*->httpx<1,>=0.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/h11-0.16.0-py3-none-any.whl
+  Collecting culsans>=0.11.0 (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/culsans-0.11.0-py3-none-any.whl
+  Collecting google-api-core>=1.26.0 (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/google_api_core-2.42.0-py3-none-any.whl
+  Collecting googleapis-common-protos>=1.70.0 (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/googleapis_common_protos-1.75.5-py3-none-any.whl
+  Collecting json-rpc>=1.15.0 (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/json_rpc-1.15.0-py2.py3-none-any.whl
+  Collecting packaging>=24.0 (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/packaging-26.3-py3-none-any.whl
+  Collecting protobuf>=5.29.5 (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached protobuf-7.36.2-cp310-abi3-manylinux2014_aarch64.whl.metadata (595 bytes)
+  Collecting sse-starlette (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/sse_starlette-3.5.0-py3-none-any.whl
+  Collecting starlette (from a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/starlette-1.8.0-py3-none-any.whl
+  Collecting grpcio-reflection>=1.7.0 (from a2a-sdk[grpc]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 21))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/grpcio_reflection-1.84.0-py3-none-any.whl
+  Collecting grpcio-tools>=1.60 (from a2a-sdk[grpc]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 21))
+    Downloading grpcio_tools-1.84.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl.metadata (5.3 kB)
+  Collecting grpcio>=1.60 (from a2a-sdk[grpc]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 21))
+    Using cached grpcio-1.84.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl.metadata (3.8 kB)
+  Collecting httpx2<3,>=2.12.0 (from openai>=2.26.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 22))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/httpx2-2.13.1-py3-none-any.whl
+  Collecting jiter<1,>=0.16.0 (from openai>=2.26.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 22))
+    Using cached jiter-0.17.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (5.2 kB)
+  Collecting sniffio (from openai>=2.26.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 22))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/sniffio-1.3.1-py3-none-any.whl
+  Collecting httpcore2==2.13.1 (from httpx2<3,>=2.12.0->openai>=2.26.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 22))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/httpcore2-2.13.1-py3-none-any.whl
+  Collecting truststore>=0.10 (from httpx2<3,>=2.12.0->openai>=2.26.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 22))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/truststore-0.10.5-py3-none-any.whl
+  Collecting annotated-doc>=0.0.2 (from fastapi>=0.135.1->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 23))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/annotated_doc-0.0.5-py3-none-any.whl
+  Collecting opentelemetry-api>=1.44.0 (from fastapi>=0.135.1->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 23))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/opentelemetry_api-1.45.1-py3-none-any.whl
+  Collecting click>=7.0 (from uvicorn>=0.42->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 24))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/click-8.5.0-py3-none-any.whl
+  Collecting deprecated>=1.2 (from limits>=5.8.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 28))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/deprecated-3.0.0-py3-none-any.whl
+  Collecting iniconfig>=1.0.1 (from pytest>=8.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 32))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/iniconfig-2.3.1-py3-none-any.whl
+  Collecting pluggy<2,>=1.5 (from pytest>=8.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 32))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pluggy-1.7.0-py3-none-any.whl
+  Collecting pygments>=2.7.2 (from pytest>=8.0->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 32))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pygments-2.21.0-py3-none-any.whl
+  Collecting aiologic<0.18.0,>=0.16.0 (from culsans>=0.11.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/aiologic-0.17.1-py3-none-any.whl
+  Collecting wrapt>=1.16.0 (from aiologic<0.18.0,>=0.16.0->culsans>=0.11.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached wrapt-2.5.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (7.6 kB)
+  Collecting proto-plus<2.0.0,>=1.26.1 (from google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/proto_plus-1.29.0-py3-none-any.whl
+  Collecting google-auth<3.0.0,>=2.14.1 (from google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/google_auth-2.62.0-py3-none-any.whl
+  Collecting requests<3.0.0,>=2.33.0 (from google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/requests-2.34.2-py3-none-any.whl
+  Collecting pyasn1-modules>=0.2.1 (from google-auth<3.0.0,>=2.14.1->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pyasn1_modules-0.4.2-py3-none-any.whl
+  Collecting cryptography>=38.0.3 (from google-auth<3.0.0,>=2.14.1->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Downloading cryptography-50.0.2-cp311-abi3-manylinux_2_34_aarch64.whl.metadata (4.4 kB)
+  Collecting charset_normalizer<4,>=2 (from requests<3.0.0,>=2.33.0->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached charset_normalizer-3.5.2-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (46 kB)
+  Collecting urllib3<3,>=1.26 (from requests<3.0.0,>=2.33.0->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/urllib3-2.8.0-py3-none-any.whl
+  Collecting cffi>=2.0.0 (from cryptography>=38.0.3->google-auth<3.0.0,>=2.14.1->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    Using cached cffi-2.1.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl.metadata (2.5 kB)
+  Collecting pycparser (from cffi>=2.0.0->cryptography>=38.0.3->google-auth<3.0.0,>=2.14.1->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pycparser-3.11-py3-none-any.whl
+  Collecting setuptools>=77.0.1 (from grpcio-tools>=1.60->a2a-sdk[grpc]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 21))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/setuptools-84.0.0-py3-none-any.whl
+  Collecting attrs>=22.2.0 (from jsonschema>=4.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/attrs-26.1.0-py3-none-any.whl
+  Collecting jsonschema-specifications>=2023.03.6 (from jsonschema>=4.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/jsonschema_specifications-2025.9.1-py3-none-any.whl
+  Collecting referencing>=0.28.4 (from jsonschema>=4.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/referencing-0.37.0-py3-none-any.whl
+  Collecting rpds-py>=0.25.0 (from jsonschema>=4.23.0->a2a-t-sdk>=0.1.8->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 19))
+    Downloading rpds_py-2026.9.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (4.1 kB)
+  Collecting pyasn1<0.7.0,>=0.6.1 (from pyasn1-modules>=0.2.1->google-auth<3.0.0,>=2.14.1->google-api-core>=1.26.0->a2a-sdk[http-server]->-r /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/requirements.txt (line 20))
+    File was already downloaded /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pyasn1-0.6.4-py3-none-any.whl
+  Using cached pydantic_core-2.50.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (2.0 MB)
+  Using cached jiter-0.17.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (341 kB)
+  Using cached pyyaml-6.0.3-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (775 kB)
+  Downloading pymupdf-1.28.2-cp310-abi3-manylinux_2_28_aarch64.whl (25.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 25.1/25.1 MB 37.4 MB/s  0:00:00
+  Using cached psycopg2_binary-2.9.13-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl (5.9 MB)
+  Using cached wrapt-2.5.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (250 kB)
+  Using cached protobuf-7.36.2-cp310-abi3-manylinux2014_aarch64.whl (344 kB)
+  Using cached charset_normalizer-3.5.2-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (246 kB)
+  Downloading cryptography-50.0.2-cp311-abi3-manylinux_2_34_aarch64.whl (4.7 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.7/4.7 MB 32.4 MB/s  0:00:00
+  Using cached cffi-2.1.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (222 kB)
+  Using cached grpcio-1.84.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (7.0 MB)
+  Downloading grpcio_tools-1.84.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (2.7 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.7/2.7 MB 65.5 MB/s  0:00:00
+  Downloading rpds_py-2026.9.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (373 kB)
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pydantic_core-2.50.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/jiter-0.17.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pyyaml-6.0.3-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/pymupdf-1.28.2-cp310-abi3-manylinux_2_28_aarch64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/psycopg2_binary-2.9.13-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/wrapt-2.5.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/protobuf-7.36.2-cp310-abi3-manylinux2014_aarch64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/charset_normalizer-3.5.2-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/cryptography-50.0.2-cp311-abi3-manylinux_2_34_aarch64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/cffi-2.1.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/grpcio-1.84.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/grpcio_tools-1.84.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl
+  Saved ./binary/build/dist/build/orchestration-center-1.0.0-linux/vendor/wheels/rpds_py-2026.9.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+  Successfully downloaded pydantic pydantic-core a2a-t-sdk httpx httpcore a2a-sdk openai anyio httpx2 httpcore2 jiter typing-extensions fastapi uvicorn loguru PyYAML pymupdf limits python-multipart psycopg2-binary pytest pluggy pytest-asyncio annotated-doc annotated-types click culsans aiologic deprecated wrapt google-api-core google-auth googleapis-common-protos opentelemetry-api proto-plus protobuf requests charset_normalizer idna urllib3 certifi cryptography cffi grpcio grpcio-reflection grpcio-tools h11 iniconfig json-rpc jsonschema attrs jsonschema-specifications packaging pyasn1-modules pyasn1 pygments python-dotenv referencing rpds-py setuptools sniffio starlette truststore typing-inspection pycparser sse-starlette
+  [0;32m✓[0m Wheels downloaded: 79 total (x86_64: 13, aarch64: 13)
+
+[1;33mPreparing npm cache for offline frontend build...[0m
+  [1;33mRunning npm install to fill cache (this may take a while)...[0m
+  [1;33m(node_modules will NOT be bundled — built on the target machine)[0m
+npm warn using --force Recommended protections disabled.
+
+added 562 packages, and audited 563 packages in 26s
+
+200 packages are looking for funding
+  run `npm fund` for details
+
+32 vulnerabilities (4 low, 10 moderate, 17 high, 1 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+npm warn install-scripts   esbuild@0.28.0 (postinstall: node install.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+  [0;32m✓[0m npm install completed (cache populated)
+Cache verified and compressed (~/.npm/_cacache)
+Content verified: 3353 (914041256 bytes)
+Content garbage-collected: 494 (717987606 bytes)
+Index entries: 3545
+Finished in 17.222s
+  [0;32m✓[0m npm cache copied to vendor/npm-cache/
+
+[1;33mEnsuring scripts are executable...[0m
+  [0;32m✓[0m Scripts are executable
+
+[1;33mCreating manifest...[0m
+  [0;32m✓[0m Manifest created
+
+[1;33mCreating tarball...[0m
+  [0;32m✓[0m Tarball created: /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/orchestration-center-1.0.0-linux.tar.gz (617M)
+
+[0;34m========================================[0m
+[0;32m  Package(s) built successfully![0m
+[0;34m========================================[0m
+
+  orchestration-center:   /root/multica_workspaces/leoyy6-c077c09ea391/leoy-156-c2b942cd28de/workdir/openan-installation/binary/build/dist/orchestration-center-1.0.0-linux.tar.gz (617M)
+
+[1;33mNext steps:[0m
+  1. Copy the tarball(s) and install.sh to the offline machine
+     (USB, SCP, etc.)
+  2. Install:  ./install.sh
+
+[0;34m========================================[0m
+exit=0
+END 2026-10-18 03:38:56 UTC

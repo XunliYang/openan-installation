@@ -160,7 +160,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Constants & version/source resolution
 # =============================================================================
 OUTPUT_DIR="${SCRIPT_DIR}/dist"
-PYTHON_VERSION="3.12"
+# Wheel-download Python version. Overridable via env (e.g. PYTHON_VERSION=3.13);
+# otherwise aligned with the interpreter detected during the prerequisite check.
+PYTHON_VERSION="${PYTHON_VERSION:-3.12}"
 
 # Built-in defaults, overridable via flags (precedence: flag > default)
 DEFAULT_REGISTRY_VERSION="v1.0.0"
@@ -571,6 +573,12 @@ if [ -z "$PYTHON_BIN" ]; then
     exit 1
 fi
 echo -e "  ${GREEN}✓${NC} Python ${PY_VERSION} ($PYTHON_BIN)"
+# Keep the wheel-download Python version in lockstep with the interpreter
+# detected above (a 3.13 host must not bundle wheels labeled for 3.12),
+# unless the caller pinned PYTHON_VERSION to a non-default value.
+if [ "${PYTHON_VERSION}" = "3.12" ]; then
+    PYTHON_VERSION="${PY_VERSION}"
+fi
 
 # Check Node.js and npm (only for orchestration-center)
 if [ "${PACK_ORCHESTRATION}" = "true" ]; then
