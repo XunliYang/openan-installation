@@ -40,18 +40,22 @@ def render(settings=None, success=True):
 
 
 def test_portal_defaults_initcontainer_patches_js():
-    # The portal JS hardcodes 127.0.0.1:5001 as the backend default; the
-    # BACKEND_URL env var only configures nginx, not the JS bundle. An
-    # initContainer copies the HTML to an emptyDir and seds the defaults
-    # to the in-cluster service addresses (field-verified bug).
+    # The portal JS hardcodes http://127.0.0.1:5001 as the backend default;
+    # the BACKEND_URL env var only configures nginx, not the JS bundle. An
+    # initContainer copies the HTML to an emptyDir and strips the absolute
+    # URL so all API calls become relative (same-origin) and route through
+    # the portal nginx proxy, which already proxies /rest/v1/orchestrate/
+    # and /api/* to the backends (field-verified bug).
     docs = render()
     deployment = docs["Deployment/openan-frontend"]
     spec = deployment["spec"]["template"]["spec"]
     init = next(c for c in spec["initContainers"] if c["name"] == "patch-portal-defaults")
     command = " ".join(init["command"])
     assert "127.0.0.1:5001" in command or "127\\.0\\.0\\.1:5001" in command
-    assert "orchestration-center:5001" in command
-    assert "registry-center:5000" in command
+    assert "127.0.0.1:5000" in command or "127\\.0\\.0\\.1:5000" in command
+    # The sed strips the absolute URL (empty replacement), not a cluster DNS
+    # name the browser cannot resolve
+    assert "orchestration-center:5001" not in command
     # The main container serves the patched files from the emptyDir
     volumes = {v["name"]: v for v in spec["volumes"]}
     assert volumes["portal-html"]["emptyDir"] == {}
