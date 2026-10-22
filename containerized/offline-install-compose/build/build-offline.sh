@@ -175,9 +175,11 @@ images = dict(zip(['registry-center','orchestration-center','workflow-designer',
                   [*sys.argv[3:6], 'postgres:15-alpine','nginx:1.27.5-alpine','mysql:8.4']))
 if sys.argv[6]:
     images['portal'] = sys.argv[6]
+# str.removeprefix is Python 3.9+; use a compatible slice for older build hosts
+archs = [p.split('/', 1)[1] if p.startswith('linux/') else p
+         for p in sys.argv[2].split(',')]
 with open(sys.argv[1], 'w', encoding='utf-8') as stream:
-    json.dump({'architectures': [p.removeprefix('linux/') for p in sys.argv[2].split(',')],
-               'images': images}, stream, indent=2)
+    json.dump({'architectures': archs, 'images': images}, stream, indent=2)
 PY
 (cd "$BUNDLE" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum >SHA256SUMS)
 tar -C "$(dirname "$BUNDLE")" -czf "$BUNDLE.tar.gz" "$(basename "$BUNDLE")"
