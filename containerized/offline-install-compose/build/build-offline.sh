@@ -102,10 +102,12 @@ BUNDLE="$(cd "$OUT_DIR" && pwd)/openan-offline-compose-$TAG"
 # leaves only its own partial output for diagnosis; it never publishes a tar.
 [ ! -e "$BUNDLE" ] && [ ! -e "$BUNDLE.tar.gz" ] || { echo 'Output exists; choose a fresh output/tag' >&2; exit 1; }
 mkdir -p "$BUNDLE/images" "$BUNDLE/deps" "$BUNDLE/scripts/lib" "$BUNDLE/compose/init"
-for script in install.sh check-env.sh uninstall.sh configure.py; do cp "$SOURCE/scripts/$script" "$BUNDLE/scripts/"; done
+for script in install.sh check-env.sh uninstall.sh configure.py gen-secrets.sh; do cp "$SOURCE/scripts/$script" "$BUNDLE/scripts/"; done
 cp "$SOURCE/scripts/lib/common.sh" "$BUNDLE/scripts/lib/"
 cp "$SOURCE/compose/init/create-databases.sh" "$SOURCE/compose/init/create-mysql-databases.sh" "$BUNDLE/compose/init/"
 cp "$SOURCE/config.env.example" "$BUNDLE/"
+mkdir -p "$BUNDLE/tool"
+cp "$SOURCE/tool/gen-certs.sh" "$BUNDLE/tool/"
 mkdir -p "$BUNDLE/templates"
 for template in registry.env.example orchestration.env.example models.yaml.example integration_credentials.conf.example; do
     cp "$SOURCE/templates/$template" "$BUNDLE/templates/"
@@ -114,7 +116,7 @@ cp "$SOURCE/README.md" "$BUNDLE/"
 mkdir -p "$BUNDLE/docs"; cp "$SOURCE/docs/DEPENDENCIES.md" "$BUNDLE/docs/"
 # With umask077, cp produces0600. +x would produce0711, unreadable to the
 # unprivileged MySQL/PostgreSQL entrypoint user that runs these public scripts.
-chmod 0755 "$BUNDLE/scripts/"*.sh "$BUNDLE/compose/init/"*.sh
+chmod 0755 "$BUNDLE/scripts/"*.sh "$BUNDLE/tool/"*.sh "$BUNDLE/compose/init/"*.sh
 RC="$APP_REGISTRY/registry-center:${REGISTRY_TAG:-$TAG}"; OC="$APP_REGISTRY/orchestration-center:${ORCHESTRATION_TAG:-$TAG}"; UI="$APP_REGISTRY/workflow-designer:${ORCHESTRATION_TAG:-$TAG}"; PORTAL="$APP_REGISTRY/openan-portal:${PORTAL_TAG:-$TAG}"
 declare -A REFS=([registry-center]="$RC" [orchestration-center]="$OC" [workflow-designer]="$UI" [postgres]="postgres:15-alpine" [mysql]="mysql:8.4" [nginx]="nginx:1.27.5-alpine")
 for arch in "${ARCHS[@]}"; do
