@@ -212,21 +212,31 @@ EOF
 done
 
 # --- Append DB passwords to config.env if not already there ---
-CONFIG="$BUNDLE/config.env"
+CONFIG="$BUNDLE_DIR/config.env"
 if [ -f "$CONFIG" ]; then
     for pair in "REGISTRY_DB_PASSWORD=$REGISTRY_DB_PASSWORD" \
                 "ORCH_DB_PASSWORD=$ORCH_DB_PASSWORD" \
                 "MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD"; do
         key="${pair%%=*}"
         val="${pair#*=}"
-        if grep -q "^${key}=" "$CONFIG"; then
+        if grep -q "^${key}=" "$CONFIG" && [ -n "$(grep "^${key}=" "$CONFIG" | cut -d= -f2-)" ]; then
             log "$key already set in config.env"
+        elif grep -q "^${key}=" "$CONFIG"; then
+            sed -i "s|^${key}=.*|${key}=${val}|" "$CONFIG"
+            log "Filled $key in config.env"
         else
-            sed -i "s|^${key}=.*|${key}=${val}|" "$CONFIG" 2>/dev/null || \
-                echo "${key}=${val}" >> "$CONFIG"
+            echo "${key}=${val}" >> "$CONFIG"
             log "Set $key in config.env"
         fi
     done
+    # Disable signing if the directory doesn't exist
+    if grep -q '^REGISTRY_SIGN_ENABLED=true' "$CONFIG"; then
+        SIGN_DIR="$(grep '^REGISTRY_SIGN_DIR=' "$CONFIG" | cut -d= -f2-)"
+        if [ -n "$SIGN_DIR" ] && [ ! -d "$BUNDLE_DIR/$SIGN_DIR" ] && [ ! -d "$SIGN_DIR" ]; then
+            sed -i 's|^REGISTRY_SIGN_ENABLED=.*|REGISTRY_SIGN_ENABLED=false|' "$CONFIG"
+            warn "REGISTRY_SIGN_ENABLED disabled: signing directory not found"
+        fi
+    fi
     chmod 0600 "$CONFIG"
 fi
 

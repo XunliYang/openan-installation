@@ -17,17 +17,34 @@ while [ $# -gt 0 ]; do
             # Non-interactive evaluation: generate all secrets and certs,
             # use bundled MySQL, HTTP, workflow-designer frontend.
             log_info "Evaluation mode: generating secrets and certificates..."
-            bash "$SCRIPT_DIR/gen-secrets.sh" --eval
-            bash "$SCRIPT_DIR/../tool/gen-certs.sh" "$BUNDLE_DIR/pki" || log_warn "Certificate generation skipped (openssl missing or failed)"
+            bash "$SCRIPT_DIR/gen-secrets.sh" --eval || \
+                die "Secret generation failed (check openssl is installed)"
+            bash "$SCRIPT_DIR/../tool/gen-certs.sh" "$BUNDLE_DIR/pki" 2>/dev/null || \
+                log_warn "Certificate generation skipped (openssl missing or failed)"
             # Configure for evaluation
             sed -i \
                 -e 's|^DATABASE_INTERNAL=.*|DATABASE_INTERNAL=true|' \
                 -e 's|^REGISTRY_SIGN_ENABLED=.*|REGISTRY_SIGN_ENABLED=true|' \
                 "$CONFIG_FILE"
-            if [ ! -d "$BUNDLE_DIR/pki/signing" ]; then
+            if [ ! -d "$BUNDLE_DIR/pki/signing" ] || \
+               [ ! -f "$BUNDLE_DIR/pki/signing/sign.cer" ]; then
                 log_warn "No signing certs; disabling REGISTRY_SIGN_ENABLED"
                 sed -i 's|^REGISTRY_SIGN_ENABLED=.*|REGISTRY_SIGN_ENABLED=false|' "$CONFIG_FILE"
             fi
+            # Point TLS/signing dirs at generated pki if they reference the default
+            if [ -d "$BUNDLE_DIR/pki/public" ]; then
+                sed -i "s|^PUBLIC_TLS_DIR=.*|PUBLIC_TLS_DIR=$BUNDLE_DIR/pki/public|" "$CONFIG_FILE"
+                sed -i "s|^REGISTRY_TLS_DIR=.*|REGISTRY_TLS_DIR=$BUNDLE_DIR/pki/registry|" "$CONFIG_FILE"
+                sed -i "s|^ORCH_TLS_DIR=.*|ORCH_TLS_DIR=$BUNDLE_DIR/pki/orchestration|" "$CONFIG_FILE"
+                sed -i "s|^REGISTRY_PROXY_TLS_DIR=.*|REGISTRY_PROXY_TLS_DIR=$BUNDLE_DIR/pki/public|" "$CONFIG_FILE"
+                sed -i "s|^ORCH_PROXY_TLS_DIR=.*|ORCH_PROXY_TLS_DIR=$BUNDLE_DIR/pki/public|" "$CONFIG_FILE"
+                [ -d "$BUNDLE_DIR/pki/signing" ] && \
+                    sed -i "s|^REGISTRY_SIGN_DIR=.*|REGISTRY_SIGN_DIR=$BUNDLE_DIR/pki/signing|" "$CONFIG_FILE"
+            fi
+            # Print the admin password so the user can log in
+            local admin_pass
+            admin_pass="$(grep '^OC_ADMIN_INITIAL_PASSWORD=' "$BUNDLE_DIR/orchestration.env" 2>/dev/null | cut -d= -f2-)"
+            [ -n "$admin_pass" ] && log_info "Admin login password: $admin_pass"
             log_info "Evaluation configuration applied"
             shift ;;
         --help|-h)
