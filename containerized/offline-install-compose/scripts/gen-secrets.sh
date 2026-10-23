@@ -57,6 +57,25 @@ hmac_digest() {
     printf '%s' "$token" | openssl dgst -sha256 -hmac "$key" | awk '{print $NF}'
 }
 
+# Fill in a key in an env file if it's missing or empty (never overwrites non-empty)
+fill_env_key() {
+    local file="$1" key="$2" value="$3"
+    local current
+    current="$(grep "^${key}=" "$file" 2>/dev/null | head -1 | cut -d= -f2-)"
+    if [ -n "$current" ]; then
+        return 0  # already set
+    fi
+    if grep -q "^${key}=" "$file" 2>/dev/null; then
+        # Key exists but is empty — fill it
+        sed -i "s|^${key}=.*|${key}=${value}|" "$file"
+    else
+        # Key doesn't exist — append it
+        echo "${key}=${value}" >> "$file"
+    fi
+    chmod 0600 "$file"
+    log "  Filled: $key"
+}
+
 case "$MODE" in
 --interactive|--eval)
     ;;
@@ -121,45 +140,44 @@ INTEGRATION_TOKEN_HMAC_KEY="$(rand)"
 REGISTRY_ACCESS_TOKEN="$(rand)"
 LLM_CHAT_API_KEY="${LLM_CHAT_API_KEY:-$(rand)}"
 
-# --- Write registry.env ---
+# --- Write registry.env (fill in missing keys, never overwrite existing values) ---
 REG_ENV="$BUNDLE/registry.env"
-if [ -f "$REG_ENV" ]; then
-    log "registry.env exists, skipping"
-else
-    cat > "$REG_ENV" <<EOF
-INTEGRATION_FINGERPRINT_KEY=$INTEGRATION_FINGERPRINT_KEY
-INTEGRATION_TOKEN_HMAC_KEY=$INTEGRATION_TOKEN_HMAC_KEY
-LLM_CHAT_API_KEY=$LLM_CHAT_API_KEY
-EOF
+if [ ! -f "$REG_ENV" ]; then
+    printf 'INTEGRATION_FINGERPRINT_KEY=%s\nINTEGRATION_TOKEN_HMAC_KEY=%s\nLLM_CHAT_API_KEY=%s\n' \
+        "$INTEGRATION_FINGERPRINT_KEY" "$INTEGRATION_TOKEN_HMAC_KEY" "$LLM_CHAT_API_KEY" > "$REG_ENV"
     chmod 0600 "$REG_ENV"
     log "Created: registry.env"
+else
+    # Fill in any empty/missing required keys
+    fill_env_key "$REG_ENV" "INTEGRATION_FINGERPRINT_KEY" "$INTEGRATION_FINGERPRINT_KEY"
+    fill_env_key "$REG_ENV" "INTEGRATION_TOKEN_HMAC_KEY" "$INTEGRATION_TOKEN_HMAC_KEY"
+    fill_env_key "$REG_ENV" "LLM_CHAT_API_KEY" "$LLM_CHAT_API_KEY"
+    log "Filled missing keys in existing registry.env"
 fi
 
-# --- Write orchestration.env ---
+# --- Write orchestration.env (fill in missing keys) ---
 OC_ENV="$BUNDLE/orchestration.env"
-if [ -f "$OC_ENV" ]; then
-    log "orchestration.env exists, skipping"
-else
-    cat > "$OC_ENV" <<EOF
-OC_ADMIN_INITIAL_PASSWORD=$OC_ADMIN_INITIAL_PASSWORD
-REGISTRY_ACCESS_TOKEN=$REGISTRY_ACCESS_TOKEN
-LLM_CHAT_API_KEY=$LLM_CHAT_API_KEY
-RETRIEVAL_VECTOR_ENABLED=false
-EOF
+if [ ! -f "$OC_ENV" ]; then
+    printf 'OC_ADMIN_INITIAL_PASSWORD=%s\nREGISTRY_ACCESS_TOKEN=%s\nLLM_CHAT_API_KEY=%s\nRETRIEVAL_VECTOR_ENABLED=false\n' \
+        "$OC_ADMIN_INITIAL_PASSWORD" "$REGISTRY_ACCESS_TOKEN" "$LLM_CHAT_API_KEY" > "$OC_ENV"
     chmod 0600 "$OC_ENV"
     log "Created: orchestration.env"
+else
+    fill_env_key "$OC_ENV" "OC_ADMIN_INITIAL_PASSWORD" "$OC_ADMIN_INITIAL_PASSWORD"
+    fill_env_key "$OC_ENV" "REGISTRY_ACCESS_TOKEN" "$REGISTRY_ACCESS_TOKEN"
+    fill_env_key "$OC_ENV" "LLM_CHAT_API_KEY" "$LLM_CHAT_API_KEY"
+    log "Filled missing keys in existing orchestration.env"
 fi
 
 # --- Compute and write integration_credentials.conf ---
 CRED="$BUNDLE/integration_credentials.conf"
-if [ -f "$CRED" ]; then
-    log "integration_credentials.conf exists, skipping"
-else
-    # Re-read from the env files in case they already existed
-    HMAC_KEY="$(grep '^INTEGRATION_TOKEN_HMAC_KEY=' "$REG_ENV" 2>/dev/null | cut -d= -f2)"
-    TOKEN="$(grep '^REGISTRY_ACCESS_TOKEN=' "$OC_ENV" 2>/dev/null | cut -d= -f2)"
+if [ ! -f "$CRED" ] || ! grep -q 'token_hash=' "$CRED" 2>/dev/null || \
+   grep -q '^credential\..*\.token_hash=$' "$CRED" 2>/dev/null; then
+    # Read from the env files (they now have values after fill_env_key)
+    HMAC_KEY="$(grep '^INTEGRATION_TOKEN_HMAC_KEY=' "$REG_ENV" 2>/dev/null | cut -d= -f2-)"
+    TOKEN="$(grep '^REGISTRY_ACCESS_TOKEN=' "$OC_ENV" 2>/dev/null | cut -d= -f2-)"
     if [ -z "$HMAC_KEY" ] || [ -z "$TOKEN" ]; then
-        die "Cannot read HMAC key or token from env files"
+        die "Cannot read HMAC key or token from env files (this is a bug)"
     fi
     DIGEST="$(hmac_digest "$HMAC_KEY" "$TOKEN")"
     cat > "$CRED" <<EOF
@@ -170,6 +188,8 @@ credential.orchestration.enabled=true
 EOF
     chmod 0600 "$CRED"
     log "Created: integration_credentials.conf (HMAC pairing computed)"
+else
+    log "integration_credentials.conf exists with token_hash, skipping"
 fi
 
 # --- Write models.yaml (only if using our env files) ---
