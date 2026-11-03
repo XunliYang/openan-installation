@@ -371,6 +371,7 @@ def test_wizard_per_component_image_tags(tmp_path, monkeypatch):
     assert values["registry"]["image"]["tag"] == "v1.1.2"
     assert values["orchestration"]["image"]["tag"] == "main-20261019"
     assert values["frontend"]["image"]["tag"] == "v2.0.0"
+    assert values["frontend"]["type"] == "portal"
 
 
 def test_wizard_frontend_workflow_designer_follows_orchestration_tag(tmp_path, monkeypatch):
@@ -388,6 +389,7 @@ def test_wizard_frontend_workflow_designer_follows_orchestration_tag(tmp_path, m
     module.configure("openan", "openan", output)
     values = json.loads(output.read_text(encoding="utf-8"))
     assert values["frontend"]["image"]["tag"] == "main-20261019"
+    assert values["frontend"]["type"] == "workflow-designer"
 
 
 def test_wizard_optional_models_and_a2at_land_in_values_and_secrets(tmp_path, monkeypatch):

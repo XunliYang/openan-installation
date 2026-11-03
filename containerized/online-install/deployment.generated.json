@@ -1,0 +1,56 @@
+{
+  "namespace": "openan",
+  "frontend": {
+    "image": {
+      "tag": "v1.0.2"
+    },
+    "type": "workflow-designer"
+  },
+  "postgresql": {
+    "enabled": true,
+    "existingSecret": "openan-pg",
+    "storage": {
+      "createStorageClass": true,
+      "storageClassName": "openan-local",
+      "createPV": true,
+      "useHostPath": true,
+      "nodeName": "node-186"
+    }
+  },
+  "database": {
+    "type": "postgresql"
+  },
+  "registry": {
+    "runtimeSecret": "openan-rc-runtime",
+    "credentialSecret": "openan-rc-credentials",
+    "modelsConfigMap": "",
+    "image": {
+      "tag": "v1.0.2"
+    },
+    "signing": {
+      "mode": "auto"
+    },
+    "persistence": {
+      "storageClassName": "openan-local",
+      "createPV": true,
+      "useHostPath": true,
+      "nodeName": "node-186"
+    }
+  },
+  "orchestration": {
+    "runtimeSecret": "openan-oc-runtime",
+    "modelsConfigMap": "",
+    "image": {
+      "tag": "v1.0.2"
+    },
+    "persistence": {
+      "storageClassName": "openan-local",
+      "createPV": true,
+      "useHostPath": true,
+      "nodeName": "node-186"
+    }
+  },
+  "ingress": {
+    "host": ""
+  }
+}

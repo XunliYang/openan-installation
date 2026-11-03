@@ -262,6 +262,7 @@ def configure(namespace, release, output, tag=None):
     # ------------------------------------------------------------------
     step_banner(2, 5, "Image Tags")
     tags = {}
+    frontend_type = None
     if components["registry"]:
         tags["registry"] = ask("registry-center image tag", default=tag or "")
     if components["orchestration"]:
@@ -435,7 +436,10 @@ def configure(namespace, release, output, tag=None):
         create_secret(namespace, prefix + "oc-runtime", oc_runtime)
 
     # --- Assemble non-secret values -------------------------------------------
-    values = {"namespace": namespace, "frontend": {"image": {"tag": tags["frontend"]}},
+    frontend_values = {"image": {"tag": tags["frontend"]}}
+    if components["orchestration"]:
+        frontend_values["type"] = frontend_type
+    values = {"namespace": namespace, "frontend": frontend_values,
               "postgresql": {"enabled": True, "existingSecret": prefix + "pg"},
               "database": {"type": "postgresql"}}
     if storage_node is not None:
