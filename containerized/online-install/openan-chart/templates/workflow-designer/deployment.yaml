@@ -20,6 +20,10 @@ spec:
       labels:
         {{- include "openan.frontend.selectorLabels" . | nindent 8 }}
     spec:
+      {{- if .Values.frontend.nodeAffinity }}
+      affinity:
+        {{- toYaml .Values.frontend.nodeAffinity | nindent 8 }}
+      {{- end }}
       {{- if eq (include "openan.frontendType" .) "workflow-designer" }}
       initContainers:
         # The stock nginx entrypoint renders /etc/nginx/templates/*.template
@@ -84,6 +88,32 @@ spec:
               mountPath: /etc/nginx/backend-tls
               readOnly: true
             {{- end }}
+        # Wait for the upstream Services to be resolvable before nginx starts:
+        # nginx resolves upstream hostnames at startup and exits with
+        # "host not found in upstream" when CoreDNS is not yet reachable on
+        # the node (e.g. after node reboot or CNI restart).
+        - name: wait-for-upstream
+          image: "{{ include "openan.frontendImageRepository" . }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              for host in orchestration-center registry-center; do
+                for i in $(seq 1 60); do
+                  if getent hosts "$host" >/dev/null 2>&1; then
+                    echo "resolved $host"
+                    break
+                  fi
+                  echo "waiting for $host to resolve ($i/60)"
+                  sleep 2
+                done
+                if ! getent hosts "$host" >/dev/null 2>&1; then
+                  echo "ERROR: $host did not resolve after 120s" >&2
+                  exit 1
+                fi
+              done
       {{- end }}
       containers:
         - name: openan-frontend
