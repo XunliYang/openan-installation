@@ -360,6 +360,9 @@ if [ "$METALLB_PRESENT" = true ] && [ "$INGRESS_PRESENT" = true ]; then
     log_info "MetalLB and ingress-nginx already installed, skipping"
 else
     if ask_yes_no "Install MetalLB + ingress-nginx automatically (pinned versions)?" "yes"; then
+        # Jobs are immutable; delete the admission Jobs from a previous install
+        # before re-applying the manifest.
+        kubectl delete -n ingress-nginx job ingress-nginx-admission-create ingress-nginx-admission-patch --ignore-not-found --timeout=30s 2>/dev/null || true
         log_info "Applying ingress-nginx controller-v1.15.1"
         kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.15.1/deploy/static/provider/cloud/deploy.yaml
         log_info "Applying MetalLB v0.16.1"
